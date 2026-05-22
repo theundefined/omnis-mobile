@@ -27,11 +27,18 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    - name: Build with Gradle
-      run: ./gradlew assembleDebug
+    - name: Build Release APK
+      run: ./gradlew assembleRelease
 
-    - name: Upload APK
+    - name: Rename and Prepare APK
+      if: github.event_name == 'release'
+      run: |
+        VERSION_NAME=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+        mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/omnis-mobile-v${VERSION_NAME}.apk
+        echo "APK_PATH=app/build/outputs/apk/release/omnis-mobile-v${VERSION_NAME}.apk" >> $GITHUB_ENV
+
+    - name: Upload APK to Release
       if: github.event_name == 'release'
       uses: softprops/action-gh-release@v2
       with:
-        files: app/build/outputs/apk/debug/app-debug.apk
+        files: ${{ env.APK_PATH }}
