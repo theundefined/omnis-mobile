@@ -1,0 +1,25 @@
+# Gradle
+.gradle/
+build/
+app/build/
+gradle/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+local.properties
+captures/
+.externalNativeBuild
+.cxx
+
+# Binaries
+*.apk
+*.aab
+
+# Local SDK and Licenses
+licenses/
+android-sdk/
+
+# Logs and temp
+*.log
+.DS_Store
