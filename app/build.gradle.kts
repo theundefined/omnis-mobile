@@ -55,8 +55,11 @@ android {
 }
 
 sentry {
+    org.set("theundefined")
+    project.set("omnis-mobile")
     includeProguardMapping = true
     autoUploadProguardMapping = true
+    uploadNativeSymbols = false
     autoInstallation {
         enabled = true
         sentryVersion = "7.3.0"
