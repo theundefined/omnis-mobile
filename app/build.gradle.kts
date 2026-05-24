@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("io.sentry.android.gradle")
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 android {
@@ -57,6 +58,7 @@ android {
 sentry {
     org.set("netrator")
     projectName.set("omnis-mobile")
+    url.set("https://de.sentry.io")
     includeProguardMapping = true
     autoUploadProguardMapping = true
     uploadNativeSymbols = false
@@ -79,6 +81,9 @@ dependencies {
     
     // Security
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // Serialization
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
 
     // Network
     implementation("com.squareup.retrofit2:retrofit:2.9.0")

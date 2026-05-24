@@ -3,8 +3,8 @@ package com.theundefined.omnis.data.local
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import com.theundefined.omnis.data.model.Account
 
 class AccountManager(context: Context) {
@@ -20,12 +20,16 @@ class AccountManager(context: Context) {
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
 
-    private val gson = Gson()
+    private val json = Json { 
+        ignoreUnknownKeys = true
+        coerceInputValues = true
+        encodeDefaults = true
+    }
 
     fun getAccounts(): List<Account> {
-        val json = sharedPreferences.getString("accounts", null) ?: return emptyList()
+        val jsonStr = sharedPreferences.getString("accounts", null) ?: return emptyList()
         return try {
-            gson.fromJson(json, Array<Account>::class.java)?.toList() ?: emptyList()
+            json.decodeFromString<List<Account>>(jsonStr)
         } catch (e: Exception) {
             emptyList()
         }
@@ -54,7 +58,7 @@ class AccountManager(context: Context) {
     }
 
     private fun saveAccounts(accounts: List<Account>) {
-        val json = gson.toJson(accounts)
-        sharedPreferences.edit().putString("accounts", json).apply()
+        val jsonStr = json.encodeToString(accounts)
+        sharedPreferences.edit().putString("accounts", jsonStr).apply()
     }
 }

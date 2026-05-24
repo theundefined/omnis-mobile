@@ -2,6 +2,9 @@ package com.theundefined.omnis.data.model
 
 import com.google.gson.annotations.SerializedName
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class Tenant(
     val name: String,
     val baseUrl: String,

@@ -1,5 +1,8 @@
 package com.theundefined.omnis.data.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class Account(
     val id: String,
     val username: String,
