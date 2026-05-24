@@ -55,7 +55,7 @@ android {
 }
 
 sentry {
-    org.set("theundefined")
+    org.set("netrator")
     projectName.set("omnis-mobile")
     includeProguardMapping = true
     autoUploadProguardMapping = true
