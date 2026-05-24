@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("io.sentry.android.gradle")
 }
 
 android {
@@ -18,6 +19,12 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        // Default DSN placeholder
+        val sentryDsn: String = project.findProperty("SENTRY_DSN")?.toString() 
+            ?: System.getenv("SENTRY_DSN") 
+            ?: ""
+        manifestPlaceholders["sentryDsn"] = sentryDsn
     }
 
     buildTypes {
@@ -44,6 +51,15 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+    }
+}
+
+sentry {
+    includeProguardMapping = true
+    autoUploadProguardMapping = true
+    autoInstallation {
+        enabled = true
+        sentryVersion = "7.3.0"
     }
 }
 

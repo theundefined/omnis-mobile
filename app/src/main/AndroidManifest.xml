@@ -10,6 +10,10 @@
         android:roundIcon="@drawable/ic_launcher_foreground"
         android:supportsRtl="true"
         android:theme="@style/Theme.Omnis">
+        
+        <meta-data android:name="io.sentry.dsn" android:value="${sentryDsn}" />
+        <meta-data android:name="io.sentry.traces.sample-rate" android:value="1.0" />
+        
         <activity
             android:name=".MainActivity"
             android:exported="true"
