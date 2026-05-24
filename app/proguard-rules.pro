@@ -28,6 +28,12 @@
     @retrofit2.http.* <methods>;
 }
 
+# Keep generic types of maps and lists which GSON needs
+-keep class java.util.Map { *; }
+-keep class java.util.List { *; }
+-keep class java.util.Set { *; }
+-keep class retrofit2.Response { *; }
+
 # General Keep for all data classes just in case
 -keep @com.google.gson.annotations.SerializedName class * {
     <fields>;
