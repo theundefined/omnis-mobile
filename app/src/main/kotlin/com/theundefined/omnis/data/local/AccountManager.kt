@@ -24,8 +24,11 @@ class AccountManager(context: Context) {
 
     fun getAccounts(): List<Account> {
         val json = sharedPreferences.getString("accounts", null) ?: return emptyList()
-        val type = object : TypeToken<List<Account>>() {}.type
-        return gson.fromJson(json, type)
+        return try {
+            gson.fromJson(json, Array<Account>::class.java)?.toList() ?: emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
     }
 
     fun addAccount(account: Account) {
