@@ -27,16 +27,11 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    - name: Prepare Sentry Properties
-      run: |
-        echo "defaults.org=netrator" > sentry.properties
-        echo "defaults.project=omnis-mobile" >> sentry.properties
-        echo "auth.token=${{ secrets.SENTRY_AUTH_TOKEN }}" >> sentry.properties
-
     - name: Build APKs
       run: ./gradlew assembleDebug assembleRelease
       env:
         SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+        SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
 
     - name: Rename and Prepare APKs
       if: github.event_name == 'release'
