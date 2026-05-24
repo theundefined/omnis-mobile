@@ -14,6 +14,9 @@
 -keepattributes *Annotation*
 -keep class sun.misc.Unsafe { *; }
 -keep class com.google.gson.stream.** { *; }
+# Prevent GSON from removing the generic signatures of TypeToken
+-keep class * extends com.google.gson.reflect.TypeToken
+-keepnames class * extends com.google.gson.reflect.TypeToken
 
 # Retrofit & OkHttp
 -dontwarn retrofit2.**
