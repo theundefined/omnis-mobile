@@ -55,7 +55,7 @@ class OmnisRepository(private val accountManager: AccountManager) {
             )
 
             if (response.isSuccessful) {
-                val token = response.body()?.jwtData?.trim('"') ?: return Result.failure(Exception("No token"))
+                val token = response.body()?.jwtData?.trim('"') ?: return Result.failure(Exception("Błąd: Nie otrzymano tokena autoryzacyjnego."))
                 
                 // Decode JWT to get display name
                 var displayName = username
@@ -83,8 +83,6 @@ class OmnisRepository(private val accountManager: AccountManager) {
                             "Fines" -> finesAmount = action.value.toDoubleOrNull() ?: 0.0
                         }
                     }
-                    // For display name, we would ideally parse JWT or fetch personal settings
-                    // Omnis-py parses JWT: display_name = payload.get("displayName", "Unknown")
                 }
 
                 val account = Account(
@@ -99,10 +97,16 @@ class OmnisRepository(private val accountManager: AccountManager) {
                 accountManager.addAccount(account)
                 Result.success(account)
             } else {
-                Result.failure(Exception("Login failed: ${response.code()}"))
+                val errorMessage = when (response.code()) {
+                    401 -> "Błędny login lub hasło."
+                    403 -> "Brak uprawnień do konta."
+                    404 -> "Nie odnaleziono serwera biblioteki."
+                    else -> "Błąd logowania (${response.code()}). Sprawdź dane i spróbuj ponownie."
+                }
+                Result.failure(Exception(errorMessage))
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(Exception("Błąd połączenia: ${e.localizedMessage}"))
         }
     }
 
@@ -119,7 +123,7 @@ class OmnisRepository(private val accountManager: AccountManager) {
                 targetUrl = "${account.tenant.baseUrl}/discovery/search?vid=${account.tenant.view}"
             )
             
-            val token = loginResponse.body()?.jwtData?.trim('"') ?: return Result.failure(Exception("Auth failed"))
+            val token = loginResponse.body()?.jwtData?.trim('"') ?: return Result.failure(Exception("Błąd autoryzacji profilu."))
             
             // Decode JWT for name
             var displayName = account.displayName ?: account.username
@@ -171,7 +175,7 @@ class OmnisRepository(private val accountManager: AccountManager) {
                 targetUrl = "${account.tenant.baseUrl}/discovery/search?vid=${account.tenant.view}"
             )
             
-            val token = loginResponse.body()?.jwtData?.trim('"') ?: return Result.failure(Exception("Auth failed"))
+            val token = loginResponse.body()?.jwtData?.trim('"') ?: return Result.failure(Exception("Błąd autoryzacji podczas pobierania książek."))
             
             val loansResponse = api.getLoans("Bearer $token")
             if (loansResponse.isSuccessful) {
@@ -198,7 +202,8 @@ class OmnisRepository(private val accountManager: AccountManager) {
 
                 Result.success(loans)
             } else {
-                Result.failure(Exception("Failed to fetch loans: ${loansResponse.code()}"))
+                val errorMsg = if (loansResponse.code() == 401) "Sesja wygasła lub błędne hasło." else "Błąd pobierania danych: ${loansResponse.code()}"
+                Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -208,7 +213,6 @@ class OmnisRepository(private val accountManager: AccountManager) {
     suspend fun renewLoan(account: Account, loanId: String): Result<Unit> {
         return try {
             val api = createClient(account.tenant.baseUrl)
-            // Re-login to get fresh token (simplification)
             val loginResponse = api.login(
                 username = account.username,
                 password = account.password,
@@ -216,13 +220,13 @@ class OmnisRepository(private val accountManager: AccountManager) {
                 view = account.tenant.view,
                 targetUrl = "${account.tenant.baseUrl}/discovery/search?vid=${account.tenant.view}"
             )
-            val token = loginResponse.body()?.jwtData?.trim('"') ?: return Result.failure(Exception("Auth failed"))
+            val token = loginResponse.body()?.jwtData?.trim('"') ?: return Result.failure(Exception("Błąd autoryzacji podczas przedłużania."))
             
             val response = api.renewLoan("Bearer $token", body = mapOf("id" to loanId))
             if (response.isSuccessful) {
                 Result.success(Unit)
             } else {
-                Result.failure(Exception("Renew failed: ${response.code()}"))
+                Result.failure(Exception("Przedłużenie nieudane: ${response.code()}"))
             }
         } catch (e: Exception) {
             Result.failure(e)
