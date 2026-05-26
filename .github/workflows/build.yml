@@ -1,21 +1,24 @@
-name: Android CI / Release
+name: Continuous Delivery
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  release:
-    types: [published]
 
 permissions:
   contents: write
 
 jobs:
-  build:
+  check-and-build:
     runs-on: ubuntu-latest
+    outputs:
+      release_version: ${{ steps.check_release.outputs.version }}
+      is_release: ${{ steps.check_release.outputs.is_release }}
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     
     - name: set up JDK 21
       uses: actions/setup-java@v4
@@ -27,10 +30,6 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    - name: Decode Keystore
-      if: github.event_name == 'release'
-      run: echo "${{ secrets.RELEASE_KEYSTORE }}" | base64 -d > omnis.jks
-
     - name: Prepare Sentry Properties
       run: |
         echo "defaults.org=netrator" > sentry.properties
@@ -38,35 +37,55 @@ jobs:
         echo "auth.token=${{ secrets.SENTRY_AUTH_TOKEN }}" >> sentry.properties
         echo "url=https://de.sentry.io" >> sentry.properties
 
-    - name: Build APKs and Bundle
-      run: ./gradlew assembleDebug assembleRelease bundleRelease
+    - name: Check if this is a Release commit
+      id: check_release
+      run: |
+        COMMIT_MSG=$(git log -1 --pretty=%B)
+        if [[ $COMMIT_MSG =~ ^release:\ (v[0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+          echo "version=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
+          echo "is_release=true" >> $GITHUB_OUTPUT
+          echo "Detected release commit for version ${BASH_REMATCH[1]}"
+        else
+          echo "is_release=false" >> $GITHUB_OUTPUT
+        fi
+
+    # Always build Debug to verify code quality
+    - name: Build Debug APK
+      run: ./gradlew assembleDebug
+      env:
+        SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+
+    # If it's a release commit, perform full build and signing
+    - name: Decode Keystore
+      if: steps.check_release.outputs.is_release == 'true'
+      run: echo "${{ secrets.RELEASE_KEYSTORE }}" | base64 -d > omnis.jks
+
+    - name: Build Release APK and Bundle
+      if: steps.check_release.outputs.is_release == 'true'
+      run: ./gradlew assembleRelease bundleRelease
       env:
         SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
         RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
         RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
 
-    - name: Rename and Prepare Assets
-      if: github.event_name == 'release'
+    - name: Prepare Release Assets
+      if: steps.check_release.outputs.is_release == 'true'
       run: |
-        VERSION_NAME=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
-        
-        # APKs
-        mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/omnis-mobile-v${VERSION_NAME}-release.apk
-        mv app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/omnis-mobile-v${VERSION_NAME}-debug.apk
-        
-        # AAB (for Google Play)
-        mv app/build/outputs/bundle/release/app-release.aab app/build/outputs/bundle/release/omnis-mobile-v${VERSION_NAME}.aab
-        
-        echo "RELEASE_APK=app/build/outputs/apk/release/omnis-mobile-v${VERSION_NAME}-release.apk" >> $GITHUB_ENV
-        echo "DEBUG_APK=app/build/outputs/apk/debug/omnis-mobile-v${VERSION_NAME}-debug.apk" >> $GITHUB_ENV
-        echo "RELEASE_AAB=app/build/outputs/bundle/release/omnis-mobile-v${VERSION_NAME}.aab" >> $GITHUB_ENV
+        VERSION="${{ steps.check_release.outputs.version }}"
+        mv app/build/outputs/apk/release/app-release.apk omnis-mobile-${VERSION}-release.apk
+        mv app/build/outputs/apk/debug/app-debug.apk omnis-mobile-${VERSION}-debug.apk
+        mv app/build/outputs/bundle/release/app-release.aab omnis-mobile-${VERSION}.aab
 
-    - name: Upload Assets to Release
-      if: github.event_name == 'release'
+    - name: Create Release and Upload Assets
+      if: steps.check_release.outputs.is_release == 'true'
       uses: softprops/action-gh-release@v2
       with:
+        tag_name: ${{ steps.check_release.outputs.version }}
+        name: Omnis Mobile ${{ steps.check_release.outputs.version }}
         files: |
-          ${{ env.RELEASE_APK }}
-          ${{ env.DEBUG_APK }}
-          ${{ env.RELEASE_AAB }}
+          omnis-mobile-*.apk
+          omnis-mobile-*.aab
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
