@@ -39,7 +39,7 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             
             val password = System.getenv("RELEASE_KEYSTORE_PASSWORD")
@@ -74,6 +74,7 @@ sentry {
     org.set("netrator")
     projectName.set("omnis-mobile")
     url.set("https://de.sentry.io")
+    authToken.set(System.getenv("SENTRY_AUTH_TOKEN"))
     includeProguardMapping = true
     autoUploadProguardMapping = true
     uploadNativeSymbols = false
