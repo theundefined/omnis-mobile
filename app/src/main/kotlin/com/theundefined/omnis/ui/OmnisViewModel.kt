@@ -7,8 +7,11 @@ import com.theundefined.omnis.data.model.Account
 import com.theundefined.omnis.data.model.Loan
 import com.theundefined.omnis.data.model.Tenant
 import com.theundefined.omnis.data.repository.OmnisRepository
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -34,6 +37,13 @@ class OmnisViewModel(private val repository: OmnisRepository) : ViewModel() {
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    private val _events = MutableSharedFlow<UiEvent>()
+    val events: SharedFlow<UiEvent> = _events.asSharedFlow()
+
+    sealed class UiEvent {
+        object AccountAdded : UiEvent()
+    }
 
     init {
         refreshAccounts()
@@ -114,6 +124,7 @@ class OmnisViewModel(private val repository: OmnisRepository) : ViewModel() {
             repository.loginAndAddAccount(username, password, tenant)
                 .onSuccess {
                     refreshAccounts()
+                    _events.emit(UiEvent.AccountAdded)
                 }
                 .onFailure { e ->
                     _uiState.update { it.copy(isLoading = false, error = e.message) }

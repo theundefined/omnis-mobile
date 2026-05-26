@@ -27,6 +27,7 @@ fun MainScreen(viewModel: OmnisViewModel) {
 
     if (currentScreen == "settings") {
         SettingsScreen(
+            viewModel = viewModel,
             accounts = uiState.accounts,
             onToggleAccount = { viewModel.toggleAccount(it) },
             onRemoveAccount = { viewModel.removeAccount(it) },

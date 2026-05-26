@@ -10,9 +10,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.theundefined.omnis.data.model.Account
 import com.theundefined.omnis.data.model.Tenant
+import com.theundefined.omnis.ui.OmnisViewModel
+import kotlinx.coroutines.flow.collectLatest
 
 @Composable
 fun SettingsScreen(
+    viewModel: OmnisViewModel,
     accounts: List<Account>,
     onToggleAccount: (Account) -> Unit,
     onRemoveAccount: (Account) -> Unit,
@@ -24,12 +27,12 @@ fun SettingsScreen(
     var showAddForm by remember { mutableStateOf(false) }
     var accountToRemove by remember { mutableStateOf<Account?>(null) }
 
-    // Close form on success (no error and stopped loading)
-    LaunchedEffect(isLoading, errorMessage) {
-        if (!isLoading && errorMessage == null && showAddForm) {
-            // Check if account list actually changed could be better, 
-            // but for now let's assume if it was adding and finished without error, it's done.
-            // Actually, ViewModel should probably handle the "success" signal better.
+    // Listen for success events to close the form
+    LaunchedEffect(Unit) {
+        viewModel.events.collectLatest { event ->
+            if (event is OmnisViewModel.UiEvent.AccountAdded) {
+                showAddForm = false
+            }
         }
     }
 
@@ -73,13 +76,6 @@ fun SettingsScreen(
                 isLoading = isLoading,
                 errorMessage = errorMessage
             )
-            
-            // Auto-close form on success
-            LaunchedEffect(isLoading, errorMessage) {
-                if (!isLoading && errorMessage == null && accounts.isNotEmpty()) {
-                    // showAddForm = false // This might be too aggressive if user was just viewing
-                }
-            }
         } else {
             LazyColumn(modifier = Modifier.weight(1f)) {
                 items(accounts, key = { it.id }) { account ->
