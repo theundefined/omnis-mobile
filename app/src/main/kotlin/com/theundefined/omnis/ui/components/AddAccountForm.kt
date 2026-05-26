@@ -26,128 +26,143 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 fun AddAccountForm(
     onAdd: (String, String, Tenant) -> Unit,
     onCancel: () -> Unit,
-    isLoading: Boolean
+    isLoading: Boolean,
+    errorMessage: String? = null
 ) {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var selectedTenant by remember { mutableStateOf(KNOWN_TENANTS[0]) }
     var expanded by remember { mutableStateOf(false) }
 
+    val snackbarHostState = remember { SnackbarHostState() }
     val autofill = LocalAutofill.current
     val autofillTree = LocalAutofillTree.current
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        Text("Dodaj konto", style = MaterialTheme.typography.headlineMedium)
-        Spacer(modifier = Modifier.height(16.dp))
+    LaunchedEffect(errorMessage) {
+        errorMessage?.let {
+            snackbarHostState.showSnackbar(it)
+        }
+    }
 
-        ExposedDropdownMenuBox(
-            expanded = expanded,
-            onExpandedChange = { expanded = !expanded }
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
         ) {
-            TextField(
-                value = selectedTenant.name,
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Biblioteka") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                modifier = Modifier
-                    .menuAnchor()
-                    .fillMaxWidth()
-            )
-            ExposedDropdownMenu(
+            Text("Dodaj konto", style = MaterialTheme.typography.headlineMedium)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Library selection dropdown
+            ExposedDropdownMenuBox(
                 expanded = expanded,
-                onDismissRequest = { expanded = false }
+                onExpandedChange = { expanded = !expanded }
             ) {
-                KNOWN_TENANTS.forEach { tenant ->
-                    DropdownMenuItem(
-                        text = { Text(tenant.name) },
-                        onClick = {
-                            selectedTenant = tenant
-                            expanded = false
-                        }
-                    )
+                TextField(
+                    value = selectedTenant.name,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Biblioteka") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                    modifier = Modifier
+                        .menuAnchor()
+                        .fillMaxWidth()
+                )
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    KNOWN_TENANTS.forEach { tenant ->
+                        DropdownMenuItem(
+                            text = { Text(tenant.name) },
+                            onClick = {
+                                selectedTenant = tenant
+                                expanded = false
+                            }
+                        )
+                    }
                 }
             }
-        }
 
-        Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-        val usernameAutofillNode = remember {
-            AutofillNode(
-                autofillTypes = listOf(AutofillType.Username),
-                onFill = { username = it }
+            // Username field
+            val usernameAutofillNode = remember {
+                AutofillNode(
+                    autofillTypes = listOf(AutofillType.Username),
+                    onFill = { username = it }
+                )
+            }
+            TextField(
+                value = username,
+                onValueChange = { username = it },
+                label = { Text("Login") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onGloballyPositioned { usernameAutofillNode.boundingBox = it.boundsInWindow() }
+                    .onFocusChanged { focusState ->
+                        if (focusState.isFocused) {
+                            autofill?.requestAutofillForNode(usernameAutofillNode)
+                        }
+                    },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Email,
+                    imeAction = ImeAction.Next
+                )
             )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Password field
+            val passwordAutofillNode = remember {
+                AutofillNode(
+                    autofillTypes = listOf(AutofillType.Password),
+                    onFill = { password = it }
+                )
+            }
+            TextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Hasło") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onGloballyPositioned { passwordAutofillNode.boundingBox = it.boundsInWindow() }
+                    .onFocusChanged { focusState ->
+                        if (focusState.isFocused) {
+                            autofill?.requestAutofillForNode(passwordAutofillNode)
+                        }
+                    },
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = ImeAction.Done
+                )
+            )
+
+            SideEffect {
+                autofillTree.children[usernameAutofillNode.id] = usernameAutofillNode
+                autofillTree.children[passwordAutofillNode.id] = passwordAutofillNode
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            if (isLoading) {
+                CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+            } else {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onCancel) {
+                        Text("Anuluj")
+                    }
+                    Button(onClick = { onAdd(username, password, selectedTenant) }) {
+                        Text("Zaloguj i dodaj")
+                    }
+                }
+            }
         }
         
-        TextField(
-            value = username,
-            onValueChange = { username = it },
-            label = { Text("Login") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .onGloballyPositioned { usernameAutofillNode.boundingBox = it.boundsInWindow() }
-                .onFocusChanged { focusState ->
-                    if (focusState.isFocused) {
-                        autofill?.requestAutofillForNode(usernameAutofillNode)
-                    }
-                },
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Email,
-                imeAction = ImeAction.Next
-            )
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter)
         )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        val passwordAutofillNode = remember {
-            AutofillNode(
-                autofillTypes = listOf(AutofillType.Password),
-                onFill = { password = it }
-            )
-        }
-
-        TextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("Hasło") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .onGloballyPositioned { passwordAutofillNode.boundingBox = it.boundsInWindow() }
-                .onFocusChanged { focusState ->
-                    if (focusState.isFocused) {
-                        autofill?.requestAutofillForNode(passwordAutofillNode)
-                    }
-                },
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                imeAction = ImeAction.Done
-            )
-        )
-
-        // Register nodes with the tree
-        SideEffect {
-            autofillTree.children[usernameAutofillNode.id] = usernameAutofillNode
-            autofillTree.children[passwordAutofillNode.id] = passwordAutofillNode
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        if (isLoading) {
-            CircularProgressIndicator(modifier = Modifier.padding(16.dp))
-        } else {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onCancel) {
-                    Text("Anuluj")
-                }
-                Button(onClick = { onAdd(username, password, selectedTenant) }) {
-                    Text("Zaloguj i dodaj")
-                }
-            }
-        }
     }
 }

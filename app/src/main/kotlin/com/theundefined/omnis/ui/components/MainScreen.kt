@@ -16,9 +16,10 @@ fun MainScreen(viewModel: OmnisViewModel) {
     var currentScreen by remember { mutableStateOf("main") }
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // Navigation and error handling logic
     LaunchedEffect(uiState.error) {
-        uiState.error?.let {
-            snackbarHostState.showSnackbar(it)
+        if (uiState.error != null && currentScreen == "main") {
+            snackbarHostState.showSnackbar(uiState.error)
         }
     }
 
@@ -29,7 +30,8 @@ fun MainScreen(viewModel: OmnisViewModel) {
             onRemoveAccount = { viewModel.removeAccount(it) },
             onAddAccount = { user, pass, tenant -> viewModel.addAccount(user, pass, tenant) },
             isLoading = uiState.isLoading,
-            onBack = { currentScreen = "main" }
+            onBack = { currentScreen = "main" },
+            errorMessage = if (uiState.error != null) uiState.error else null
         )
         return
     }

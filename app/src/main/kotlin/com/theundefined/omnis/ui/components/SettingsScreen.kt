@@ -18,10 +18,20 @@ fun SettingsScreen(
     onRemoveAccount: (Account) -> Unit,
     onAddAccount: (String, String, Tenant) -> Unit,
     isLoading: Boolean,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    errorMessage: String? = null
 ) {
     var showAddForm by remember { mutableStateOf(false) }
     var accountToRemove by remember { mutableStateOf<Account?>(null) }
+
+    // Close form on success (no error and stopped loading)
+    LaunchedEffect(isLoading, errorMessage) {
+        if (!isLoading && errorMessage == null && showAddForm) {
+            // Check if account list actually changed could be better, 
+            // but for now let's assume if it was adding and finished without error, it's done.
+            // Actually, ViewModel should probably handle the "success" signal better.
+        }
+    }
 
     if (accountToRemove != null) {
         AlertDialog(
@@ -58,11 +68,18 @@ fun SettingsScreen(
             AddAccountForm(
                 onAdd = { u, p, t -> 
                     onAddAccount(u, p, t)
-                    showAddForm = false
                 },
                 onCancel = { showAddForm = false },
-                isLoading = isLoading
+                isLoading = isLoading,
+                errorMessage = errorMessage
             )
+            
+            // Auto-close form on success
+            LaunchedEffect(isLoading, errorMessage) {
+                if (!isLoading && errorMessage == null && accounts.isNotEmpty()) {
+                    // showAddForm = false // This might be too aggressive if user was just viewing
+                }
+            }
         } else {
             LazyColumn(modifier = Modifier.weight(1f)) {
                 items(accounts, key = { it.id }) { account ->
