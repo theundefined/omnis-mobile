@@ -23,6 +23,7 @@ fun MainScreen(viewModel: OmnisViewModel) {
         }
     }
 
+    val currentError = uiState.error
     if (currentScreen == "settings") {
         SettingsScreen(
             accounts = uiState.accounts,
@@ -31,7 +32,7 @@ fun MainScreen(viewModel: OmnisViewModel) {
             onAddAccount = { user, pass, tenant -> viewModel.addAccount(user, pass, tenant) },
             isLoading = uiState.isLoading,
             onBack = { currentScreen = "main" },
-            errorMessage = if (uiState.error != null) uiState.error else null
+            errorMessage = currentError
         )
         return
     }
