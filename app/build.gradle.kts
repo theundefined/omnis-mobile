@@ -28,11 +28,26 @@ android {
         manifestPlaceholders["sentryDsn"] = sentryDsn
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("../omnis.jks")
+            storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+            keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("debug")
+            
+            val password = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+            if (password != null) {
+                signingConfig = signingConfigs.getByName("release")
+            } else {
+                signingConfig = signingConfigs.getByName("debug")
+            }
         }
     }
     compileOptions {

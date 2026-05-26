@@ -27,30 +27,46 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    - name: Build APKs
-      run: ./gradlew assembleDebug assembleRelease
+    - name: Decode Keystore
+      if: github.event_name == 'release'
+      run: echo "${{ secrets.RELEASE_KEYSTORE }}" | base64 -d > omnis.jks
+
+    - name: Prepare Sentry Properties
+      run: |
+        echo "defaults.org=netrator" > sentry.properties
+        echo "defaults.project=omnis-mobile" >> sentry.properties
+        echo "auth.token=${{ secrets.SENTRY_AUTH_TOKEN }}" >> sentry.properties
+        echo "url=https://de.sentry.io" >> sentry.properties
+
+    - name: Build APKs and Bundle
+      run: ./gradlew assembleDebug assembleRelease bundleRelease
       env:
         SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
-        SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+        RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+        RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
 
-    - name: Rename and Prepare APKs
+    - name: Rename and Prepare Assets
       if: github.event_name == 'release'
       run: |
         VERSION_NAME=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
         
-        # Release APK
+        # APKs
         mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/omnis-mobile-v${VERSION_NAME}-release.apk
-        
-        # Debug APK
         mv app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/omnis-mobile-v${VERSION_NAME}-debug.apk
+        
+        # AAB (for Google Play)
+        mv app/build/outputs/bundle/release/app-release.aab app/build/outputs/bundle/release/omnis-mobile-v${VERSION_NAME}.aab
         
         echo "RELEASE_APK=app/build/outputs/apk/release/omnis-mobile-v${VERSION_NAME}-release.apk" >> $GITHUB_ENV
         echo "DEBUG_APK=app/build/outputs/apk/debug/omnis-mobile-v${VERSION_NAME}-debug.apk" >> $GITHUB_ENV
+        echo "RELEASE_AAB=app/build/outputs/bundle/release/omnis-mobile-v${VERSION_NAME}.aab" >> $GITHUB_ENV
 
-    - name: Upload APKs to Release
+    - name: Upload Assets to Release
       if: github.event_name == 'release'
       uses: softprops/action-gh-release@v2
       with:
         files: |
           ${{ env.RELEASE_APK }}
           ${{ env.DEBUG_APK }}
+          ${{ env.RELEASE_AAB }}

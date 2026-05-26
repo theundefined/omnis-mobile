@@ -16,6 +16,11 @@ captures/
 *.apk
 *.aab
 
+# Keystores and secrets
+*.jks
+*.base64
+keystore/
+
 # Local SDK and Licenses
 licenses/
 android-sdk/
