@@ -13,8 +13,8 @@ android {
         applicationId = "com.theundefined.omnis"
         minSdk = 26
         targetSdk = 34
-        versionCode = 28
-        versionName = "0.1.26"
+        versionCode = 29
+        versionName = "0.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
