@@ -236,4 +236,7 @@ class OmnisRepository(private val accountManager: AccountManager) {
     fun getAccounts() = accountManager.getAccounts()
     fun updateAccount(account: Account) = accountManager.updateAccount(account)
     fun removeAccount(account: Account) = accountManager.removeAccount(account)
+
+    fun getCachedLoans(accountId: String): List<Loan> = accountManager.getCachedLoans(accountId)
+    fun saveCachedLoans(accountId: String, loans: List<Loan>) = accountManager.saveCachedLoans(accountId, loans)
 }

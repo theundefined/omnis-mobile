@@ -52,6 +52,10 @@ fun MainScreen(viewModel: OmnisViewModel) {
                         Text(if (uiState.groupingMode == GroupingMode.ACCOUNT) "👤" else "📍")
                     }
 
+                    IconButton(onClick = { viewModel.refreshAllLoans(isManual = true) }) {
+                        Text("🔄")
+                    }
+
                     var showSortMenu by remember { mutableStateOf(false) }
                     Box {
                         IconButton(onClick = { showSortMenu = true }) {

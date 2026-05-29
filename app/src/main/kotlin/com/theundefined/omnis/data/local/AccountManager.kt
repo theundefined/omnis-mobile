@@ -35,6 +35,20 @@ class AccountManager(context: Context) {
         }
     }
 
+    fun getCachedLoans(accountId: String): List<com.theundefined.omnis.data.model.Loan> {
+        val jsonStr = sharedPreferences.getString("loans_$accountId", null) ?: return emptyList()
+        return try {
+            json.decodeFromString<List<com.theundefined.omnis.data.model.Loan>>(jsonStr)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveCachedLoans(accountId: String, loans: List<com.theundefined.omnis.data.model.Loan>) {
+        val jsonStr = json.encodeToString(loans)
+        sharedPreferences.edit().putString("loans_$accountId", jsonStr).apply()
+    }
+
     fun addAccount(account: Account) {
         val accounts = getAccounts().toMutableList()
         accounts.removeAll { it.username == account.username && it.tenant.institution == account.tenant.institution }
@@ -55,6 +69,7 @@ class AccountManager(context: Context) {
         val accounts = getAccounts().toMutableList()
         accounts.removeIf { it.id == account.id }
         saveAccounts(accounts)
+        sharedPreferences.edit().remove("loans_${account.id}").apply()
     }
 
     private fun saveAccounts(accounts: List<Account>) {
