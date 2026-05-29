@@ -47,40 +47,66 @@ class OmnisViewModel(private val repository: OmnisRepository) : ViewModel() {
 
     init {
         refreshAccounts()
+        loadCachedLoans()
+        refreshAllLoans(isManual = false)
     }
 
     fun refreshAccounts() {
         val accounts = repository.getAccounts()
         _uiState.update { it.copy(accounts = accounts) }
-        refreshAllLoans()
     }
 
-    fun refreshAllLoans() {
+    fun loadCachedLoans() {
+        val currentAccounts = _uiState.value.accounts.filter { it.isEnabled }
+        val allLoansList = mutableListOf<Pair<Account, Loan>>()
+        
+        currentAccounts.forEach { account ->
+            val cachedLoans = repository.getCachedLoans(account.id)
+            cachedLoans.forEach { allLoansList.add(account to it) }
+        }
+        updateGroupedLoans(allLoansList, false)
+    }
+
+    fun refreshAllLoans(isManual: Boolean = true) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
-            val currentAccounts = uiState.value.accounts.filter { it.isEnabled }
+            if (isManual) {
+                _uiState.update { it.copy(isLoading = true, error = null) }
+            }
+            
+            val currentAccounts = _uiState.value.accounts.filter { it.isEnabled }
             val allLoansList = mutableListOf<Pair<Account, Loan>>()
+            var hasError = false
+            var errorMessage: String? = null
             
             currentAccounts.forEach { account ->
-                // Migration/Auto-update: if displayName is missing or is just the username, fetch profile
                 if (account.displayName == null || account.displayName == account.username) {
                     repository.fetchAccountProfile(account)
                 }
 
                 repository.getLoansForAccount(account).onSuccess { loans ->
+                    repository.saveCachedLoans(account.id, loans)
                     loans.forEach { allLoansList.add(account to it) }
+                }.onFailure {
+                    hasError = true
+                    errorMessage = it.message
+                    // Use cached loans if network fails
+                    val cachedLoans = repository.getCachedLoans(account.id)
+                    cachedLoans.forEach { loan -> allLoansList.add(account to loan) }
                 }
             }
             
-            // After potential profile updates, refresh the account list in state
             val updatedAccounts = repository.getAccounts()
             _uiState.update { it.copy(accounts = updatedAccounts) }
             
-            updateGroupedLoans(allLoansList)
+            updateGroupedLoans(allLoansList, false)
+            
+            if (hasError && isManual) {
+                _uiState.update { it.copy(error = errorMessage ?: "Wystąpił błąd podczas odświeżania danych") }
+            }
         }
     }
 
-    private fun updateGroupedLoans(allLoans: List<Pair<Account, Loan>>) {
+    private fun updateGroupedLoans(allLoans: List<Pair<Account, Loan>>, isLoading: Boolean) {
         val grouped = when (uiState.value.groupingMode) {
             GroupingMode.ACCOUNT -> {
                 allLoans.groupBy { it.first.displayName ?: it.first.username }
@@ -91,7 +117,7 @@ class OmnisViewModel(private val repository: OmnisRepository) : ViewModel() {
                     .mapValues { entry -> sortLoans(entry.value.map { it.second }) }
             }
         }
-        _uiState.update { it.copy(loans = grouped, isLoading = false) }
+        _uiState.update { it.copy(loans = grouped, isLoading = isLoading) }
     }
 
     private fun sortLoans(loans: List<Loan>): List<Loan> {
@@ -104,12 +130,30 @@ class OmnisViewModel(private val repository: OmnisRepository) : ViewModel() {
 
     fun setGroupingMode(mode: GroupingMode) {
         _uiState.update { it.copy(groupingMode = mode) }
-        refreshAllLoans()
+        reapplyGroupingAndSorting()
     }
 
     fun setSortMode(mode: SortMode) {
         _uiState.update { it.copy(sortMode = mode) }
-        refreshAllLoans()
+        reapplyGroupingAndSorting()
+    }
+
+    private fun reapplyGroupingAndSorting() {
+        val currentAccounts = _uiState.value.accounts.filter { it.isEnabled }
+        val allLoansList = mutableListOf<Pair<Account, Loan>>()
+        
+        currentAccounts.forEach { account ->
+            // In a real app we might store current loaded loans, but we can also just use cached loans
+            // OR we can flatten current uiState.loans
+            val loansForAccount = _uiState.value.loans.values.flatten().filter { it.accountId == account.id }
+            if (loansForAccount.isNotEmpty()) {
+                loansForAccount.forEach { allLoansList.add(account to it) }
+            } else {
+                val cachedLoans = repository.getCachedLoans(account.id)
+                cachedLoans.forEach { allLoansList.add(account to it) }
+            }
+        }
+        updateGroupedLoans(allLoansList, _uiState.value.isLoading)
     }
 
     fun toggleAccount(account: Account) {

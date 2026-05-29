@@ -95,6 +95,15 @@ fun SettingsScreen(
             ) {
                 Text("Dodaj nowe konto")
             }
+            
+            Text(
+                text = "Wersja: ${com.theundefined.omnis.BuildConfig.VERSION_NAME}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(bottom = 16.dp)
+            )
         }
     }
 }

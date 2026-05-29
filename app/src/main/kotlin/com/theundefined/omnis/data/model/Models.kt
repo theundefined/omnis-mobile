@@ -1,7 +1,7 @@
 package com.theundefined.omnis.data.model
 
 import com.google.gson.annotations.SerializedName
-
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -21,19 +21,20 @@ data class UserInfo(
     val finesCurrency: String = "PLN"
 )
 
+@Serializable
 data class Loan(
-    @SerializedName("loanid") val id: String,
+    @SerializedName("loanid") @SerialName("loanid") val id: String,
     val mmsid: String,
     val title: String,
     val author: String?,
-    @SerializedName("duedate") val dueDate: String,
-    @SerializedName("duehour") val dueHour: String,
-    @SerializedName("loandate") val loanDate: String,
-    @SerializedName("loanstatus") val status: String,
-    @SerializedName("ilsinstitutionname") val libraryName: String,
-    @SerializedName("mainlocationname") val locationName: String,
-    @SerializedName("secondarylocationname") val subLocationName: String?,
-    @SerializedName("itembarcode") val barcode: String,
+    @SerializedName("duedate") @SerialName("duedate") val dueDate: String,
+    @SerializedName("duehour") @SerialName("duehour") val dueHour: String,
+    @SerializedName("loandate") @SerialName("loandate") val loanDate: String,
+    @SerializedName("loanstatus") @SerialName("loanstatus") val status: String,
+    @SerializedName("ilsinstitutionname") @SerialName("ilsinstitutionname") val libraryName: String,
+    @SerializedName("mainlocationname") @SerialName("mainlocationname") val locationName: String,
+    @SerializedName("secondarylocationname") @SerialName("secondarylocationname") val subLocationName: String?,
+    @SerializedName("itembarcode") @SerialName("itembarcode") val barcode: String,
     val renewable: Boolean = false,
     var accountId: String? = null,
     var ownerName: String? = null
