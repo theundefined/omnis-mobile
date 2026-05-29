@@ -8,12 +8,12 @@ plugins {
 
 android {
     namespace = "com.theundefined.omnis"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.theundefined.omnis"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 30
         versionName = "0.2.1"
 
