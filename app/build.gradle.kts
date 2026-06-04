@@ -43,6 +43,10 @@ android {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             
+            ndk {
+                debugSymbolLevel = "full"
+            }
+
             val password = System.getenv("RELEASE_KEYSTORE_PASSWORD")
             if (password != null) {
                 signingConfig = signingConfigs.getByName("release")

@@ -30,7 +30,8 @@ class OmnisRepository(private val accountManager: AccountManager) {
         val okHttpClient = OkHttpClient.Builder()
             .addInterceptor(logging)
             .cookieJar(cookieJar)
-            .followRedirects(true)
+            .followRedirects(false)
+            .followSslRedirects(false)
             .build()
 
         return Retrofit.Builder()
