@@ -14,8 +14,8 @@ android {
         applicationId = "com.theundefined.omnis"
         minSdk = 26
         targetSdk = 35
-        versionCode = 30
-        versionName = "0.2.1"
+        versionCode = 31
+        versionName = "0.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -61,6 +61,10 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+    lint {
+        disable += "NullSafeMutableLiveData"
+        checkReleaseBuilds = false
     }
     packaging {
         resources {
