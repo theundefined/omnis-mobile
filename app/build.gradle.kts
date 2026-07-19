@@ -4,6 +4,18 @@ plugins {
     id("io.sentry.android.gradle")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.diffplug.spotless")
+}
+
+spotless {
+    kotlin {
+        target("src/**/*.kt")
+        ktfmt().kotlinlangStyle()
+    }
+    kotlinGradle {
+        target("*.gradle.kts")
+        ktfmt().kotlinlangStyle()
+    }
 }
 
 android {
@@ -18,14 +30,12 @@ android {
         versionName = "0.3.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        vectorDrawables {
-            useSupportLibrary = true
-        }
+        vectorDrawables { useSupportLibrary = true }
+        resourceConfigurations.addAll(listOf("pl", "en"))
 
         // Default DSN placeholder
-        val sentryDsn: String = project.findProperty("SENTRY_DSN")?.toString() 
-            ?: System.getenv("SENTRY_DSN") 
-            ?: ""
+        val sentryDsn: String =
+            project.findProperty("SENTRY_DSN")?.toString() ?: System.getenv("SENTRY_DSN") ?: ""
         manifestPlaceholders["sentryDsn"] = sentryDsn
     }
 
@@ -41,11 +51,12 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            
-            ndk {
-                debugSymbolLevel = "full"
-            }
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+
+            ndk { debugSymbolLevel = "full" }
 
             val password = System.getenv("RELEASE_KEYSTORE_PASSWORD")
             if (password != null) {
@@ -59,9 +70,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    kotlinOptions { jvmTarget = "17" }
     buildFeatures {
         compose = true
         buildConfig = true
@@ -70,11 +79,7 @@ android {
         disable += "NullSafeMutableLiveData"
         checkReleaseBuilds = false
     }
-    packaging {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
-    }
+    packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
 }
 
 sentry {
@@ -101,7 +106,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
-    
+
     // Security
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 

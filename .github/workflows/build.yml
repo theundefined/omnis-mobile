@@ -49,6 +49,9 @@ jobs:
           echo "is_release=false" >> $GITHUB_OUTPUT
         fi
 
+    - name: Check code formatting
+      run: ./gradlew spotlessCheck
+
     # Always build Debug to verify code quality
     - name: Build Debug APK
       run: ./gradlew assembleDebug

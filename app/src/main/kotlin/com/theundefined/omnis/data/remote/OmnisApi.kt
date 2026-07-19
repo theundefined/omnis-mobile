@@ -6,9 +6,7 @@ import retrofit2.http.*
 
 interface OmnisApi {
     @GET("/discovery/search")
-    suspend fun getInitialCookies(
-        @Query("vid") view: String
-    ): Response<Unit>
+    suspend fun getInitialCookies(@Query("vid") view: String): Response<Unit>
 
     @POST("/primaws/suprimaLogin")
     @FormUrlEncoded

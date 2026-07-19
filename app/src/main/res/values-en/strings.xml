@@ -1,0 +1,36 @@
+<resources>
+    <string name="app_name">Omnis</string>
+    <string name="sort_by_due_date">Sort by due date</string>
+    <string name="sort_by_loan_date">Sort by loan date</string>
+    <string name="sort_by_title">Sort by title</string>
+    <string name="add_first_account">Add first account</string>
+    <string name="add_account">Add account</string>
+    <string name="library">Library</string>
+    <string name="login">Username</string>
+    <string name="password">Password</string>
+    <string name="cancel">Cancel</string>
+    <string name="login_and_add">Login and add</string>
+    <string name="no_loans">No loans.</string>
+    <string name="days_overdue">%d days overdue</string>
+    <string name="today">today</string>
+    <string name="tomorrow">tomorrow</string>
+    <string name="in_days">in %d days</string>
+    <string name="return_label">Due date: %1$s</string>
+    <string name="loaned_on">Loaned on: %1$s</string>
+    <string name="location_label">Location: %1$s - %2$s</string>
+    <string name="loaned_by">Loaned by: %1$s</string>
+    <string name="barcode_label">Barcode: %1$s</string>
+    <string name="unknown_author">Unknown author</string>
+    <string name="renew">Renew</string>
+    <string name="remove_account">Remove account</string>
+    <string name="remove_account_confirm">Are you sure you want to remove account %1$s?</string>
+    <string name="remove">Remove</string>
+    <string name="back_to_main">← Back</string>
+    <string name="manage_accounts">Manage accounts</string>
+    <string name="add_new_account">Add new account</string>
+    <string name="version_label">Version: %1$s</string>
+    <string name="fines_label">Fines: %1$.2f %2$s</string>
+    <string name="refresh_error">An error occurred while refreshing data</string>
+    
+    <string name="share_book">📚 Book: %1$s\n✍️ Author: %2$s\n📅 Due date: %3$s\n📍 Location: %4$s\n🔑 Barcode: %5$s</string>
+</resources>

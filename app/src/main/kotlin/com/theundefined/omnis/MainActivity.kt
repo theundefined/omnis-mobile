@@ -15,13 +15,11 @@ import com.theundefined.omnis.ui.components.MainScreen
 import com.theundefined.omnis.ui.theme.OmnisTheme
 
 class MainActivity : ComponentActivity() {
-    
-    private val repository by lazy {
-        OmnisRepository(AccountManager(applicationContext))
-    }
-    
+
+    private val repository by lazy { OmnisRepository(AccountManager(applicationContext)) }
+
     private val viewModel: OmnisViewModel by viewModels {
-        OmnisViewModel.Factory(repository)
+        OmnisViewModel.Factory(application, repository)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -1,8 +1,10 @@
 package com.theundefined.omnis.ui
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.theundefined.omnis.R
 import com.theundefined.omnis.data.model.Account
 import com.theundefined.omnis.data.model.Loan
 import com.theundefined.omnis.data.model.Tenant
@@ -17,11 +19,14 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 enum class GroupingMode {
-    ACCOUNT, BRANCH
+    ACCOUNT,
+    BRANCH
 }
 
 enum class SortMode {
-    DUE_DATE, LOAN_DATE, TITLE
+    DUE_DATE,
+    LOAN_DATE,
+    TITLE
 }
 
 data class UiState(
@@ -33,7 +38,8 @@ data class UiState(
     val error: String? = null
 )
 
-class OmnisViewModel(private val repository: OmnisRepository) : ViewModel() {
+class OmnisViewModel(application: Application, private val repository: OmnisRepository) :
+    AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -59,7 +65,7 @@ class OmnisViewModel(private val repository: OmnisRepository) : ViewModel() {
     fun loadCachedLoans() {
         val currentAccounts = _uiState.value.accounts.filter { it.isEnabled }
         val allLoansList = mutableListOf<Pair<Account, Loan>>()
-        
+
         currentAccounts.forEach { account ->
             val cachedLoans = repository.getCachedLoans(account.id)
             cachedLoans.forEach { allLoansList.add(account to it) }
@@ -72,51 +78,63 @@ class OmnisViewModel(private val repository: OmnisRepository) : ViewModel() {
             if (isManual) {
                 _uiState.update { it.copy(isLoading = true, error = null) }
             }
-            
+
             val currentAccounts = _uiState.value.accounts.filter { it.isEnabled }
             val allLoansList = mutableListOf<Pair<Account, Loan>>()
             var hasError = false
             var errorMessage: String? = null
-            
+
             currentAccounts.forEach { account ->
                 if (account.displayName == null || account.displayName == account.username) {
                     repository.fetchAccountProfile(account)
                 }
 
-                repository.getLoansForAccount(account).onSuccess { loans ->
-                    repository.saveCachedLoans(account.id, loans)
-                    loans.forEach { allLoansList.add(account to it) }
-                }.onFailure {
-                    hasError = true
-                    errorMessage = it.message
-                    // Use cached loans if network fails
-                    val cachedLoans = repository.getCachedLoans(account.id)
-                    cachedLoans.forEach { loan -> allLoansList.add(account to loan) }
-                }
+                repository
+                    .getLoansForAccount(account)
+                    .onSuccess { loans ->
+                        repository.saveCachedLoans(account.id, loans)
+                        loans.forEach { allLoansList.add(account to it) }
+                    }
+                    .onFailure {
+                        hasError = true
+                        errorMessage = it.message
+                        // Use cached loans if network fails
+                        val cachedLoans = repository.getCachedLoans(account.id)
+                        cachedLoans.forEach { loan -> allLoansList.add(account to loan) }
+                    }
             }
-            
+
             val updatedAccounts = repository.getAccounts()
             _uiState.update { it.copy(accounts = updatedAccounts) }
-            
+
             updateGroupedLoans(allLoansList, false)
-            
+
             if (hasError && isManual) {
-                _uiState.update { it.copy(error = errorMessage ?: "Wystąpił błąd podczas odświeżania danych") }
+                _uiState.update {
+                    it.copy(
+                        error =
+                            errorMessage
+                                ?: getApplication<Application>().getString(R.string.refresh_error)
+                    )
+                }
             }
         }
     }
 
     private fun updateGroupedLoans(allLoans: List<Pair<Account, Loan>>, isLoading: Boolean) {
-        val grouped = when (uiState.value.groupingMode) {
-            GroupingMode.ACCOUNT -> {
-                allLoans.groupBy { it.first.displayName ?: it.first.username }
-                    .mapValues { entry -> sortLoans(entry.value.map { it.second }) }
+        val grouped =
+            when (uiState.value.groupingMode) {
+                GroupingMode.ACCOUNT -> {
+                    allLoans
+                        .groupBy { it.first.displayName ?: it.first.username }
+                        .mapValues { entry -> sortLoans(entry.value.map { it.second }) }
+                }
+                GroupingMode.BRANCH -> {
+                    allLoans
+                        .groupBy { it.second.libraryName + " - " + it.second.locationName }
+                        .mapValues { entry -> sortLoans(entry.value.map { it.second }) }
+                }
             }
-            GroupingMode.BRANCH -> {
-                allLoans.groupBy { it.second.libraryName + " - " + it.second.locationName }
-                    .mapValues { entry -> sortLoans(entry.value.map { it.second }) }
-            }
-        }
         _uiState.update { it.copy(loans = grouped, isLoading = isLoading) }
     }
 
@@ -141,11 +159,13 @@ class OmnisViewModel(private val repository: OmnisRepository) : ViewModel() {
     private fun reapplyGroupingAndSorting() {
         val currentAccounts = _uiState.value.accounts.filter { it.isEnabled }
         val allLoansList = mutableListOf<Pair<Account, Loan>>()
-        
+
         currentAccounts.forEach { account ->
-            // In a real app we might store current loaded loans, but we can also just use cached loans
+            // In a real app we might store current loaded loans, but we can also just use cached
+            // loans
             // OR we can flatten current uiState.loans
-            val loansForAccount = _uiState.value.loans.values.flatten().filter { it.accountId == account.id }
+            val loansForAccount =
+                _uiState.value.loans.values.flatten().filter { it.accountId == account.id }
             if (loansForAccount.isNotEmpty()) {
                 loansForAccount.forEach { allLoansList.add(account to it) }
             } else {
@@ -165,7 +185,8 @@ class OmnisViewModel(private val repository: OmnisRepository) : ViewModel() {
     fun addAccount(username: String, password: String, tenant: Tenant) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-            repository.loginAndAddAccount(username, password, tenant)
+            repository
+                .loginAndAddAccount(username, password, tenant)
                 .onSuccess {
                     refreshAccounts()
                     _events.emit(UiEvent.AccountAdded)
@@ -186,10 +207,9 @@ class OmnisViewModel(private val repository: OmnisRepository) : ViewModel() {
     fun renewLoan(account: Account, loanId: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            repository.renewLoan(account, loanId)
-                .onSuccess {
-                    refreshAllLoans()
-                }
+            repository
+                .renewLoan(account, loanId)
+                .onSuccess { refreshAllLoans() }
                 .onFailure { e ->
                     _uiState.update { it.copy(isLoading = false, error = e.message) }
                 }
@@ -201,9 +221,10 @@ class OmnisViewModel(private val repository: OmnisRepository) : ViewModel() {
         refreshAccounts()
     }
 
-    class Factory(private val repository: OmnisRepository) : ViewModelProvider.Factory {
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return OmnisViewModel(repository) as T
+    class Factory(private val application: Application, private val repository: OmnisRepository) :
+        ViewModelProvider.Factory {
+        override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+            return OmnisViewModel(application, repository) as T
         }
     }
 }
