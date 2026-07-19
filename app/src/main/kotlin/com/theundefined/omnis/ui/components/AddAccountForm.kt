@@ -14,10 +14,12 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalAutofill
 import androidx.compose.ui.platform.LocalAutofillTree
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.theundefined.omnis.R
 import com.theundefined.omnis.data.model.KNOWN_TENANTS
 import com.theundefined.omnis.data.model.Tenant
 
@@ -38,19 +40,14 @@ fun AddAccountForm(
     val autofill = LocalAutofill.current
     val autofillTree = LocalAutofillTree.current
 
-    LaunchedEffect(errorMessage) {
-        errorMessage?.let {
-            snackbarHostState.showSnackbar(it)
-        }
-    }
+    LaunchedEffect(errorMessage) { errorMessage?.let { snackbarHostState.showSnackbar(it) } }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
-        ) {
-            Text("Dodaj konto", style = MaterialTheme.typography.headlineMedium)
+        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            Text(
+                stringResource(R.string.add_account),
+                style = MaterialTheme.typography.headlineMedium
+            )
             Spacer(modifier = Modifier.height(16.dp))
 
             // Library selection dropdown
@@ -62,16 +59,13 @@ fun AddAccountForm(
                     value = selectedTenant.name,
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Biblioteka") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                    modifier = Modifier
-                        .menuAnchor()
-                        .fillMaxWidth()
+                    label = { Text(stringResource(R.string.library)) },
+                    trailingIcon = {
+                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                    },
+                    modifier = Modifier.menuAnchor().fillMaxWidth()
                 )
-                ExposedDropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false }
-                ) {
+                ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                     KNOWN_TENANTS.forEach { tenant ->
                         DropdownMenuItem(
                             text = { Text(tenant.name) },
@@ -96,19 +90,19 @@ fun AddAccountForm(
             TextField(
                 value = username,
                 onValueChange = { username = it },
-                label = { Text("Login") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onGloballyPositioned { usernameAutofillNode.boundingBox = it.boundsInWindow() }
-                    .onFocusChanged { focusState ->
-                        if (focusState.isFocused) {
-                            autofill?.requestAutofillForNode(usernameAutofillNode)
+                label = { Text(stringResource(R.string.login)) },
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .onGloballyPositioned {
+                            usernameAutofillNode.boundingBox = it.boundsInWindow()
                         }
-                    },
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Email,
-                    imeAction = ImeAction.Next
-                )
+                        .onFocusChanged { focusState ->
+                            if (focusState.isFocused) {
+                                autofill?.requestAutofillForNode(usernameAutofillNode)
+                            }
+                        },
+                keyboardOptions =
+                    KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next)
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -123,20 +117,23 @@ fun AddAccountForm(
             TextField(
                 value = password,
                 onValueChange = { password = it },
-                label = { Text("Hasło") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onGloballyPositioned { passwordAutofillNode.boundingBox = it.boundsInWindow() }
-                    .onFocusChanged { focusState ->
-                        if (focusState.isFocused) {
-                            autofill?.requestAutofillForNode(passwordAutofillNode)
+                label = { Text(stringResource(R.string.password)) },
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .onGloballyPositioned {
+                            passwordAutofillNode.boundingBox = it.boundsInWindow()
                         }
-                    },
+                        .onFocusChanged { focusState ->
+                            if (focusState.isFocused) {
+                                autofill?.requestAutofillForNode(passwordAutofillNode)
+                            }
+                        },
                 visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Password,
-                    imeAction = ImeAction.Done
-                )
+                keyboardOptions =
+                    KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Done
+                    )
             )
 
             SideEffect {
@@ -150,16 +147,14 @@ fun AddAccountForm(
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
             } else {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onCancel) {
-                        Text("Anuluj")
-                    }
+                    TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) }
                     Button(onClick = { onAdd(username, password, selectedTenant) }) {
-                        Text("Zaloguj i dodaj")
+                        Text(stringResource(R.string.login_and_add))
                     }
                 }
             }
         }
-        
+
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier.align(Alignment.BottomCenter)

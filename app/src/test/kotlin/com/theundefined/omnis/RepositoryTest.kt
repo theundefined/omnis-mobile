@@ -1,7 +1,7 @@
 package com.theundefined.omnis
 
-import org.junit.Test
 import org.junit.Assert.*
+import org.junit.Test
 
 class RepositoryTest {
     @Test
