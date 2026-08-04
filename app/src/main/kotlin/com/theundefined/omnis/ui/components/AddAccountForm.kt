@@ -1,7 +1,9 @@
 package com.theundefined.omnis.ui.components
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,8 +44,10 @@ fun AddAccountForm(
 
     LaunchedEffect(errorMessage) { errorMessage?.let { snackbarHostState.showSnackbar(it) } }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    Box(modifier = Modifier.fillMaxSize().imePadding()) {
+        Column(
+            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)
+        ) {
             Text(
                 stringResource(R.string.add_account),
                 style = MaterialTheme.typography.headlineMedium

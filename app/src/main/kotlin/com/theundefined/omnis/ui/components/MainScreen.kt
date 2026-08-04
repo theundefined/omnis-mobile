@@ -1,10 +1,14 @@
 package com.theundefined.omnis.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.theundefined.omnis.R
 import com.theundefined.omnis.ui.GroupingMode
@@ -27,6 +31,8 @@ fun MainScreen(viewModel: OmnisViewModel) {
         }
     }
 
+    BackHandler(enabled = currentScreen == "settings") { currentScreen = "main" }
+
     if (currentScreen == "settings") {
         SettingsScreen(
             viewModel = viewModel,
@@ -47,6 +53,12 @@ fun MainScreen(viewModel: OmnisViewModel) {
             TopAppBar(
                 title = { Text(stringResource(R.string.app_name)) },
                 actions = {
+                    val groupingDescription =
+                        stringResource(
+                            if (uiState.groupingMode == GroupingMode.ACCOUNT)
+                                R.string.cd_group_by_account
+                            else R.string.cd_group_by_branch
+                        )
                     IconButton(
                         onClick = {
                             val nextMode =
@@ -54,18 +66,29 @@ fun MainScreen(viewModel: OmnisViewModel) {
                                     GroupingMode.BRANCH
                                 else GroupingMode.ACCOUNT
                             viewModel.setGroupingMode(nextMode)
-                        }
+                        },
+                        modifier = Modifier.semantics { contentDescription = groupingDescription }
                     ) {
                         Text(if (uiState.groupingMode == GroupingMode.ACCOUNT) "👤" else "📍")
                     }
 
-                    IconButton(onClick = { viewModel.refreshAllLoans(isManual = true) }) {
+                    val refreshDescription = stringResource(R.string.cd_refresh)
+                    IconButton(
+                        onClick = { viewModel.refreshAllLoans(isManual = true) },
+                        modifier = Modifier.semantics { contentDescription = refreshDescription }
+                    ) {
                         Text("🔄")
                     }
 
                     var showSortMenu by remember { mutableStateOf(false) }
+                    val sortDescription = stringResource(R.string.cd_sort)
                     Box {
-                        IconButton(onClick = { showSortMenu = true }) { Text("🔃") }
+                        IconButton(
+                            onClick = { showSortMenu = true },
+                            modifier = Modifier.semantics { contentDescription = sortDescription }
+                        ) {
+                            Text("🔃")
+                        }
                         DropdownMenu(
                             expanded = showSortMenu,
                             onDismissRequest = { showSortMenu = false }
@@ -94,7 +117,13 @@ fun MainScreen(viewModel: OmnisViewModel) {
                         }
                     }
 
-                    IconButton(onClick = { currentScreen = "settings" }) { Text("⚙️") }
+                    val settingsDescription = stringResource(R.string.cd_settings)
+                    IconButton(
+                        onClick = { currentScreen = "settings" },
+                        modifier = Modifier.semantics { contentDescription = settingsDescription }
+                    ) {
+                        Text("⚙️")
+                    }
                 }
             )
         }
@@ -110,10 +139,11 @@ fun MainScreen(viewModel: OmnisViewModel) {
                     }
                 }
             } else {
-                Column {
-                    if (uiState.isLoading) {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    }
+                PullToRefreshBox(
+                    isRefreshing = uiState.isLoading,
+                    onRefresh = { viewModel.refreshAllLoans(isManual = true) },
+                    modifier = Modifier.fillMaxSize()
+                ) {
                     LoanList(
                         groupedLoans = uiState.loans,
                         onRenew = { loan -> viewModel.renewLoan(loan) }

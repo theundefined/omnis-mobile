@@ -25,7 +25,12 @@
     <string name="remove_account">Usuń konto</string>
     <string name="remove_account_confirm">Czy na pewno chcesz usunąć konto %1$s?</string>
     <string name="remove">Usuń</string>
-    <string name="back_to_main">← Powrót</string>
+    <string name="cd_back">Wstecz</string>
+    <string name="cd_group_by_account">Grupowanie: według konta</string>
+    <string name="cd_group_by_branch">Grupowanie: według lokalizacji</string>
+    <string name="cd_refresh">Odśwież</string>
+    <string name="cd_sort">Sortuj</string>
+    <string name="cd_settings">Ustawienia</string>
     <string name="manage_accounts">Zarządzanie kontami</string>
     <string name="add_new_account">Dodaj nowe konto</string>
     <string name="version_label">Wersja: %1$s</string>

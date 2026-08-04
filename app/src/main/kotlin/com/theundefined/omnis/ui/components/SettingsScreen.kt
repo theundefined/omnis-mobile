@@ -1,5 +1,6 @@
 package com.theundefined.omnis.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -8,6 +9,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.theundefined.omnis.R
 import com.theundefined.omnis.data.model.Account
@@ -15,6 +18,7 @@ import com.theundefined.omnis.data.model.Tenant
 import com.theundefined.omnis.ui.OmnisViewModel
 import kotlinx.coroutines.flow.collectLatest
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     viewModel: OmnisViewModel,
@@ -28,6 +32,11 @@ fun SettingsScreen(
 ) {
     var showAddForm by remember { mutableStateOf(false) }
     var accountToRemove by remember { mutableStateOf<Account?>(null) }
+
+    // Closing the add-account form takes priority over leaving the settings screen; when the
+    // form isn't shown, the enclosing MainScreen's BackHandler (currentScreen == "settings")
+    // takes over and navigates back to the main screen.
+    BackHandler(enabled = showAddForm) { showAddForm = false }
 
     // Listen for success events to close the form
     LaunchedEffect(Unit) {
@@ -62,51 +71,59 @@ fun SettingsScreen(
         )
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack) { Text(stringResource(R.string.back_to_main)) }
-            Spacer(modifier = Modifier.width(16.dp))
-            Text(
-                stringResource(R.string.manage_accounts),
-                style = MaterialTheme.typography.headlineSmall
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.manage_accounts)) },
+                navigationIcon = {
+                    val backDescription = stringResource(R.string.cd_back)
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier.semantics { contentDescription = backDescription }
+                    ) {
+                        Text("←", style = MaterialTheme.typography.headlineSmall)
+                    }
+                }
             )
         }
-
-        if (showAddForm) {
-            AddAccountForm(
-                onAdd = { u, p, t -> onAddAccount(u, p, t) },
-                onCancel = { showAddForm = false },
-                isLoading = isLoading,
-                errorMessage = errorMessage
-            )
-        } else {
-            LazyColumn(modifier = Modifier.weight(1f)) {
-                items(accounts, key = { it.id }) { account ->
-                    AccountSettingsItem(
-                        account = account,
-                        onToggle = { onToggleAccount(account) },
-                        onRemove = { accountToRemove = account }
-                    )
+    ) { padding ->
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            if (showAddForm) {
+                AddAccountForm(
+                    onAdd = { u, p, t -> onAddAccount(u, p, t) },
+                    onCancel = { showAddForm = false },
+                    isLoading = isLoading,
+                    errorMessage = errorMessage
+                )
+            } else {
+                LazyColumn(modifier = Modifier.weight(1f)) {
+                    items(accounts, key = { it.id }) { account ->
+                        AccountSettingsItem(
+                            account = account,
+                            onToggle = { onToggleAccount(account) },
+                            onRemove = { accountToRemove = account }
+                        )
+                    }
                 }
-            }
 
-            Button(
-                onClick = { showAddForm = true },
-                modifier = Modifier.fillMaxWidth().padding(16.dp)
-            ) {
-                Text(stringResource(R.string.add_new_account))
-            }
+                Button(
+                    onClick = { showAddForm = true },
+                    modifier = Modifier.fillMaxWidth().padding(16.dp)
+                ) {
+                    Text(stringResource(R.string.add_new_account))
+                }
 
-            Text(
-                text =
-                    stringResource(
-                        R.string.version_label,
-                        com.theundefined.omnis.BuildConfig.VERSION_NAME
-                    ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 16.dp)
-            )
+                Text(
+                    text =
+                        stringResource(
+                            R.string.version_label,
+                            com.theundefined.omnis.BuildConfig.VERSION_NAME
+                        ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 16.dp)
+                )
+            }
         }
     }
 }
@@ -139,7 +156,13 @@ fun AccountSettingsItem(account: Account, onToggle: () -> Unit, onRemove: () -> 
 
             Switch(checked = account.isEnabled, onCheckedChange = { onToggle() })
 
-            IconButton(onClick = onRemove) { Text("🗑️") }
+            val removeDescription = stringResource(R.string.remove_account)
+            IconButton(
+                onClick = onRemove,
+                modifier = Modifier.semantics { contentDescription = removeDescription }
+            ) {
+                Text("🗑️")
+            }
         }
     }
 }
