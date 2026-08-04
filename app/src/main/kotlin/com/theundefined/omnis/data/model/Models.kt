@@ -62,6 +62,13 @@ data class LoanResponseItem(
     val renew: String?
 )
 
+@Serializable
+data class HistoryCacheEntry(
+    val loans: List<Loan> = emptyList(),
+    val nextOffset: Int = 1,
+    val hasMore: Boolean = true
+)
+
 data class LoginResponse(val jwtData: String?)
 
 data class CountersResponse(val data: CountersData)

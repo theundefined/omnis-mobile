@@ -36,6 +36,13 @@
     <string name="version_label">Wersja: %1$s</string>
     <string name="fines_label">Kary: %1$.2f %2$s</string>
     <string name="refresh_error">Wystąpił błąd podczas odświeżania danych</string>
-    
+    <string name="cd_more_options">Więcej opcji</string>
+    <string name="history_title">Historia wypożyczeń</string>
+    <string name="no_history">Brak historii wypożyczeń.</string>
+    <string name="history_partial_error">Nie udało się pobrać historii dla: %1$s</string>
+    <string name="load_more">Załaduj więcej</string>
+    <string name="history_end">To już cała historia.</string>
+    <string name="retry">Spróbuj ponownie</string>
+
     <string name="share_book">📚 Książka: %1$s\n✍️ Autor: %2$s\n📅 Termin zwrotu: %3$s\n📍 Lokalizacja: %4$s\n🔑 Kod kreskowy: %5$s</string>
 </resources>

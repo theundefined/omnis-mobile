@@ -49,6 +49,29 @@ class AccountManager(context: Context) {
         sharedPreferences.edit().putString("loans_$accountId", jsonStr).apply()
     }
 
+    fun getCachedHistory(accountId: String): com.theundefined.omnis.data.model.HistoryCacheEntry {
+        val jsonStr =
+            sharedPreferences.getString("history_$accountId", null)
+                ?: return com.theundefined.omnis.data.model.HistoryCacheEntry()
+        return try {
+            json.decodeFromString<com.theundefined.omnis.data.model.HistoryCacheEntry>(jsonStr)
+        } catch (e: Exception) {
+            com.theundefined.omnis.data.model.HistoryCacheEntry()
+        }
+    }
+
+    fun saveCachedHistory(
+        accountId: String,
+        entry: com.theundefined.omnis.data.model.HistoryCacheEntry
+    ) {
+        val jsonStr = json.encodeToString(entry)
+        sharedPreferences.edit().putString("history_$accountId", jsonStr).apply()
+    }
+
+    fun clearCachedHistory(accountId: String) {
+        sharedPreferences.edit().remove("history_$accountId").apply()
+    }
+
     fun addAccount(account: Account) {
         val accounts = getAccounts().toMutableList()
         accounts.removeAll {
@@ -72,6 +95,7 @@ class AccountManager(context: Context) {
         accounts.removeIf { it.id == account.id }
         saveAccounts(accounts)
         sharedPreferences.edit().remove("loans_${account.id}").apply()
+        clearCachedHistory(account.id)
     }
 
     private fun saveAccounts(accounts: List<Account>) {

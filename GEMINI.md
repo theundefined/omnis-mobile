@@ -36,3 +36,4 @@ Projekt stosuje rygorystyczny model **Continuous Delivery**, w którym GitHub Ac
 - **Bulk Renew:** Przycisk przedłużenia wszystkich książek jednocześnie.
 - **Powiadomienia:** Przypomnienia o kończących się terminach w tle.
 - **Grupowanie:** Rozbudowa widoku filii o informację o użytkowniku wypożyczającym.
+- **Historia wypożyczeń:** zaplanowana, gotowa do implementacji — patrz [docs/plans/loan-history.md](docs/plans/loan-history.md).

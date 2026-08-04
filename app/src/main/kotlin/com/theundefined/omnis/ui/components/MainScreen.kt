@@ -31,7 +31,9 @@ fun MainScreen(viewModel: OmnisViewModel) {
         }
     }
 
-    BackHandler(enabled = currentScreen == "settings") { currentScreen = "main" }
+    BackHandler(enabled = currentScreen == "settings" || currentScreen == "history") {
+        currentScreen = "main"
+    }
 
     if (currentScreen == "settings") {
         SettingsScreen(
@@ -44,6 +46,11 @@ fun MainScreen(viewModel: OmnisViewModel) {
             onBack = { currentScreen = "main" },
             errorMessage = error
         )
+        return
+    }
+
+    if (currentScreen == "history") {
+        HistoryScreen(viewModel = viewModel, onBack = { currentScreen = "main" })
         return
     }
 
@@ -117,12 +124,34 @@ fun MainScreen(viewModel: OmnisViewModel) {
                         }
                     }
 
-                    val settingsDescription = stringResource(R.string.cd_settings)
-                    IconButton(
-                        onClick = { currentScreen = "settings" },
-                        modifier = Modifier.semantics { contentDescription = settingsDescription }
-                    ) {
-                        Text("⚙️")
+                    var showMoreMenu by remember { mutableStateOf(false) }
+                    val moreDescription = stringResource(R.string.cd_more_options)
+                    Box {
+                        IconButton(
+                            onClick = { showMoreMenu = true },
+                            modifier = Modifier.semantics { contentDescription = moreDescription }
+                        ) {
+                            Text("⋮")
+                        }
+                        DropdownMenu(
+                            expanded = showMoreMenu,
+                            onDismissRequest = { showMoreMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.history_title)) },
+                                onClick = {
+                                    showMoreMenu = false
+                                    currentScreen = "history"
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.cd_settings)) },
+                                onClick = {
+                                    showMoreMenu = false
+                                    currentScreen = "settings"
+                                }
+                            )
+                        }
                     }
                 }
             )

@@ -20,7 +20,12 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
 @Composable
-fun LoanList(groupedLoans: Map<String, List<Loan>>, onRenew: (Loan) -> Unit) {
+fun LoanList(
+    groupedLoans: Map<String, List<Loan>>,
+    onRenew: (Loan) -> Unit = {},
+    isHistory: Boolean = false,
+    footer: (@Composable () -> Unit)? = null
+) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         groupedLoans.forEach { (groupKey, accountLoans) ->
             item {
@@ -40,11 +45,17 @@ fun LoanList(groupedLoans: Map<String, List<Loan>>, onRenew: (Loan) -> Unit) {
                     )
                 }
             } else {
-                items(accountLoans, key = { it.id }) { loan ->
-                    LoanItem(loan, onRenew = { onRenew(loan) })
+                // Klucz łączy accountId z loanid — samo loanid jest nadawane per instytucja,
+                // więc przy wielu kontach/tenantach mogłoby się powtórzyć w obrębie jednej
+                // LazyColumn (Compose wymaga unikalności kluczy globalnie, nie per grupa).
+                items(accountLoans, key = { "${it.accountId}:${it.id}" }) { loan ->
+                    LoanItem(loan, onRenew = { onRenew(loan) }, isHistory = isHistory)
                 }
             }
             item { Spacer(modifier = Modifier.height(16.dp)) }
+        }
+        if (footer != null) {
+            item { footer() }
         }
     }
 }
@@ -97,10 +108,20 @@ fun formatRelativeDate(dateStr: String): String {
 }
 
 @Composable
-fun LoanItem(loan: Loan, onRenew: () -> Unit) {
+fun formatPlainDate(dateStr: String): String {
+    val date = parseFlexibleDate(dateStr) ?: return dateStr
+    return date.format(DateTimeFormatter.ofPattern("yyyy.MM.dd"))
+}
+
+@Composable
+fun LoanItem(loan: Loan, onRenew: () -> Unit, isHistory: Boolean = false) {
     val context = LocalContext.current
-    val dueDateColor = getDueDateColor(loan.dueDate)
-    val formattedDueDate = formatRelativeDate(loan.dueDate)
+    // Dla historii wypożyczenie jest już zakończone — kolorowanie "ile dni zostało" i opis
+    // relatywny ("za 3 dni") nie mają sensu, pokazujemy samą datę.
+    val dueDateColor =
+        if (isHistory) MaterialTheme.colorScheme.onSurfaceVariant else getDueDateColor(loan.dueDate)
+    val formattedDueDate =
+        if (isHistory) formatPlainDate(loan.dueDate) else formatRelativeDate(loan.dueDate)
 
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
