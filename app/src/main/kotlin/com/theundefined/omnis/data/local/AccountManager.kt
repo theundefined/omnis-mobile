@@ -72,6 +72,34 @@ class AccountManager(context: Context) {
         sharedPreferences.edit().remove("history_$accountId").apply()
     }
 
+    /**
+     * Preferencje filtra filii wyszukiwania — klucz per BIBLIOTEKA (Tenant.searchKey()), nie per
+     * konto: kilka kont dzielących ten sam katalog dzieli też te same preferencje. Dlatego (w
+     * odróżnieniu od loans_$accountId/history_$accountId) nie jest czyszczony w removeAccount —
+     * usunięcie jednego z kilku kont tej samej biblioteki nie powinno kasować preferencji filii dla
+     * pozostałych.
+     */
+    fun getSearchBranchPrefs(
+        tenantKey: String
+    ): com.theundefined.omnis.data.model.SearchBranchPrefs {
+        val jsonStr =
+            sharedPreferences.getString("search_branches_$tenantKey", null)
+                ?: return com.theundefined.omnis.data.model.SearchBranchPrefs()
+        return try {
+            json.decodeFromString<com.theundefined.omnis.data.model.SearchBranchPrefs>(jsonStr)
+        } catch (e: Exception) {
+            com.theundefined.omnis.data.model.SearchBranchPrefs()
+        }
+    }
+
+    fun saveSearchBranchPrefs(
+        tenantKey: String,
+        prefs: com.theundefined.omnis.data.model.SearchBranchPrefs
+    ) {
+        val jsonStr = json.encodeToString(prefs)
+        sharedPreferences.edit().putString("search_branches_$tenantKey", jsonStr).apply()
+    }
+
     fun addAccount(account: Account) {
         val accounts = getAccounts().toMutableList()
         accounts.removeAll {

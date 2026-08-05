@@ -45,4 +45,20 @@
     <string name="retry">Spróbuj ponownie</string>
 
     <string name="share_book">📚 Książka: %1$s\n✍️ Autor: %2$s\n📅 Termin zwrotu: %3$s\n📍 Lokalizacja: %4$s\n🔑 Kod kreskowy: %5$s</string>
+
+    <string name="search_title">Szukaj</string>
+    <string name="search_hint">Szukaj w katalogu…</string>
+    <string name="cd_search">Szukaj</string>
+    <string name="cd_preferred_for_search">Preferowane do wyszukiwania</string>
+    <string name="all_branches">Wszystkie filie</string>
+    <string name="no_search_results">Brak wyników wyszukiwania.</string>
+    <string name="no_search_results_filtered">Brak wyników w wybranych filiach.</string>
+    <string name="search_before_hint">Wpisz tytuł lub frazę, aby wyszukać.</string>
+    <string name="status_available">Dostępna</string>
+    <string name="status_borrowed_until">Wypożyczona do %1$s</string>
+    <string name="status_overdue_since">Przetrzymana od %1$s</string>
+    <string name="status_borrowed_unknown">Wypożyczona</string>
+    <string name="status_unknown">Status nieznany</string>
+    <string name="search_error">Błąd wyszukiwania: %1$s</string>
+    <string name="search_results_end">To już wszystkie wyniki.</string>
 </resources>

@@ -12,7 +12,8 @@ data class Account(
     val isEnabled: Boolean = true,
     val finesAmount: Double = 0.0,
     private val _finesCurrency: String? = "PLN",
-    val loansCount: Int = 0
+    val loansCount: Int = 0,
+    val preferredForSearch: Boolean = false
 ) {
     val finesCurrency: String
         get() = _finesCurrency ?: "PLN"

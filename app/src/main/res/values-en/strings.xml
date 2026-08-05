@@ -45,4 +45,20 @@
     <string name="retry">Try again</string>
 
     <string name="share_book">📚 Book: %1$s\n✍️ Author: %2$s\n📅 Due date: %3$s\n📍 Location: %4$s\n🔑 Barcode: %5$s</string>
+
+    <string name="search_title">Search</string>
+    <string name="search_hint">Search the catalog…</string>
+    <string name="cd_search">Search</string>
+    <string name="cd_preferred_for_search">Preferred for search</string>
+    <string name="all_branches">All branches</string>
+    <string name="no_search_results">No search results.</string>
+    <string name="no_search_results_filtered">No results in selected branches.</string>
+    <string name="search_before_hint">Enter a title or keyword to search.</string>
+    <string name="status_available">Available</string>
+    <string name="status_borrowed_until">Borrowed until %1$s</string>
+    <string name="status_overdue_since">Overdue since %1$s</string>
+    <string name="status_borrowed_unknown">Borrowed</string>
+    <string name="status_unknown">Status unknown</string>
+    <string name="search_error">Search error: %1$s</string>
+    <string name="search_results_end">That\'s all the results.</string>
 </resources>
