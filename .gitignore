@@ -37,3 +37,6 @@ scripts/
 .DS_Store
 .env*
 tmp/
+
+# Local planning/notes docs — never committed to the repo
+docs/
