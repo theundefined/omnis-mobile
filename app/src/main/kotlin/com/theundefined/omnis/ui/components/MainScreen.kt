@@ -31,7 +31,10 @@ fun MainScreen(viewModel: OmnisViewModel) {
         }
     }
 
-    BackHandler(enabled = currentScreen == "settings" || currentScreen == "history") {
+    BackHandler(
+        enabled =
+            currentScreen == "settings" || currentScreen == "history" || currentScreen == "search"
+    ) {
         currentScreen = "main"
     }
 
@@ -40,6 +43,7 @@ fun MainScreen(viewModel: OmnisViewModel) {
             viewModel = viewModel,
             accounts = uiState.accounts,
             onToggleAccount = { viewModel.toggleAccount(it) },
+            onTogglePreferredForSearch = { viewModel.togglePreferredForSearch(it) },
             onRemoveAccount = { viewModel.removeAccount(it) },
             onAddAccount = { user, pass, tenant -> viewModel.addAccount(user, pass, tenant) },
             isLoading = uiState.isLoading,
@@ -54,12 +58,25 @@ fun MainScreen(viewModel: OmnisViewModel) {
         return
     }
 
+    if (currentScreen == "search") {
+        SearchScreen(viewModel = viewModel, onBack = { currentScreen = "main" })
+        return
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.app_name)) },
                 actions = {
+                    val searchDescription = stringResource(R.string.cd_search)
+                    IconButton(
+                        onClick = { currentScreen = "search" },
+                        modifier = Modifier.semantics { contentDescription = searchDescription }
+                    ) {
+                        Text("🔎")
+                    }
+
                     val groupingDescription =
                         stringResource(
                             if (uiState.groupingMode == GroupingMode.ACCOUNT)

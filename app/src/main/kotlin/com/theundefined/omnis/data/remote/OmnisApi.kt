@@ -41,4 +41,32 @@ interface OmnisApi {
         @Query("lang") lang: String = "pl",
         @Body body: Map<String, String>
     ): Response<Any>
+
+    @GET("/primaws/rest/pub/pnxs")
+    suspend fun searchPnxs(
+        @QueryMap params: Map<String, String>,
+        @Header("Authorization") token: String
+    ): Response<PnxsSearchResponse>
+
+    @POST("/primaws/rest/pub/delivery")
+    suspend fun getDelivery(
+        @QueryMap params: Map<String, String>,
+        @Header("Authorization") token: String,
+        @Body almaIds: List<String>
+    ): Response<List<DeliveryItem>>
+
+    @GET("/primaws/rest/pub/getPhysicalService/{bareMmsid}")
+    suspend fun getPhysicalServiceId(
+        @Path("bareMmsid") bareMmsid: String,
+        @QueryMap params: Map<String, String>,
+        @Header("Authorization") token: String
+    ): Response<PhysicalServiceResponse>
+
+    @POST("/primaws/rest/priv/ILSServices/holdings/{physicalServiceId}")
+    suspend fun getHoldingsStatus(
+        @Path("physicalServiceId") physicalServiceId: String,
+        @QueryMap params: Map<String, String>,
+        @Header("Authorization") token: String,
+        @Body body: HoldingsStatusRequest
+    ): Response<HoldingsStatusResponse>
 }

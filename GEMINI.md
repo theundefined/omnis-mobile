@@ -36,4 +36,6 @@ Projekt stosuje rygorystyczny model **Continuous Delivery**, w którym GitHub Ac
 - **Bulk Renew:** Przycisk przedłużenia wszystkich książek jednocześnie.
 - **Powiadomienia:** Przypomnienia o kończących się terminach w tle.
 - **Grupowanie:** Rozbudowa widoku filii o informację o użytkowniku wypożyczającym.
-- **Historia wypożyczeń:** zaplanowana, gotowa do implementacji — patrz [docs/plans/loan-history.md](docs/plans/loan-history.md).
+- **Historia wypożyczeń:** zaimplementowana (paginacja + trwały cache per stronę).
+- **Wyszukiwanie książek w katalogu:** zaimplementowane — checkboxy preferowanych filii (trwałe per biblioteka), wszystkie wydania, termin zwrotu dla wypożyczonych; wyszukiwanie równoległe po unikalnych bibliotekach z flagą "preferowane do wyszukiwania" na koncie.
+- **Okładki/szczegóły wydania (okładka, ISBN, gatunki), licznik rezerwacji (Requests — już pobierany w getCounters, nieużywany w UI), katalog filii Biblioteki Raczyńskich (adres/godziny/mapa):** nieużywane dziś możliwości omnis-py, odkryte przy pracy nad wyszukiwaniem.

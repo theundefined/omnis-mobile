@@ -8,9 +8,16 @@ import com.theundefined.omnis.R
 import com.theundefined.omnis.data.model.Account
 import com.theundefined.omnis.data.model.HistoryCacheEntry
 import com.theundefined.omnis.data.model.Loan
+import com.theundefined.omnis.data.model.SearchBranchPrefs
+import com.theundefined.omnis.data.model.SearchPage
+import com.theundefined.omnis.data.model.SearchResult
 import com.theundefined.omnis.data.model.Tenant
+import com.theundefined.omnis.data.model.searchKey
 import com.theundefined.omnis.data.repository.OmnisRepository
 import com.theundefined.omnis.ui.components.parseFlexibleDate
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -54,6 +61,55 @@ data class HistoryUiState(
 /** Kursor paginacji historii pojedynczego konta — dokąd doszliśmy i czy jest więcej stron. */
 private data class HistoryCursor(val nextOffset: Int, val hasMore: Boolean)
 
+data class SearchUiState(
+    val query: String = "",
+    val isLoading: Boolean = false,
+    val hasSearched: Boolean = false,
+    val tenantSections: List<SearchTenantSection> = emptyList()
+)
+
+/**
+ * Wyniki + stan filtra filii dla JEDNEJ unikalnej biblioteki (Tenant.searchKey()) — patrz
+ * docs/plans/book-search.md §8. `confirmedBranches` (realne holding.mainLocation z odpowiedzi
+ * wyszukiwania) i `seededBranches` (podpowiedź z Loan.locationName w cache'u wypożyczeń) są celowo
+ * rozdzielone: filtrowanie (filteredResults()) liczy się TYLKO po przecięciu selectedBranches z
+ * confirmedBranches, więc niepotwierdzona (jeszcze) nazwa z seedu nigdy nie potrafi wyzerować
+ * wyników — jeśli żadna zaznaczona filia nie została jeszcze potwierdzona przez realne
+ * wyszukiwanie, efektywnie nie filtrujemy, zamiast pokazać pustą listę.
+ */
+data class SearchTenantSection(
+    val tenantKey: String,
+    val tenantLabel: String,
+    val results: List<SearchResult> =
+        emptyList(), // pełne, nieprzefiltrowane, bieżąca + doładowane strony
+    val confirmedBranches: List<String> = emptyList(),
+    val seededBranches: List<String> = emptyList(),
+    val selectedBranches: Set<String> = emptySet(),
+    val showAllBranches: Boolean = true,
+    val isLoading: Boolean = false,
+    val error: String? = null,
+    val nextOffset: Int = 0,
+    val canLoadMore: Boolean = false,
+    val isLoadingMore: Boolean = false
+)
+
+/** Suma potwierdzonych i sugerowanych nazw filii — do wyświetlenia jako checkboxy w UI. */
+fun SearchTenantSection.checkboxBranches(): List<String> =
+    (confirmedBranches + seededBranches).distinct()
+
+fun SearchTenantSection.filteredResults(): List<SearchResult> {
+    val effectiveSelection = selectedBranches.intersect(confirmedBranches.toSet())
+    if (showAllBranches || effectiveSelection.isEmpty()) return results
+    return results.mapNotNull { result ->
+        val versions =
+            result.versions.mapNotNull { v ->
+                val branches = v.branches.filter { it.libraryName in effectiveSelection }
+                if (branches.isEmpty()) null else v.copy(branches = branches)
+            }
+        if (versions.isEmpty()) null else result.copy(versions = versions)
+    }
+}
+
 class OmnisViewModel(application: Application, private val repository: OmnisRepository) :
     AndroidViewModel(application) {
 
@@ -74,6 +130,20 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
     // wciąż trwał w tle) zmieniła się ona pod nogami — inaczej wyniki policzone dla starego
     // zestawu kont mogłyby wylądować w świeżo wyczyszczonym stanie.
     private var historyGeneration = 0
+
+    private val _searchUiState = MutableStateFlow(SearchUiState())
+    val searchUiState: StateFlow<SearchUiState> = _searchUiState.asStateFlow()
+
+    // Konto użyte do wykonania OSTATNIEGO wyszukania per biblioteka — loadMoreResults() musi
+    // doładowywać kolejne strony tym samym kontem/loginem, nawet jeśli w międzyczasie zmienił
+    // się zestaw kont/flaga preferowania (patrz docs/plans/book-search.md §8.3a).
+    private var searchRepresentatives: Map<String, Account> = emptyMap()
+
+    // Zwiększane przy każdym runSearch() — analogicznie do historyGeneration (patrz wyżej),
+    // chroni przed sytuacją, w której użytkownik odpala drugie wyszukanie zanim pierwsze
+    // zdążyło wrócić z sieci: wynik "spóźnionego" pierwszego wyszukania jest wtedy porzucany
+    // zamiast nadpisać świeżo ustawiony szkielet drugiego.
+    private var searchGeneration = 0
 
     private val _events = MutableSharedFlow<UiEvent>()
     val events: SharedFlow<UiEvent> = _events.asSharedFlow()
@@ -470,6 +540,183 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
                 _historyUiState.value.sortMode
             )
         _historyUiState.update { it.copy(loans = grouped) }
+    }
+
+    /**
+     * Wybiera JEDNO konto reprezentujące każdą unikalną bibliotekę (tenant.searchKey()) wśród
+     * włączonych kont — kilka kont dzielących ten sam katalog dałoby identyczne wyniki, więc
+     * wyszukujemy raz, nie N razy. Preferuje konto oznaczone `preferredForSearch`; w przeciwnym
+     * razie pierwsze wg kolejności z AccountManager.getAccounts() (kolejność dodania) —
+     * deterministyczny fallback, patrz docs/plans/book-search.md §8.1.
+     */
+    private fun pickSearchAccounts(accounts: List<Account>): List<Account> =
+        accounts
+            .filter { it.isEnabled }
+            .groupBy { it.tenant.searchKey() }
+            .values
+            .map { group -> group.firstOrNull { it.preferredForSearch } ?: group.first() }
+
+    private fun updateSearchSection(
+        tenantKey: String,
+        transform: (SearchTenantSection) -> SearchTenantSection
+    ) {
+        _searchUiState.update { state ->
+            state.copy(
+                tenantSections =
+                    state.tenantSections.map {
+                        if (it.tenantKey == tenantKey) transform(it) else it
+                    }
+            )
+        }
+    }
+
+    private fun branchNamesOf(page: SearchPage): List<String> =
+        page.results.flatMap { r -> r.versions.flatMap { v -> v.branches.map { it.libraryName } } }
+
+    private fun formatSearchError(e: Throwable): String =
+        getApplication<Application>().getString(R.string.search_error, e.message ?: "")
+
+    fun runSearch(query: String) {
+        if (query.isBlank()) return
+
+        searchGeneration++
+        val generation = searchGeneration
+
+        val targets = pickSearchAccounts(_uiState.value.accounts)
+        searchRepresentatives = targets.associateBy { it.tenant.searchKey() }
+
+        val existingSections = _searchUiState.value.tenantSections.associateBy { it.tenantKey }
+        val allAccounts = _uiState.value.accounts
+        val skeleton =
+            targets.map { account ->
+                val tenantKey = account.tenant.searchKey()
+                val siblingIds =
+                    allAccounts.filter { it.tenant.searchKey() == tenantKey }.map { it.id }
+                val seeded =
+                    siblingIds
+                        .flatMap { repository.getCachedLoans(it) }
+                        .map { it.locationName }
+                        .distinct()
+                val prefs = repository.getSearchBranchPrefs(tenantKey)
+                SearchTenantSection(
+                    tenantKey = tenantKey,
+                    tenantLabel = account.tenant.name,
+                    confirmedBranches =
+                        existingSections[tenantKey]?.confirmedBranches ?: emptyList(),
+                    seededBranches = seeded,
+                    selectedBranches = prefs.selectedBranches,
+                    showAllBranches = prefs.showAllBranches,
+                    isLoading = true
+                )
+            }
+
+        _searchUiState.update {
+            it.copy(query = query, hasSearched = true, isLoading = true, tenantSections = skeleton)
+        }
+
+        viewModelScope.launch {
+            val outcomes = coroutineScope {
+                targets
+                    .map { account ->
+                        async { account to repository.searchBooks(account, query, offset = 0) }
+                    }
+                    .awaitAll()
+            }
+
+            if (generation != searchGeneration)
+                return@launch // nowsze wyszukanie już wystartowało — porzucamy wynik
+
+            outcomes.forEach { (account, result) ->
+                val tenantKey = account.tenant.searchKey()
+                result
+                    .onSuccess { page ->
+                        updateSearchSection(tenantKey) { section ->
+                            section.copy(
+                                results = page.results,
+                                confirmedBranches =
+                                    (section.confirmedBranches + branchNamesOf(page)).distinct(),
+                                nextOffset = page.results.size,
+                                canLoadMore = page.hasMore,
+                                isLoading = false,
+                                error = null
+                            )
+                        }
+                    }
+                    .onFailure { e ->
+                        updateSearchSection(tenantKey) { section ->
+                            section.copy(isLoading = false, error = formatSearchError(e))
+                        }
+                    }
+            }
+            _searchUiState.update { it.copy(isLoading = false) }
+        }
+    }
+
+    /**
+     * Doładowuje kolejną stronę wyników dla JEDNEJ biblioteki — bez trwałego cache'u (patrz §7).
+     */
+    fun loadMoreResults(tenantKey: String) {
+        val section =
+            _searchUiState.value.tenantSections.find { it.tenantKey == tenantKey } ?: return
+        if (section.isLoadingMore || !section.canLoadMore) return
+        val account = searchRepresentatives[tenantKey] ?: return
+        val query = _searchUiState.value.query
+        val generation = searchGeneration
+        val offset = section.nextOffset
+
+        updateSearchSection(tenantKey) { it.copy(isLoadingMore = true) }
+
+        viewModelScope.launch {
+            repository
+                .searchBooks(account, query, offset = offset)
+                .onSuccess { page ->
+                    if (generation != searchGeneration) return@onSuccess
+                    updateSearchSection(tenantKey) { s ->
+                        s.copy(
+                            results = s.results + page.results,
+                            confirmedBranches =
+                                (s.confirmedBranches + branchNamesOf(page)).distinct(),
+                            nextOffset = s.nextOffset + page.results.size,
+                            canLoadMore = page.hasMore,
+                            isLoadingMore = false
+                        )
+                    }
+                }
+                .onFailure { e ->
+                    if (generation != searchGeneration) return@onFailure
+                    updateSearchSection(tenantKey) {
+                        it.copy(isLoadingMore = false, error = formatSearchError(e))
+                    }
+                }
+        }
+    }
+
+    fun setBranchSelection(tenantKey: String, branch: String, selected: Boolean) {
+        updateSearchSection(tenantKey) { section ->
+            val newSet =
+                if (selected) section.selectedBranches + branch
+                else section.selectedBranches - branch
+            repository.saveSearchBranchPrefs(
+                tenantKey,
+                SearchBranchPrefs(newSet, section.showAllBranches)
+            )
+            section.copy(selectedBranches = newSet)
+        }
+    }
+
+    fun setShowAllBranches(tenantKey: String, showAll: Boolean) {
+        updateSearchSection(tenantKey) { section ->
+            repository.saveSearchBranchPrefs(
+                tenantKey,
+                SearchBranchPrefs(section.selectedBranches, showAll)
+            )
+            section.copy(showAllBranches = showAll)
+        }
+    }
+
+    fun togglePreferredForSearch(account: Account) {
+        repository.updateAccount(account.copy(preferredForSearch = !account.preferredForSearch))
+        refreshAccounts()
     }
 
     class Factory(private val application: Application, private val repository: OmnisRepository) :

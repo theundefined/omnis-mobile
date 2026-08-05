@@ -4,6 +4,10 @@ import com.theundefined.omnis.data.local.AccountManager
 import com.theundefined.omnis.data.model.*
 import com.theundefined.omnis.data.remote.OmnisApi
 import java.util.UUID
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
@@ -339,6 +343,267 @@ class OmnisRepository(private val accountManager: AccountManager) {
         }
     }
 
+    /**
+     * Wyszukiwanie katalogu — port `client.py::search_books` (omnis-py). Zawsze zwraca WSZYSTKIE
+     * filie dla wszystkich wydań (bez branch_filter po stronie serwera) — filtrowanie po
+     * zaznaczonych filiach dzieje się po stronie klienta w ViewModelu (patrz
+     * docs/plans/book-search.md §7), żeby zaznaczanie/odznaczanie checkboxów było natychmiastowe i
+     * nie wymagało ponownego logowania+wyszukiwania za każdym kliknięciem.
+     *
+     * Token pozyskany raz na początku i reużywany przez CAŁY pipeline (top search + per-dzieło
+     * wyszukanie wydań + delivery + doładowanie dat zwrotu) — analogicznie do getLoansForAccount,
+     * NIE re-logować się per pod-request.
+     */
+    suspend fun searchBooks(
+        account: Account,
+        query: String,
+        offset: Int = 0,
+        limit: Int = 10
+    ): Result<SearchPage> {
+        return try {
+            val api = createClient(account.tenant.baseUrl)
+            val token =
+                loginForToken(api, account).getOrElse {
+                    return Result.failure(it)
+                }
+            val bearer = "Bearer $token"
+
+            fun buildParams(
+                q: String,
+                offset: Int = 0,
+                qInclude: String = "",
+                sort: String = "rank",
+                limit: Int,
+                cameFrom: String? = null
+            ): Map<String, String> {
+                val params =
+                    mutableMapOf(
+                        "acTriggered" to "false",
+                        "blendFacetsSeparately" to "false",
+                        "citationTrailFilterByAvailability" to "true",
+                        "disableCache" to "false",
+                        "getMore" to "0",
+                        "inst" to account.tenant.institution,
+                        "isCDSearch" to "false",
+                        "lang" to "pl",
+                        "limit" to limit.toString(),
+                        "newspapersActive" to "false",
+                        "newspapersSearch" to "false",
+                        "offset" to offset.toString(),
+                        "otbRanking" to "false",
+                        "pcAvailability" to "true",
+                        "q" to "any,contains,$q",
+                        "qExclude" to "",
+                        "qInclude" to qInclude,
+                        "rapido" to "false",
+                        "refEntryActive" to "false",
+                        "rtaLinks" to "true",
+                        "scope" to "MyInstitution2",
+                        "searchInFulltextUserSelection" to "true",
+                        "skipDelivery" to "Y",
+                        "sort" to sort,
+                        "tab" to "LibraryCatalog",
+                        "vid" to account.tenant.view
+                    )
+                cameFrom?.let { params["came_from"] = it }
+                return params
+            }
+
+            val topParams = buildParams(query, offset = offset, limit = limit)
+            val topResponse = api.searchPnxs(topParams, bearer).body()
+            val topDocs = topResponse?.docs ?: emptyList()
+            // info.total — pole do zweryfikowania (patrz docs/plans/book-search.md §6/§7).
+            // Fallback bez niego: strona wróciła pełna (limit elementów) -> zakładamy, że może
+            // być więcej; nadmiarowo ostrożne (jeden zbędny "Załaduj więcej" na końcu), ale
+            // nigdy nie ucina wyników przedwcześnie.
+            val hasMore =
+                topResponse?.info?.total?.let { total -> offset + topDocs.size < total }
+                    ?: (topDocs.size >= limit)
+
+            // Krok 2: dociągnij WSZYSTKIE wydania per frbrgroupid, równolegle.
+            data class Resolved(
+                val versions: List<PnxDoc>,
+                val deliveryById: Map<String, DeliveryItem>
+            )
+            val resolved = coroutineScope {
+                topDocs
+                    .map { doc ->
+                        async {
+                            val frbrgroupid = doc.pnx.frbrgroupid()
+                            val (versionDocs, deliveryParams) =
+                                if (frbrgroupid != null) {
+                                    val groupParams =
+                                        buildParams(
+                                            query,
+                                            qInclude = "facet_frbrgroupid,exact,$frbrgroupid",
+                                            sort = "date_d",
+                                            limit = 50,
+                                            cameFrom = "addFacet"
+                                        )
+                                    val docs =
+                                        api.searchPnxs(groupParams, bearer).body()?.docs?.takeIf {
+                                            it.isNotEmpty()
+                                        } ?: listOf(doc)
+                                    docs to groupParams
+                                } else listOf(doc) to topParams
+
+                            val almaIds = versionDocs.mapNotNull { it.pnx.almaId() }.distinct()
+                            val deliveryById =
+                                if (almaIds.isNotEmpty()) {
+                                    api.getDelivery(deliveryParams, bearer, almaIds)
+                                        .body()
+                                        ?.mapNotNull { item ->
+                                            item.pnx.almaId()?.let { it to item }
+                                        }
+                                        ?.toMap() ?: emptyMap()
+                                } else emptyMap()
+
+                            Resolved(versionDocs, deliveryById)
+                        }
+                    }
+                    .awaitAll()
+            }
+
+            // Zbierz wyniki + listę "brakujących dat" do dociągnięcia w kroku 4.
+            data class EnrichTarget(
+                val branch: BranchAvailability,
+                val bareMmsid: String,
+                val holding: Holding
+            )
+            val enrichTargets = mutableListOf<EnrichTarget>()
+            val results =
+                topDocs.zip(resolved).map { (doc, r) ->
+                    val frbrgroupid = doc.pnx.frbrgroupid()
+                    val title =
+                        doc.pnx.addataFirst("btitle") ?: doc.pnx.displayFirst("title") ?: "Unknown"
+                    val author = doc.pnx.addataFirst("au")
+
+                    val versions =
+                        r.versions.map { v ->
+                            val delivery = v.pnx.almaId()?.let { r.deliveryById[it] }
+                            val holdings = delivery?.delivery?.holding ?: emptyList()
+                            val branches =
+                                holdings.map { h ->
+                                    val branch =
+                                        BranchAvailability(
+                                            libraryName = h.mainLocation,
+                                            libraryCode = h.libraryCode,
+                                            subLocation = h.subLocation,
+                                            status = h.availabilityStatus
+                                        )
+                                    if (branch.status == "unavailable") {
+                                        enrichTargets.add(
+                                            EnrichTarget(branch, v.pnx.bareMmsid(), h)
+                                        )
+                                    }
+                                    branch
+                                }
+                            BookVersion(
+                                mmsid = v.pnx.bareMmsid(),
+                                title = v.pnx.displayFirst("title") ?: title,
+                                author = v.pnx.addataFirst("au") ?: author,
+                                edition = v.pnx.displayFirst("edition"),
+                                publisher = v.pnx.addataFirst("pub"),
+                                publicationDate = v.pnx.addataFirst("date"),
+                                isbns = v.pnx.addata["isbn"] ?: emptyList(),
+                                frbrgroupid = frbrgroupid,
+                                branches = branches
+                            )
+                        }
+                    SearchResult(frbrgroupid, title, author, versions)
+                }
+
+            // Krok 4: doładuj termin zwrotu tylko dla niedostępnych filii, równolegle.
+            if (enrichTargets.isNotEmpty()) {
+                val serviceIds = coroutineScope {
+                    enrichTargets
+                        .map { it.bareMmsid }
+                        .distinct()
+                        .associateWith { mmsid ->
+                            async {
+                                api.getPhysicalServiceId(
+                                        mmsid,
+                                        mapOf(
+                                            "vid" to account.tenant.view,
+                                            "lang" to "pl",
+                                            "recordOwner" to "48OMNIS_NETWORK",
+                                            "sourceRecordId" to mmsid,
+                                            "resource_type" to "book",
+                                            "isRapido" to "false"
+                                        ),
+                                        bearer
+                                    )
+                                    .body()
+                                    ?.physicalServiceId
+                            }
+                        }
+                        .mapValues { it.value.await() }
+                }
+                coroutineScope {
+                    enrichTargets.forEach { target ->
+                        val serviceId = serviceIds[target.bareMmsid] ?: return@forEach
+                        launch {
+                            val body =
+                                HoldingsStatusRequest(
+                                    filters =
+                                        HoldingsFilters(
+                                            sublibrary = target.holding.mainLocation,
+                                            holid = target.holding.holdId ?: "",
+                                            sublibs = target.holding.mainLocation,
+                                            ilsRecordList =
+                                                listOf(
+                                                    IlsRecordRef(
+                                                        account.tenant.institution,
+                                                        target.bareMmsid
+                                                    )
+                                                ),
+                                            vid = account.tenant.view
+                                        ),
+                                    locations = listOf(target.holding)
+                                )
+                            val status =
+                                api.getHoldingsStatus(
+                                        serviceId,
+                                        mapOf(
+                                            "record-institution" to account.tenant.institution,
+                                            "lang" to "pl"
+                                        ),
+                                        bearer,
+                                        body
+                                    )
+                                    .body()
+                            val statusName =
+                                status
+                                    ?.data
+                                    ?.itemInfo
+                                    ?.locations
+                                    ?.flatMap { it.items ?: emptyList() }
+                                    ?.firstNotNullOfOrNull { item ->
+                                        Regex("""(\d{2}/\d{2}/\d{4})""")
+                                            .find(item.itemstatusname)
+                                            ?.value
+                                            ?.let {
+                                                it to
+                                                    item.itemstatusname
+                                                        .lowercase()
+                                                        .contains("przekroczon")
+                                            }
+                                    }
+                            statusName?.let { (date, overdue) ->
+                                target.branch.dueDate = date
+                                target.branch.overdue = overdue
+                            }
+                        }
+                    }
+                }
+            }
+
+            Result.success(SearchPage(results, hasMore))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     fun getAccounts() = accountManager.getAccounts()
 
     fun updateAccount(account: Account) = accountManager.updateAccount(account)
@@ -357,4 +622,10 @@ class OmnisRepository(private val accountManager: AccountManager) {
         accountManager.saveCachedHistory(accountId, entry)
 
     fun clearCachedHistory(accountId: String) = accountManager.clearCachedHistory(accountId)
+
+    fun getSearchBranchPrefs(tenantKey: String): SearchBranchPrefs =
+        accountManager.getSearchBranchPrefs(tenantKey)
+
+    fun saveSearchBranchPrefs(tenantKey: String, prefs: SearchBranchPrefs) =
+        accountManager.saveSearchBranchPrefs(tenantKey, prefs)
 }
