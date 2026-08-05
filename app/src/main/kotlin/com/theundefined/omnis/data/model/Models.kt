@@ -185,7 +185,14 @@ data class Holding(
     val libraryCode: String = "",
     val subLocation: String? = null,
     val availabilityStatus: String = "unknown",
-    val holdId: String? = null
+    val holdId: String? = null,
+    // Zweryfikowane empirycznie (docs/api-verification-response.md, przez bisekcję pól na
+    // żywym koncie): bez tego pola ILSServices/holdings/{id} zwraca 200 OK, ale z pustym
+    // wynikiem (brak due_date) — reszta pól surowego holding (21 kluczy z API) nie ma na to
+    // żadnego wpływu. Format wartości (np. "HoldingResultKey [mid=..., libraryId=...,
+    // locationCode=..., callNumber=...]") nie jest udokumentowany i nie próbujemy go budować
+    // ręcznie — to pole jest tylko przekazywane 1:1 tak, jak przyszło z /pub/delivery.
+    val holKey: String? = null
 )
 
 data class PhysicalServiceResponse(val physicalServiceId: String? = null)
