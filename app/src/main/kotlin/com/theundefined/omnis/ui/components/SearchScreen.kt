@@ -72,6 +72,7 @@ fun SearchScreen(viewModel: OmnisViewModel, onBack: () -> Unit) {
 
             val noEnabledAccounts = uiState.accounts.none { it.isEnabled }
             val hasAnyRawResults = state.tenantSections.any { it.results.isNotEmpty() }
+            val errorSections = state.tenantSections.filter { it.error != null }
             val allFilteredEmpty =
                 state.tenantSections.isNotEmpty() &&
                     state.tenantSections.all { it.filteredResults().isEmpty() && !it.isLoading }
@@ -98,6 +99,18 @@ fun SearchScreen(viewModel: OmnisViewModel, onBack: () -> Unit) {
                 allFilteredEmpty -> {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            errorSections.forEach { section ->
+                                Text(
+                                    if (state.tenantSections.size > 1)
+                                        "${section.tenantLabel}: ${section.error}"
+                                    else section.error!!,
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                            if (errorSections.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
                             if (hasAnyRawResults) {
                                 Text(
                                     stringResource(R.string.no_search_results_filtered),
@@ -113,7 +126,7 @@ fun SearchScreen(viewModel: OmnisViewModel, onBack: () -> Unit) {
                                 ) {
                                     Text(stringResource(R.string.all_branches))
                                 }
-                            } else {
+                            } else if (errorSections.size < state.tenantSections.size) {
                                 Text(
                                     stringResource(R.string.no_search_results),
                                     style = MaterialTheme.typography.bodyMedium

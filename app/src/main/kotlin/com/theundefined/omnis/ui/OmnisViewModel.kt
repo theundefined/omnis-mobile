@@ -573,8 +573,10 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
     private fun branchNamesOf(page: SearchPage): List<String> =
         page.results.flatMap { r -> r.versions.flatMap { v -> v.branches.map { it.libraryName } } }
 
-    private fun formatSearchError(e: Throwable): String =
-        getApplication<Application>().getString(R.string.search_error, e.message ?: "")
+    private fun formatSearchError(e: Throwable): String {
+        val detail = e.message?.takeIf { it.isNotBlank() } ?: e::class.simpleName ?: "unknown"
+        return getApplication<Application>().getString(R.string.search_error, detail)
+    }
 
     fun runSearch(query: String) {
         if (query.isBlank()) return

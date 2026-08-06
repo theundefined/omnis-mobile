@@ -410,7 +410,17 @@ class OmnisRepository(private val accountManager: AccountManager) {
             }
 
             val topParams = buildParams(query, offset = offset, limit = limit)
-            val topResponse = api.searchPnxs(topParams, bearer).body()
+            val topHttpResponse = api.searchPnxs(topParams, bearer)
+            if (!topHttpResponse.isSuccessful) {
+                val errorMsg =
+                    if (topHttpResponse.code() == 401) "Sesja wygasła lub błędne hasło."
+                    else
+                        "Błąd wyszukiwania: ${topHttpResponse.code()} ${
+                            topHttpResponse.errorBody()?.string()?.take(200) ?: ""
+                        }"
+                return Result.failure(Exception(errorMsg))
+            }
+            val topResponse = topHttpResponse.body()
             val topDocs = topResponse?.docs ?: emptyList()
             // info.total — pole do zweryfikowania (patrz docs/plans/book-search.md §6/§7).
             // Fallback bez niego: strona wróciła pełna (limit elementów) -> zakładamy, że może
