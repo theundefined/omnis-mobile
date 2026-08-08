@@ -47,7 +47,7 @@ class OmnisRepository(private val accountManager: AccountManager) {
         return Retrofit.Builder()
             .baseUrl(baseUrl)
             .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(GsonConverterFactory.create(createPrimoGson()))
             .build()
             .create(OmnisApi::class.java)
     }

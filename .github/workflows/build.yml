@@ -52,6 +52,9 @@ jobs:
     - name: Check code formatting
       run: ./gradlew spotlessCheck
 
+    - name: Run unit tests
+      run: ./gradlew testDebugUnitTest
+
     # Always build Debug to verify code quality
     - name: Build Debug APK
       run: ./gradlew assembleDebug

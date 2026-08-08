@@ -1,5 +1,9 @@
 package com.theundefined.omnis.data.model
 
+import com.google.gson.Gson
+import com.google.gson.GsonBuilder
+import com.google.gson.JsonDeserializer
+import com.google.gson.JsonElement
 import com.google.gson.annotations.SerializedName
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -156,6 +160,54 @@ data class Pnx(
     val facets: Map<String, List<String>> = emptyMap(),
     val control: Map<String, List<String>> = emptyMap()
 )
+
+// Primo nie jest spójne w typowaniu wartości wewnątrz display/addata/facets/control: zwykle to
+// lista stringów, ale bywa, że dla pojedynczej wartości pole przychodzi jako goły string zamiast
+// jednoelementowej tablicy (zweryfikowane empirycznie — błąd zgłaszany w aplikacji: "Expected
+// BEGIN_ARRAY but was STRING at ... path $.docs[0].pnx.control", odtworzony i potwierdzony przez
+// scratch-test na Gson 2.10.1 dla JSON-a {"control":{"recordid":"ALMA123"}}). Deserializer musi
+// być zarejestrowany na Pnx::class.java, NIE na Type z TypeToken<Map<String, List<String>>>() —
+// Kotlin generuje dla `List<String>` (interfejs z `out`-wariancją) sygnaturę z wildcardem
+// (`? extends String`) w miejscu, gdzie typ pojawia się jako argument typu w publicznej
+// supertypie (tu: wewnątrz anonimowej klasy `object : TypeToken<...>() {}`), podczas gdy
+// zreflektowany typ pola `Pnx.control` takiego wildcardu nie ma — Gson dopasowuje adaptery po
+// dokładnej równości Type, więc rejestracja po Type z TypeToken nigdy by nie trafiła w realne
+// pole i cicho spadała z powrotem na domyślne (psujące się) parsowanie mapy. Zweryfikowane
+// empirycznie: scratch-test w Kotlinie (nie w Javie, gdzie problem wariancji nie występuje)
+// odtworzył ten sam błąd mimo zarejestrowanego adaptera po Type, i przestał go rzucać dopiero
+// po przejściu na rejestrację po klasie.
+private fun JsonElement?.toLenientStringListMap(): Map<String, List<String>> {
+    val result = mutableMapOf<String, List<String>>()
+    if (this != null && isJsonObject) {
+        for ((key, value) in asJsonObject.entrySet()) {
+            result[key] =
+                when {
+                    value.isJsonArray ->
+                        value.asJsonArray.mapNotNull { if (it.isJsonNull) null else it.asString }
+                    value.isJsonPrimitive -> listOf(value.asString)
+                    else -> emptyList()
+                }
+        }
+    }
+    return result
+}
+
+val pnxDeserializer =
+    JsonDeserializer<Pnx> { json, _, _ ->
+        val obj = json?.asJsonObject
+        Pnx(
+            display = obj?.get("display").toLenientStringListMap(),
+            addata = obj?.get("addata").toLenientStringListMap(),
+            facets = obj?.get("facets").toLenientStringListMap(),
+            control = obj?.get("control").toLenientStringListMap()
+        )
+    }
+
+// Jedyne miejsce budujące Gson dla API Primo — używane zarówno przez
+// OmnisRepository.createClient, jak i przez testy (ModelsTest), żeby cofnięcie rejestracji
+// pnxDeserializer w jednym z tych miejsc nie mogło ukryć się za zielonymi testami.
+fun createPrimoGson(): Gson =
+    GsonBuilder().registerTypeAdapter(Pnx::class.java, pnxDeserializer).create()
 
 // Port 1:1 statycznych metod client.py:340-368 (_display_first/_addata_first/
 // _extract_frbrgroupid/_alma_id/_bare_mmsid) jako extension functions na Pnx — wspólny typ
