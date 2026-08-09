@@ -517,7 +517,8 @@ class OmnisRepository(private val accountManager: AccountManager) {
                                 publicationDate = v.pnx.addataFirst("date"),
                                 isbns = v.pnx.addata["isbn"] ?: emptyList(),
                                 frbrgroupid = frbrgroupid,
-                                branches = branches
+                                branches = branches,
+                                resourceType = v.pnx.displayFirst("type")
                             )
                         }
                     SearchResult(frbrgroupid, title, author, versions)

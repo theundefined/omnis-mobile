@@ -61,4 +61,7 @@
     <string name="status_unknown">Status nieznany</string>
     <string name="search_error">Błąd wyszukiwania: %1$s</string>
     <string name="search_results_end">To już wszystkie wyniki.</string>
+    <string name="search_sort_relevance">Trafność</string>
+    <string name="search_sort_title">Tytuł</string>
+    <string name="search_sort_hint_load_all">Sortowanie po tytule będzie dostępne po załadowaniu wszystkich wyników.</string>
 </resources>

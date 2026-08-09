@@ -15,6 +15,8 @@ import com.theundefined.omnis.data.model.Tenant
 import com.theundefined.omnis.data.model.searchKey
 import com.theundefined.omnis.data.repository.OmnisRepository
 import com.theundefined.omnis.ui.components.parseFlexibleDate
+import java.text.Collator
+import java.util.Locale
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -68,6 +70,12 @@ data class SearchUiState(
     val tenantSections: List<SearchTenantSection> = emptyList()
 )
 
+/** Sortowanie wyników wyszukiwania w obrębie jednej biblioteki — czysto klient-side. */
+enum class SearchSortMode {
+    RELEVANCE, // kolejność zwrócona przez Primo (parametr sort=rank) — bez zmian
+    TITLE
+}
+
 /**
  * Wyniki + stan filtra filii dla JEDNEJ unikalnej biblioteki (Tenant.searchKey()) — patrz
  * docs/plans/book-search.md §8. `confirmedBranches` (realne holding.mainLocation z odpowiedzi
@@ -84,8 +92,14 @@ data class SearchTenantSection(
         emptyList(), // pełne, nieprzefiltrowane, bieżąca + doładowane strony
     val confirmedBranches: List<String> = emptyList(),
     val seededBranches: List<String> = emptyList(),
+    // libraryName -> pierwszy napotkany subLocation dla tej filii (patrz branchAddressesOf) —
+    // wyłącznie do WYŚWIETLENIA obok nazwy filii w chipie. Klucz filtrowania/persystencji
+    // (selectedBranches, confirmedBranches) zostaje surową nazwą filii, żeby dołożenie adresu do
+    // etykiety nie rozjechało `branch in selectedBranches` ani zapisanych wcześniej preferencji.
+    val branchAddresses: Map<String, String> = emptyMap(),
     val selectedBranches: Set<String> = emptySet(),
     val showAllBranches: Boolean = true,
+    val sortMode: SearchSortMode = SearchSortMode.RELEVANCE,
     val isLoading: Boolean = false,
     val error: String? = null,
     val nextOffset: Int = 0,
@@ -97,16 +111,29 @@ data class SearchTenantSection(
 fun SearchTenantSection.checkboxBranches(): List<String> =
     (confirmedBranches + seededBranches).distinct()
 
+/** Etykieta chipa filii: nazwa + adres (subLocation), gdy już go znamy z wyników. */
+fun SearchTenantSection.branchChipLabel(branch: String): String =
+    branchAddresses[branch]?.let { "$branch ($it)" } ?: branch
+
+private val polishCollator: Collator =
+    Collator.getInstance(Locale("pl")).apply { strength = Collator.PRIMARY }
+
 fun SearchTenantSection.filteredResults(): List<SearchResult> {
     val effectiveSelection = selectedBranches.intersect(confirmedBranches.toSet())
-    if (showAllBranches || effectiveSelection.isEmpty()) return results
-    return results.mapNotNull { result ->
-        val versions =
-            result.versions.mapNotNull { v ->
-                val branches = v.branches.filter { it.libraryName in effectiveSelection }
-                if (branches.isEmpty()) null else v.copy(branches = branches)
+    val base =
+        if (showAllBranches || effectiveSelection.isEmpty()) results
+        else
+            results.mapNotNull { result ->
+                val versions =
+                    result.versions.mapNotNull { v ->
+                        val branches = v.branches.filter { it.libraryName in effectiveSelection }
+                        if (branches.isEmpty()) null else v.copy(branches = branches)
+                    }
+                if (versions.isEmpty()) null else result.copy(versions = versions)
             }
-        if (versions.isEmpty()) null else result.copy(versions = versions)
+    return when (sortMode) {
+        SearchSortMode.RELEVANCE -> base
+        SearchSortMode.TITLE -> base.sortedWith(compareBy(polishCollator) { it.title })
     }
 }
 
@@ -573,6 +600,18 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
     private fun branchNamesOf(page: SearchPage): List<String> =
         page.results.flatMap { r -> r.versions.flatMap { v -> v.branches.map { it.libraryName } } }
 
+    /**
+     * Nazwa filii -> jej subLocation (np. "os. Bolesława Chrobrego 117a"), do wyświetlenia obok
+     * nazwy w chipie filtra. Pierwsze napotkane wystąpienie wygrywa — jedna filia może mieć różne
+     * subLocation dla różnych wydań (np. inny księgozbiór), a chip pokazuje tylko jedną etykietę.
+     */
+    private fun branchAddressesOf(page: SearchPage): Map<String, String> =
+        page.results
+            .flatMap { r -> r.versions.flatMap { v -> v.branches } }
+            .mapNotNull { b -> b.subLocation?.let { b.libraryName to it } }
+            .distinctBy { it.first } // pierwsze wystąpienie wygrywa, patrz komentarz wyżej
+            .toMap()
+
     private fun formatSearchError(e: Throwable): String {
         val detail = e.message?.takeIf { it.isNotBlank() } ?: e::class.simpleName ?: "unknown"
         return getApplication<Application>().getString(R.string.search_error, detail)
@@ -605,6 +644,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
                     tenantLabel = account.tenant.name,
                     confirmedBranches =
                         existingSections[tenantKey]?.confirmedBranches ?: emptyList(),
+                    branchAddresses = existingSections[tenantKey]?.branchAddresses ?: emptyMap(),
                     seededBranches = seeded,
                     selectedBranches = prefs.selectedBranches,
                     showAllBranches = prefs.showAllBranches,
@@ -637,6 +677,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
                                 results = page.results,
                                 confirmedBranches =
                                     (section.confirmedBranches + branchNamesOf(page)).distinct(),
+                                branchAddresses = branchAddressesOf(page) + section.branchAddresses,
                                 nextOffset = page.results.size,
                                 canLoadMore = page.hasMore,
                                 isLoading = false,
@@ -678,6 +719,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
                             results = s.results + page.results,
                             confirmedBranches =
                                 (s.confirmedBranches + branchNamesOf(page)).distinct(),
+                            branchAddresses = branchAddressesOf(page) + s.branchAddresses,
                             nextOffset = s.nextOffset + page.results.size,
                             canLoadMore = page.hasMore,
                             isLoadingMore = false
@@ -714,6 +756,15 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
             )
             section.copy(showAllBranches = showAll)
         }
+    }
+
+    /**
+     * Wyłącznie klient-side (patrz filteredResults()) — nie odpytuje API ponownie. UI ogranicza
+     * wywołanie do sytuacji, gdy wszystkie strony wyników danej biblioteki są już załadowane
+     * (!canLoadMore), żeby sortowanie nie gubiło się przy kolejnym "Załaduj więcej".
+     */
+    fun setSearchSortMode(tenantKey: String, mode: SearchSortMode) {
+        updateSearchSection(tenantKey) { section -> section.copy(sortMode = mode) }
     }
 
     fun togglePreferredForSearch(account: Account) {

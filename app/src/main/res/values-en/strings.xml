@@ -61,4 +61,7 @@
     <string name="status_unknown">Status unknown</string>
     <string name="search_error">Search error: %1$s</string>
     <string name="search_results_end">That\'s all the results.</string>
+    <string name="search_sort_relevance">Relevance</string>
+    <string name="search_sort_title">Title</string>
+    <string name="search_sort_hint_load_all">Sorting by title will be available once all results are loaded.</string>
 </resources>

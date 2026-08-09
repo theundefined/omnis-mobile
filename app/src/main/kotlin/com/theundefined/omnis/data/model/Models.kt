@@ -110,7 +110,11 @@ data class BookVersion(
     val publicationDate: String?,
     val isbns: List<String>,
     val frbrgroupid: String?,
-    val branches: List<BranchAvailability>
+    val branches: List<BranchAvailability>,
+    // Primo pnx.display["type"], np. "Audiobook" — null lub "book" (bez rozróżnienia
+    // wielkości liter) oznacza zwykłą książkę drukowaną. Port 1:1 client.py:688
+    // (resource_type=self._display_first(v, "type")) z omnis-py.
+    val resourceType: String? = null
 )
 
 data class SearchResult(

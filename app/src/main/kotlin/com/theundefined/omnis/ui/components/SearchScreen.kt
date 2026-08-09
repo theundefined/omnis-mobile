@@ -19,9 +19,16 @@ import com.theundefined.omnis.R
 import com.theundefined.omnis.data.model.BranchAvailability
 import com.theundefined.omnis.data.model.SearchResult
 import com.theundefined.omnis.ui.OmnisViewModel
+import com.theundefined.omnis.ui.SearchSortMode
 import com.theundefined.omnis.ui.SearchTenantSection
+import com.theundefined.omnis.ui.branchChipLabel
 import com.theundefined.omnis.ui.checkboxBranches
 import com.theundefined.omnis.ui.filteredResults
+import java.text.Collator
+import java.util.Locale
+
+private val polishCollator: Collator =
+    Collator.getInstance(Locale("pl")).apply { strength = Collator.PRIMARY }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -171,7 +178,8 @@ private fun SearchTenantSectionView(section: SearchTenantSection, viewModel: Omn
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                section.checkboxBranches().forEach { branch ->
+                section.checkboxBranches().sortedWith(compareBy(polishCollator) { it }).forEach {
+                    branch ->
                     FilterChip(
                         selected = branch in section.selectedBranches,
                         onClick = {
@@ -181,11 +189,15 @@ private fun SearchTenantSectionView(section: SearchTenantSection, viewModel: Omn
                                 branch !in section.selectedBranches
                             )
                         },
-                        label = { Text(branch) }
+                        label = { Text(section.branchChipLabel(branch)) }
                     )
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        SearchSortControl(section = section, viewModel = viewModel)
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -229,6 +241,39 @@ private fun SearchTenantSectionView(section: SearchTenantSection, viewModel: Omn
     }
 }
 
+/**
+ * Sortowanie wyników jest wyłącznie klient-side (SearchTenantSection.filteredResults()) i nie
+ * przetrwałoby doładowania kolejnej strony bez utraty spójności kolejności, więc chip "Tytuł" jest
+ * dostępny dopiero po załadowaniu wszystkich stron danej biblioteki (!canLoadMore) — patrz
+ * OmnisViewModel.setSearchSortMode.
+ */
+@Composable
+private fun SearchSortControl(section: SearchTenantSection, viewModel: OmnisViewModel) {
+    if (section.results.isEmpty()) return
+
+    if (section.canLoadMore || section.isLoadingMore) {
+        Text(
+            stringResource(R.string.search_sort_hint_load_all),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        return
+    }
+
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(
+            selected = section.sortMode == SearchSortMode.RELEVANCE,
+            onClick = { viewModel.setSearchSortMode(section.tenantKey, SearchSortMode.RELEVANCE) },
+            label = { Text(stringResource(R.string.search_sort_relevance)) }
+        )
+        FilterChip(
+            selected = section.sortMode == SearchSortMode.TITLE,
+            onClick = { viewModel.setSearchSortMode(section.tenantKey, SearchSortMode.TITLE) },
+            label = { Text(stringResource(R.string.search_sort_title)) }
+        )
+    }
+}
+
 @Composable
 private fun SearchResultCard(result: SearchResult) {
     Card(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
@@ -241,10 +286,22 @@ private fun SearchResultCard(result: SearchResult) {
                 Column {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        val editionLabel =
+                            (version.edition ?: "-").let { base ->
+                                // Port omnis-py cli.py:339-340 — dopisek typu nośnika, gdy inny
+                                // niż zwykła książka drukowana (np. "Audiobook").
+                                if (
+                                    version.resourceType != null &&
+                                        !version.resourceType.equals("book", ignoreCase = true)
+                                )
+                                    "$base [${version.resourceType}]"
+                                else base
+                            }
                         Text(
-                            version.edition ?: "-",
+                            editionLabel,
+                            modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -257,13 +314,17 @@ private fun SearchResultCard(result: SearchResult) {
                     version.branches.forEach { branch ->
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             val label =
                                 branch.subLocation?.let { "${branch.libraryName} – $it" }
                                     ?: branch.libraryName
-                            Text(label, style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                label,
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodySmall
+                            )
                             BranchStatusBadge(branch)
                         }
                     }
