@@ -27,7 +27,7 @@ class OmnisRepository(private val accountManager: AccountManager) {
 
         val cookieJar =
             object : CookieJar {
-                private val cookies = mutableListOf<Cookie>()
+                private val cookies = java.util.concurrent.CopyOnWriteArrayList<Cookie>()
 
                 override fun saveFromResponse(url: HttpUrl, responseCookies: List<Cookie>) {
                     cookies.addAll(responseCookies)
