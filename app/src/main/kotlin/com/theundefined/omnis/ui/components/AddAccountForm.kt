@@ -22,6 +22,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.theundefined.omnis.R
+import com.theundefined.omnis.data.model.DEMO_PASSWORD
+import com.theundefined.omnis.data.model.DEMO_USERNAME
 import com.theundefined.omnis.data.model.KNOWN_TENANTS
 import com.theundefined.omnis.data.model.Tenant
 
@@ -76,10 +78,23 @@ fun AddAccountForm(
                             onClick = {
                                 selectedTenant = tenant
                                 expanded = false
+                                if (tenant.isDemo) {
+                                    if (username.isEmpty()) username = DEMO_USERNAME
+                                    if (password.isEmpty()) password = DEMO_PASSWORD
+                                }
                             }
                         )
                     }
                 }
+            }
+
+            if (selectedTenant.isDemo) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    stringResource(R.string.demo_credentials_hint, DEMO_USERNAME, DEMO_PASSWORD),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
 
             Spacer(modifier = Modifier.height(8.dp))

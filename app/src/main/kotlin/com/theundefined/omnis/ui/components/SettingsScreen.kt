@@ -27,6 +27,8 @@ fun SettingsScreen(
     onTogglePreferredForSearch: (Account) -> Unit,
     onRemoveAccount: (Account) -> Unit,
     onAddAccount: (String, String, Tenant) -> Unit,
+    onEnterDemoMode: () -> Unit,
+    onExitDemoMode: () -> Unit,
     isLoading: Boolean,
     onBack: () -> Unit,
     errorMessage: String? = null
@@ -113,6 +115,27 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth().padding(16.dp)
                 ) {
                     Text(stringResource(R.string.add_new_account))
+                }
+
+                val isDemoModeActive = accounts.any { it.isDemo && it.isEnabled }
+                OutlinedButton(
+                    onClick = { if (isDemoModeActive) onExitDemoMode() else onEnterDemoMode() },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                ) {
+                    Text(
+                        stringResource(
+                            if (isDemoModeActive) R.string.demo_mode_disable
+                            else R.string.demo_mode_enable
+                        )
+                    )
+                }
+                if (!isDemoModeActive) {
+                    Text(
+                        stringResource(R.string.demo_mode_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
                 }
 
                 Text(

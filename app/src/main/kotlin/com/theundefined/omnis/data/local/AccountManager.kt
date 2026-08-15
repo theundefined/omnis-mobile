@@ -126,7 +126,11 @@ class AccountManager(context: Context) {
         clearCachedHistory(account.id)
     }
 
-    private fun saveAccounts(accounts: List<Account>) {
+    /**
+     * Publiczne, żeby OmnisRepository mogło zapisać cały zastąpiony zestaw kont jednym atomowym
+     * zapisem (np. applyDemoMode/exitDemoMode), zamiast wielu osobnych updateAccount().
+     */
+    fun saveAccounts(accounts: List<Account>) {
         val jsonStr = json.encodeToString(accounts)
         sharedPreferences.edit().putString("accounts", jsonStr).apply()
     }

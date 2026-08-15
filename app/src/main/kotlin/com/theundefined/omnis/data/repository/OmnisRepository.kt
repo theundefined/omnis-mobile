@@ -4,6 +4,7 @@ import com.theundefined.omnis.data.local.AccountManager
 import com.theundefined.omnis.data.model.*
 import com.theundefined.omnis.data.remote.OmnisApi
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -20,9 +21,16 @@ class OmnisRepository(private val accountManager: AccountManager) {
 
     companion object {
         const val HISTORY_PAGE_SIZE = 50
+
+        // Ten sam domyślny timeout co httpx.AsyncClient w omnis-py: ustawiony jawnie, zamiast
+        // polegać na cichych domyślnych wartościach OkHttp (10s connect/read/write).
+        const val DEFAULT_TIMEOUT_SECONDS = 30L
     }
 
-    private fun createClient(baseUrl: String): OmnisApi {
+    private fun createClient(
+        baseUrl: String,
+        timeoutSeconds: Long = DEFAULT_TIMEOUT_SECONDS
+    ): OmnisApi {
         val logging = HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BODY }
 
         val cookieJar =
@@ -42,6 +50,9 @@ class OmnisRepository(private val accountManager: AccountManager) {
                 .cookieJar(cookieJar)
                 .followRedirects(false)
                 .followSslRedirects(false)
+                .connectTimeout(timeoutSeconds, TimeUnit.SECONDS)
+                .readTimeout(timeoutSeconds, TimeUnit.SECONDS)
+                .writeTimeout(timeoutSeconds, TimeUnit.SECONDS)
                 .build()
 
         return Retrofit.Builder()
@@ -58,7 +69,11 @@ class OmnisRepository(private val accountManager: AccountManager) {
         tenant: Tenant
     ): Result<Account> {
         return try {
-            val api = createClient(tenant.baseUrl)
+            val api =
+                createClient(
+                    tenant.baseUrl,
+                    tenant.defaultTimeoutSeconds ?: DEFAULT_TIMEOUT_SECONDS
+                )
             api.getInitialCookies(tenant.view)
 
             val response =
@@ -122,7 +137,9 @@ class OmnisRepository(private val accountManager: AccountManager) {
                         tenant = tenant,
                         displayName = displayName,
                         finesAmount = finesAmount,
-                        loansCount = loansCount
+                        loansCount = loansCount,
+                        isDemo = tenant.isDemo,
+                        timeoutSeconds = tenant.defaultTimeoutSeconds
                     )
                 accountManager.addAccount(account)
                 Result.success(account)
@@ -144,7 +161,11 @@ class OmnisRepository(private val accountManager: AccountManager) {
 
     suspend fun fetchAccountProfile(account: Account): Result<Account> {
         return try {
-            val api = createClient(account.tenant.baseUrl)
+            val api =
+                createClient(
+                    account.tenant.baseUrl,
+                    account.timeoutSeconds ?: DEFAULT_TIMEOUT_SECONDS
+                )
             api.getInitialCookies(account.tenant.view)
 
             val loginResponse =
@@ -245,7 +266,11 @@ class OmnisRepository(private val accountManager: AccountManager) {
     /** Pobiera WSZYSTKIE strony (przechodzi po `showmore`) — używane dla aktywnych wypożyczeń. */
     suspend fun getLoansForAccount(account: Account, type: String = "active"): Result<List<Loan>> {
         return try {
-            val api = createClient(account.tenant.baseUrl)
+            val api =
+                createClient(
+                    account.tenant.baseUrl,
+                    account.timeoutSeconds ?: DEFAULT_TIMEOUT_SECONDS
+                )
             val token =
                 loginForToken(api, account).getOrElse {
                     return Result.failure(it)
@@ -292,7 +317,11 @@ class OmnisRepository(private val accountManager: AccountManager) {
         bulk: Int = HISTORY_PAGE_SIZE
     ): Result<Pair<List<Loan>, Boolean>> {
         return try {
-            val api = createClient(account.tenant.baseUrl)
+            val api =
+                createClient(
+                    account.tenant.baseUrl,
+                    account.timeoutSeconds ?: DEFAULT_TIMEOUT_SECONDS
+                )
             val token =
                 loginForToken(api, account).getOrElse {
                     return Result.failure(it)
@@ -318,7 +347,11 @@ class OmnisRepository(private val accountManager: AccountManager) {
 
     suspend fun renewLoan(account: Account, loanId: String): Result<Unit> {
         return try {
-            val api = createClient(account.tenant.baseUrl)
+            val api =
+                createClient(
+                    account.tenant.baseUrl,
+                    account.timeoutSeconds ?: DEFAULT_TIMEOUT_SECONDS
+                )
             val loginResponse =
                 api.login(
                     username = account.username,
@@ -361,7 +394,11 @@ class OmnisRepository(private val accountManager: AccountManager) {
         limit: Int = 10
     ): Result<SearchPage> {
         return try {
-            val api = createClient(account.tenant.baseUrl)
+            val api =
+                createClient(
+                    account.tenant.baseUrl,
+                    account.timeoutSeconds ?: DEFAULT_TIMEOUT_SECONDS
+                )
             val token =
                 loginForToken(api, account).getOrElse {
                     return Result.failure(it)
@@ -620,6 +657,10 @@ class OmnisRepository(private val accountManager: AccountManager) {
     fun updateAccount(account: Account) = accountManager.updateAccount(account)
 
     fun removeAccount(account: Account) = accountManager.removeAccount(account)
+
+    fun enterDemoMode() = accountManager.saveAccounts(applyDemoMode(accountManager.getAccounts()))
+
+    fun exitDemoMode() = accountManager.saveAccounts(exitDemoMode(accountManager.getAccounts()))
 
     fun getCachedLoans(accountId: String): List<Loan> = accountManager.getCachedLoans(accountId)
 

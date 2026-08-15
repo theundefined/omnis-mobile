@@ -373,6 +373,18 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         resetHistoryState()
     }
 
+    fun enterDemoMode() {
+        repository.enterDemoMode()
+        refreshAccounts()
+        resetHistoryState()
+    }
+
+    fun exitDemoMode() {
+        repository.exitDemoMode()
+        refreshAccounts()
+        resetHistoryState()
+    }
+
     /**
      * Czyści historię trzymaną w pamięci (nie ruszając trwałego cache'u — patrz
      * `AccountManager`/`OmnisRepository`) i cofa `hasLoadedOnce`, żeby kolejne otwarcie ekranu

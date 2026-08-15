@@ -9,7 +9,14 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class Tenant(val name: String, val baseUrl: String, val institution: String, val view: String)
+data class Tenant(
+    val name: String,
+    val baseUrl: String,
+    val institution: String,
+    val view: String,
+    val isDemo: Boolean = false,
+    val defaultTimeoutSeconds: Long? = null
+)
 
 /**
  * Dwa konta "są tą samą biblioteką" (ten sam katalog, te same filie) wtedy i tylko wtedy, gdy mają

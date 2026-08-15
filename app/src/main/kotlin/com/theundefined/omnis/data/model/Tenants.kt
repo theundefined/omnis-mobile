@@ -1,5 +1,18 @@
 package com.theundefined.omnis.data.model
 
+// Publiczny, samowystarczalny mock serwera Primo (https://github.com/theundefined/omnis-mock) —
+// pozwala wypróbować apkę bez prawdziwych danych logowania. defaultTimeoutSeconds jest wyższy niż
+// domyślne 30s, bo darmowa instancja na Render potrzebuje ~50s+ na "obudzenie się" po bezczynności.
+val MOCK_TENANT =
+    Tenant(
+        name = "Nieoficjalna Biblioteka OMNIS (Demo)",
+        baseUrl = "https://omnis-mock.onrender.com",
+        institution = "MOCK",
+        view = "MOCK:MOCK",
+        isDemo = true,
+        defaultTimeoutSeconds = 60L
+    )
+
 val KNOWN_TENANTS =
     listOf(
         Tenant(
@@ -61,5 +74,6 @@ val KNOWN_TENANTS =
             baseUrl = "https://omnis-zamojski.primo.exlibrisgroup.com",
             institution = "48OMNIS_ZAM",
             view = "48OMNIS_ZAM:ZAM_1"
-        )
+        ),
+        MOCK_TENANT
     )

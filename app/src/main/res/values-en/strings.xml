@@ -64,4 +64,9 @@
     <string name="search_sort_relevance">Relevance</string>
     <string name="search_sort_title">Title</string>
     <string name="search_sort_hint_load_all">Sorting by title will be available once all results are loaded.</string>
+
+    <string name="demo_mode_enable">Enable demo mode</string>
+    <string name="demo_mode_disable">Disable demo mode</string>
+    <string name="demo_mode_hint">Demo mode disables your other accounts and enables a test account for the demo library, without needing real login credentials. The first data fetch may take up to about 50 seconds.</string>
+    <string name="demo_credentials_hint">Demo account — username: %1$s, password: %2$s (filled in automatically).</string>
 </resources>

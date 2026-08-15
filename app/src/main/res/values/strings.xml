@@ -64,4 +64,9 @@
     <string name="search_sort_relevance">Trafność</string>
     <string name="search_sort_title">Tytuł</string>
     <string name="search_sort_hint_load_all">Sortowanie po tytule będzie dostępne po załadowaniu wszystkich wyników.</string>
+
+    <string name="demo_mode_enable">Włącz tryb demo</string>
+    <string name="demo_mode_disable">Wyłącz tryb demo</string>
+    <string name="demo_mode_hint">Tryb demo wyłącza pozostałe konta i włącza konto testowe biblioteki demonstracyjnej, bez potrzeby podawania prawdziwych danych logowania. Pierwsze pobranie danych może potrwać do ok. 50 sekund.</string>
+    <string name="demo_credentials_hint">Konto demonstracyjne — login: %1$s, hasło: %2$s (wypełnione automatycznie).</string>
 </resources>

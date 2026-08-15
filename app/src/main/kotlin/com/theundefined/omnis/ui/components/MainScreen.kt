@@ -46,6 +46,8 @@ fun MainScreen(viewModel: OmnisViewModel) {
             onTogglePreferredForSearch = { viewModel.togglePreferredForSearch(it) },
             onRemoveAccount = { viewModel.removeAccount(it) },
             onAddAccount = { user, pass, tenant -> viewModel.addAccount(user, pass, tenant) },
+            onEnterDemoMode = { viewModel.enterDemoMode() },
+            onExitDemoMode = { viewModel.exitDemoMode() },
             isLoading = uiState.isLoading,
             onBack = { currentScreen = "main" },
             errorMessage = error
