@@ -34,6 +34,7 @@
     <string name="manage_accounts">Zarządzanie kontami</string>
     <string name="add_new_account">Dodaj nowe konto</string>
     <string name="version_label">Wersja: %1$s</string>
+    <string name="about_app_source_link">Kod źródłowy na GitHubie</string>
     <string name="fines_label">Kary: %1$.2f %2$s</string>
     <string name="refresh_error">Wystąpił błąd podczas odświeżania danych</string>
     <string name="cd_more_options">Więcej opcji</string>

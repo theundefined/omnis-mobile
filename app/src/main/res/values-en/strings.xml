@@ -34,6 +34,7 @@
     <string name="manage_accounts">Manage accounts</string>
     <string name="add_new_account">Add new account</string>
     <string name="version_label">Version: %1$s</string>
+    <string name="about_app_source_link">Source code on GitHub</string>
     <string name="fines_label">Fines: %1$.2f %2$s</string>
     <string name="refresh_error">An error occurred while refreshing data</string>
     <string name="cd_more_options">More options</string>

@@ -1,5 +1,7 @@
 # Omnis Mobile 📚
 
+[![GitHub](https://img.shields.io/badge/GitHub-theundefined%2Fomnis--mobile-181717?logo=github)](https://github.com/theundefined/omnis-mobile)
+
 Natywna aplikacja na system Android będąca mobilnym odpowiednikiem narzędzia [omnis-py](https://github.com/theundefined/omnis-py). Aplikacja służy do wygodnego zarządzania wieloma kontami bibliotecznymi działającymi w systemie OMNIS (m.in. Biblioteka Raczyńskich, Biblioteka Narodowa, biblioteki uniwersyteckie).
 
 ## ✨ Funkcje
@@ -17,13 +19,7 @@ Natywna aplikacja na system Android będąca mobilnym odpowiednikiem narzędzia 
 
 ## 🏛️ Obsługiwane biblioteki
 
-Aplikacja natywnie wspiera większość polskich bibliotek korzystających z systemu Ex Libris Primo, w tym:
-- Biblioteka Raczyńskich w Poznaniu
-- Biblioteka Narodowa
-- Biblioteka UAM
-- Uniwersytet Jagielloński
-- Dolnośląska Biblioteka Publiczna
-- ...i wiele innych.
+Aplikacja natywnie wspiera **56 bibliotek** działających w polskiej sieci OMNIS i innych instalacjach Ex Libris Primo — m.in. Bibliotekę Raczyńskich, Bibliotekę Narodową, biblioteki uniwersyteckie (UAM, UJ, UW, UWr, PW, UMCS i inne) oraz liczne biblioteki publiczne i powiatowe. Pełna, zawsze aktualna lista znajduje się w kodzie: [`Tenants.kt`](app/src/main/kotlin/com/theundefined/omnis/data/model/Tenants.kt).
 
 ## 🛠️ Technologia
 
@@ -48,3 +44,5 @@ Wymagane JDK 21 oraz zainstalowany system Android SDK.
 
 ## 🤝 Autor
 Stworzone przez [TheUndefined](https://github.com/theundefined).
+
+Kod źródłowy i zgłoszenia: [github.com/theundefined/omnis-mobile](https://github.com/theundefined/omnis-mobile).

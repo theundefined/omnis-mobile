@@ -1,5 +1,7 @@
 package com.theundefined.omnis.ui.components
 
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -8,6 +10,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -35,6 +38,7 @@ fun SettingsScreen(
 ) {
     var showAddForm by remember { mutableStateOf(false) }
     var accountToRemove by remember { mutableStateOf<Account?>(null) }
+    val context = LocalContext.current
 
     // Closing the add-account form takes priority over leaving the settings screen; when the
     // form isn't shown, the enclosing MainScreen's BackHandler (currentScreen == "settings")
@@ -146,8 +150,25 @@ fun SettingsScreen(
                         ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 16.dp)
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
                 )
+
+                TextButton(
+                    onClick = {
+                        val intent =
+                            Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse("https://github.com/theundefined/omnis-mobile")
+                            )
+                        context.startActivity(intent)
+                    },
+                    modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 16.dp)
+                ) {
+                    Text(
+                        stringResource(R.string.about_app_source_link),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
             }
         }
     }
