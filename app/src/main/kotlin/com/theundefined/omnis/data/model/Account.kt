@@ -1,5 +1,7 @@
 package com.theundefined.omnis.data.model
 
+import java.text.Collator
+import java.util.Locale
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -21,3 +23,16 @@ data class Account(
     val finesCurrency: String
         get() = _finesCurrency ?: "PLN"
 }
+
+private val accountNameCollator: Collator =
+    Collator.getInstance(Locale("pl")).apply { strength = Collator.PRIMARY }
+
+/**
+ * Kolejność listy kont w ekranie Ustawień: alfabetycznie wg nazwy konta (z uwzględnieniem polskich
+ * znaków diakrytycznych), z kontem demo zawsze na końcu — niezależnie od jego nazwy/tenanta.
+ */
+fun List<Account>.sortedForSettings(): List<Account> =
+    sortedWith(
+        compareBy<Account> { it.isDemo }
+            .thenBy(accountNameCollator) { it.displayName ?: it.username }
+    )

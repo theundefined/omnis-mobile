@@ -330,6 +330,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         repository.updateAccount(updated)
         refreshAccounts()
         resetHistoryState()
+        onAccountSetChanged()
     }
 
     fun addAccount(username: String, password: String, tenant: Tenant) {
@@ -340,12 +341,25 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
                 .onSuccess {
                     refreshAccounts()
                     resetHistoryState()
+                    onAccountSetChanged()
                     _events.emit(UiEvent.AccountAdded)
                 }
                 .onFailure { e ->
                     _uiState.update { it.copy(isLoading = false, error = e.message) }
                 }
         }
+    }
+
+    /**
+     * Zestaw włączonych kont się zmienił (toggle, dodanie/usunięcie konta, wejście/wyjście z trybu
+     * demo) — lista wypożyczeń na ekranie głównym trzyma płaski, już przefiltrowany `Map<String,
+     * List<Loan>>` (`updateGroupedLoans`), który inaczej zostałby ze starym zestawem kont aż do
+     * następnego ręcznego odświeżenia. Najpierw pokazujemy natychmiast to, co jest w cache'u (bez
+     * sieci), a potem dociągamy świeże dane w tle — tak samo jak przy starcie apki w `init{}`.
+     */
+    private fun onAccountSetChanged() {
+        loadCachedLoans()
+        refreshAllLoans(isManual = false)
     }
 
     fun renewLoan(loan: Loan) {
@@ -371,18 +385,21 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         repository.removeAccount(account)
         refreshAccounts()
         resetHistoryState()
+        onAccountSetChanged()
     }
 
     fun enterDemoMode() {
         repository.enterDemoMode()
         refreshAccounts()
         resetHistoryState()
+        onAccountSetChanged()
     }
 
     fun exitDemoMode() {
         repository.exitDemoMode()
         refreshAccounts()
         resetHistoryState()
+        onAccountSetChanged()
     }
 
     /**

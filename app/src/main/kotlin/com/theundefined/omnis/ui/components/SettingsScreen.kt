@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.theundefined.omnis.R
 import com.theundefined.omnis.data.model.Account
 import com.theundefined.omnis.data.model.Tenant
+import com.theundefined.omnis.data.model.sortedForSettings
 import com.theundefined.omnis.ui.OmnisViewModel
 import kotlinx.coroutines.flow.collectLatest
 
@@ -104,7 +105,7 @@ fun SettingsScreen(
                 )
             } else {
                 LazyColumn(modifier = Modifier.weight(1f)) {
-                    items(accounts, key = { it.id }) { account ->
+                    items(accounts.sortedForSettings(), key = { it.id }) { account ->
                         AccountSettingsItem(
                             account = account,
                             onToggle = { onToggleAccount(account) },
