@@ -6,6 +6,7 @@ import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -14,6 +15,7 @@ import com.theundefined.omnis.R
 import com.theundefined.omnis.ui.GroupingMode
 import com.theundefined.omnis.ui.OmnisViewModel
 import com.theundefined.omnis.ui.SortMode
+import kotlinx.coroutines.flow.collectLatest
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -21,6 +23,7 @@ fun MainScreen(viewModel: OmnisViewModel) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var currentScreen by remember { mutableStateOf("main") }
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     val error = uiState.error
 
@@ -28,6 +31,25 @@ fun MainScreen(viewModel: OmnisViewModel) {
     LaunchedEffect(error) {
         if (error != null && currentScreen == "main") {
             snackbarHostState.showSnackbar(error)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.events.collectLatest { event ->
+            if (event is OmnisViewModel.UiEvent.BulkRenewFinished) {
+                val message =
+                    if (event.failedTitles.isEmpty()) {
+                        context.getString(R.string.bulk_renew_success, event.succeeded)
+                    } else {
+                        context.getString(
+                            R.string.bulk_renew_partial,
+                            event.succeeded,
+                            event.succeeded + event.failedTitles.size,
+                            event.failedTitles.joinToString(", ")
+                        )
+                    }
+                snackbarHostState.showSnackbar(message)
+            }
         }
     }
 
@@ -194,7 +216,8 @@ fun MainScreen(viewModel: OmnisViewModel) {
                 ) {
                     LoanList(
                         groupedLoans = uiState.loans,
-                        onRenew = { loan -> viewModel.renewLoan(loan) }
+                        onRenew = { loan -> viewModel.renewLoan(loan) },
+                        onRenewAll = { loans -> viewModel.renewAllInGroup(loans) }
                     )
                 }
             }

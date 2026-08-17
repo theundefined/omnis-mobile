@@ -1,12 +1,13 @@
 package com.theundefined.omnis.ui.components
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -23,18 +24,54 @@ import java.time.temporal.ChronoUnit
 fun LoanList(
     groupedLoans: Map<String, List<Loan>>,
     onRenew: (Loan) -> Unit = {},
+    onRenewAll: (List<Loan>) -> Unit = {},
     isHistory: Boolean = false,
     footer: (@Composable () -> Unit)? = null
 ) {
+    val context = LocalContext.current
+    var renewConfirmGroup by remember { mutableStateOf<Pair<String, List<Loan>>?>(null) }
+
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         groupedLoans.forEach { (groupKey, accountLoans) ->
             item {
-                Text(
-                    text = groupKey,
-                    modifier = Modifier.padding(16.dp),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.secondary
-                )
+                val renewableLoans = accountLoans.filter { it.renewable }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = groupKey,
+                        modifier = Modifier.padding(vertical = 16.dp),
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                    if (accountLoans.isNotEmpty()) {
+                        val groupShareText = buildGroupShareText(groupKey, accountLoans, isHistory)
+                        Row {
+                            IconButton(
+                                onClick = {
+                                    val sendIntent =
+                                        Intent().apply {
+                                            action = Intent.ACTION_SEND
+                                            putExtra(Intent.EXTRA_TEXT, groupShareText)
+                                            type = "text/plain"
+                                        }
+                                    context.startActivity(Intent.createChooser(sendIntent, null))
+                                }
+                            ) {
+                                Text("📤")
+                            }
+                            if (!isHistory && renewableLoans.isNotEmpty()) {
+                                IconButton(
+                                    onClick = { renewConfirmGroup = groupKey to renewableLoans }
+                                ) {
+                                    Text("🔁")
+                                }
+                            }
+                        }
+                    }
+                }
             }
             if (accountLoans.isEmpty()) {
                 item {
@@ -58,6 +95,64 @@ fun LoanList(
             item { footer() }
         }
     }
+
+    renewConfirmGroup?.let { (groupKey, renewableLoans) ->
+        AlertDialog(
+            onDismissRequest = { renewConfirmGroup = null },
+            title = { Text(stringResource(R.string.renew_all_confirm_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.renew_all_confirm_message,
+                        renewableLoans.size,
+                        groupKey
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onRenewAll(renewableLoans)
+                        renewConfirmGroup = null
+                    }
+                ) {
+                    Text(stringResource(R.string.renew))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { renewConfirmGroup = null }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
+}
+
+private fun buildLoanShareText(context: Context, loan: Loan, formattedDueDate: String): String =
+    context.getString(
+        R.string.share_book,
+        loan.title,
+        loan.author ?: context.getString(R.string.unknown_author),
+        formattedDueDate,
+        "${loan.libraryName} - ${loan.locationName}",
+        loan.barcode
+    )
+
+@Composable
+private fun buildGroupShareText(groupKey: String, loans: List<Loan>, isHistory: Boolean): String {
+    val context = LocalContext.current
+    // `joinToString { ... }` nie jest inline w stdlibie, więc Compose nie pozwala wywoływać z jego
+    // lambdy funkcji @Composable (formatPlainDate/formatRelativeDate) — zwykła pętla `for` działa,
+    // bo to inline'owana kontrola przepływu, a nie osobna lambda.
+    val loanTexts = mutableListOf<String>()
+    for (loan in loans) {
+        val formattedDueDate =
+            if (isHistory) formatPlainDate(loan.dueDate) else formatRelativeDate(loan.dueDate)
+        loanTexts.add(buildLoanShareText(context, loan, formattedDueDate))
+    }
+    return context.getString(R.string.share_loans_group_header, groupKey, loans.size) +
+        "\n\n" +
+        loanTexts.joinToString(separator = "\n\n")
 }
 
 @Composable
@@ -185,15 +280,7 @@ fun LoanItem(loan: Loan, onRenew: () -> Unit, isHistory: Boolean = false) {
             ) {
                 IconButton(
                     onClick = {
-                        val shareText =
-                            context.getString(
-                                R.string.share_book,
-                                loan.title,
-                                loan.author ?: context.getString(R.string.unknown_author),
-                                formattedDueDate,
-                                "${loan.libraryName} - ${loan.locationName}",
-                                loan.barcode
-                            )
+                        val shareText = buildLoanShareText(context, loan, formattedDueDate)
                         val sendIntent: Intent =
                             Intent().apply {
                                 action = Intent.ACTION_SEND

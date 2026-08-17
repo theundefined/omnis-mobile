@@ -137,6 +137,18 @@ fun SearchTenantSection.filteredResults(): List<SearchResult> {
     }
 }
 
+/**
+ * Czysta funkcja (bez coroutines/Context) licząca podsumowanie zbiorczego przedłużania — wydzielona
+ * spoza `OmnisViewModel`, żeby dało się ją pokryć testem jednostkowym bez mockowania repozytorium.
+ */
+fun summarizeRenewResults(
+    results: List<Pair<Loan, Result<Unit>>>
+): OmnisViewModel.UiEvent.BulkRenewFinished {
+    val succeeded = results.count { it.second.isSuccess }
+    val failedTitles = results.filter { it.second.isFailure }.map { it.first.title }
+    return OmnisViewModel.UiEvent.BulkRenewFinished(succeeded, failedTitles)
+}
+
 class OmnisViewModel(application: Application, private val repository: OmnisRepository) :
     AndroidViewModel(application) {
 
@@ -177,6 +189,9 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
 
     sealed class UiEvent {
         object AccountAdded : UiEvent()
+
+        data class BulkRenewFinished(val succeeded: Int, val failedTitles: List<String>) :
+            UiEvent()
     }
 
     init {
@@ -372,12 +387,42 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
     fun renewLoan(account: Account, loanId: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            repository
-                .renewLoan(account, loanId)
+            renewLoanCore(account, loanId)
                 .onSuccess { refreshAllLoans() }
                 .onFailure { e ->
                     _uiState.update { it.copy(isLoading = false, error = e.message) }
                 }
+        }
+    }
+
+    private suspend fun renewLoanCore(account: Account, loanId: String): Result<Unit> =
+        repository.renewLoan(account, loanId)
+
+    /**
+     * Przedłuża naraz wszystkie odnawialne wypożyczenia z jednej grupy (nagłówek w `LoanList` —
+     * konto albo filia, w zależności od aktualnego `GroupingMode`). Sekwencyjnie, nie równolegle:
+     * każde wywołanie loguje się od nowa na koncie właściciela wypożyczenia (patrz `renewLoanCore`
+     * -> `OmnisRepository.renewLoan`), a grupy zwykle mają niewiele pozycji, więc nie ma potrzeby
+     * ryzykować równoległych logowań na tym samym koncie. Odświeżenie sieciowe robimy raz, po całej
+     * pętli, zamiast po każdej pozycji jak w pojedynczym `renewLoan`.
+     */
+    fun renewAllInGroup(loans: List<Loan>) {
+        val renewable = loans.filter { it.renewable }
+        if (renewable.isEmpty()) return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            val results =
+                renewable.map { loan ->
+                    val account = uiState.value.accounts.find { it.id == loan.accountId }
+                    val result =
+                        if (account != null) renewLoanCore(account, loan.id)
+                        else Result.failure(Exception("Nieznane konto dla wypożyczenia"))
+                    loan to result
+                }
+            refreshAllLoans(isManual = false)
+            _uiState.update { it.copy(isLoading = false) }
+            _events.emit(summarizeRenewResults(results))
         }
     }
 

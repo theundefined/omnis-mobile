@@ -46,6 +46,11 @@
     <string name="retry">Spróbuj ponownie</string>
 
     <string name="share_book">📚 Książka: %1$s\n✍️ Autor: %2$s\n📅 Termin zwrotu: %3$s\n📍 Lokalizacja: %4$s\n🔑 Kod kreskowy: %5$s</string>
+    <string name="share_loans_group_header">📚 Wypożyczenia — %1$s (%2$d szt.):</string>
+    <string name="renew_all_confirm_title">Przedłużyć wszystkie?</string>
+    <string name="renew_all_confirm_message">Przedłużyć %1$d wypożyczeń w grupie „%2$s”?</string>
+    <string name="bulk_renew_success">Przedłużono wszystkie (%1$d).</string>
+    <string name="bulk_renew_partial">Przedłużono %1$d z %2$d. Nie udało się: %3$s</string>
 
     <string name="search_title">Szukaj</string>
     <string name="search_hint">Szukaj w katalogu…</string>
