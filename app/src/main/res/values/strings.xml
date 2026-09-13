@@ -47,6 +47,10 @@
 
     <string name="share_book">📚 Książka: %1$s\n✍️ Autor: %2$s\n📅 Termin zwrotu: %3$s\n📍 Lokalizacja: %4$s\n🔑 Kod kreskowy: %5$s</string>
     <string name="share_loans_group_header">📚 Wypożyczenia — %1$s (%2$d szt.):</string>
+    <string name="share_search_result_header">📚 %1$s\n✍️ %2$s</string>
+    <string name="share_search_version_header">%1$s (%2$s):</string>
+    <string name="cd_share_result">Udostępnij wynik</string>
+    <string name="cd_search_web">Szukaj w internecie</string>
     <string name="renew_all_confirm_title">Przedłużyć wszystkie?</string>
     <string name="renew_all_confirm_message">Przedłużyć %1$d wypożyczeń w grupie „%2$s”?</string>
     <string name="bulk_renew_success">Przedłużono wszystkie (%1$d).</string>
@@ -70,6 +74,11 @@
     <string name="search_sort_relevance">Trafność</string>
     <string name="search_sort_title">Tytuł</string>
     <string name="search_sort_hint_load_all">Sortowanie po tytule będzie dostępne po załadowaniu wszystkich wyników.</string>
+    <string name="series_label">Seria: %1$s</string>
+    <string name="language_label">Język: %1$s</string>
+    <string name="show_description">Pokaż opis</string>
+    <string name="hide_description">Ukryj opis</string>
+    <string name="cd_shelf_map">Pokaż na regale</string>
 
     <string name="demo_mode_enable">Włącz tryb demo</string>
     <string name="demo_mode_disable">Wyłącz tryb demo</string>

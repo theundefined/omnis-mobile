@@ -105,7 +105,9 @@ data class BranchAvailability(
     // fakcie (osobny request per niedostępna filia), analogicznie do mutowalnego modelu
     // Pydantic w client.py (branch.due_date = due_date).
     var dueDate: String? = null,
-    var overdue: Boolean = false
+    var overdue: Boolean = false,
+    // Google Maps — fizyczna lokalizacja na regale. holding.stackMapUrl, patrz Holding.
+    val mapsUrl: String? = null
 )
 
 data class BookVersion(
@@ -121,7 +123,19 @@ data class BookVersion(
     // Primo pnx.display["type"], np. "Audiobook" — null lub "book" (bez rozróżnienia
     // wielkości liter) oznacza zwykłą książkę drukowaną. Port 1:1 client.py:688
     // (resource_type=self._display_first(v, "type")) z omnis-py.
-    val resourceType: String? = null
+    val resourceType: String? = null,
+    // Wszystkie poniższe pola pochodzą z tej samej odpowiedzi /pnxs, którą repozytorium już
+    // pobiera dla title/author/edition powyżej — zero dodatkowych zapytań sieciowych. Port
+    // 1:1 pól z client.py::search_books (BookVersion) w omnis-py.
+    val series: String? = null,
+    val genres: List<String> = emptyList(),
+    val subjects: List<String> = emptyList(),
+    val language: String? = null,
+    val physicalDescription: String? = null,
+    // pnx.addata["abstract"] (MARC 520) — bywa wielojęzyczne (kolejne elementy listy), bierzemy
+    // pierwszy wpis bez próby rozpoznawania języka (Primo nie taguje tu jednoznacznie języka per
+    // element, w odróżnieniu np. od "contributorfull").
+    val description: String? = null
 )
 
 data class SearchResult(
@@ -255,7 +269,12 @@ data class Holding(
     // żadnego wpływu. Format wartości (np. "HoldingResultKey [mid=..., libraryId=...,
     // locationCode=..., callNumber=...]") nie jest udokumentowany i nie próbujemy go budować
     // ręcznie — to pole jest tylko przekazywane 1:1 tak, jak przyszło z /pub/delivery.
-    val holKey: String? = null
+    val holKey: String? = null,
+    // Link do Google Maps z fizyczną lokalizacją na regale — pole już przychodzi w tej samej
+    // odpowiedzi /pub/delivery, którą OmnisRepository.searchBooks i tak pobiera; do niedawna było
+    // tu pomijane (brak pola w tej data class), mimo że omnis-py (client.py BranchAvailability)
+    // już je parsuje jako maps_url.
+    val stackMapUrl: String? = null
 )
 
 data class PhysicalServiceResponse(val physicalServiceId: String? = null)

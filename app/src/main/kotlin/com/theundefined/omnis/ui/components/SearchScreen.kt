@@ -1,5 +1,7 @@
 package com.theundefined.omnis.ui.components
 
+import android.content.Context
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardActions
@@ -9,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -16,6 +19,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.theundefined.omnis.R
+import com.theundefined.omnis.data.model.BookVersion
 import com.theundefined.omnis.data.model.BranchAvailability
 import com.theundefined.omnis.data.model.SearchResult
 import com.theundefined.omnis.ui.OmnisViewModel
@@ -276,99 +280,242 @@ private fun SearchSortControl(section: SearchTenantSection, viewModel: OmnisView
 
 @Composable
 private fun SearchResultCard(result: SearchResult) {
+    val context = LocalContext.current
+
     Card(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(result.title, style = MaterialTheme.typography.titleMedium)
             result.author?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+            result.versions
+                .firstNotNullOfOrNull { it.series }
+                ?.let {
+                    Text(
+                        stringResource(R.string.series_label, it),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                }
 
             result.versions.forEach { version ->
-                Spacer(modifier = Modifier.height(8.dp))
-                Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        val editionLabel =
-                            (version.edition ?: "-").let { base ->
-                                // Port omnis-py cli.py:339-340 — dopisek typu nośnika, gdy inny
-                                // niż zwykła książka drukowana (np. "Audiobook").
-                                if (
-                                    version.resourceType != null &&
-                                        !version.resourceType.equals("book", ignoreCase = true)
-                                )
-                                    "$base [${version.resourceType}]"
-                                else base
-                            }
-                        Text(
-                            editionLabel,
-                            modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            version.publicationDate ?: "-",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    version.branches.forEach { branch ->
+                // key() na mmsid — bez tego `remember` niżej wiąże się z pozycją w forEach, nie z
+                // konkretnym wydaniem, więc np. zmiana sortowania/filtra filii (które przebudowują
+                // filteredResults()) przesuwałaby stan "rozwinięty opis" na inne wydanie.
+                key(version.mmsid) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Column {
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            val label =
-                                branch.subLocation?.let { "${branch.libraryName} – $it" }
-                                    ?: branch.libraryName
                             Text(
-                                label,
+                                editionLabel(version),
                                 modifier = Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodySmall
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            BranchStatusBadge(branch)
+                            Text(
+                                version.publicationDate ?: "-",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        val metaParts =
+                            listOfNotNull(
+                                version.language?.let {
+                                    stringResource(R.string.language_label, it)
+                                },
+                                version.physicalDescription
+                            )
+                        if (metaParts.isNotEmpty()) {
+                            Text(
+                                metaParts.joinToString(" • "),
+                                modifier = Modifier.padding(top = 4.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        val tags = (version.genres + version.subjects).distinct()
+                        if (tags.isNotEmpty()) {
+                            Text(
+                                tags.joinToString(", "),
+                                modifier = Modifier.padding(top = 2.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        val description = version.description
+                        if (!description.isNullOrBlank()) {
+                            var descriptionExpanded by remember { mutableStateOf(false) }
+                            TextButton(
+                                onClick = { descriptionExpanded = !descriptionExpanded },
+                                contentPadding = PaddingValues(vertical = 4.dp)
+                            ) {
+                                Text(
+                                    stringResource(
+                                        if (descriptionExpanded) R.string.hide_description
+                                        else R.string.show_description
+                                    ),
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                            if (descriptionExpanded) {
+                                Text(
+                                    description,
+                                    modifier = Modifier.padding(bottom = 4.dp),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+
+                        version.branches.forEach { branch ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    branchLabel(branch),
+                                    modifier = Modifier.weight(1f),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                BranchStatusBadge(branch)
+                                branch.mapsUrl?.let { url ->
+                                    val shelfMapDescription = stringResource(R.string.cd_shelf_map)
+                                    Box(
+                                        modifier =
+                                            Modifier.size(32.dp)
+                                                .clickable { openUrl(context, url) }
+                                                .semantics {
+                                                    contentDescription = shelfMapDescription
+                                                },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("📍", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
+                            }
                         }
                     }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                val shareDescription = stringResource(R.string.cd_share_result)
+                IconButton(
+                    onClick = {
+                        sendShareIntent(context, buildSearchResultShareText(context, result))
+                    },
+                    modifier = Modifier.semantics { contentDescription = shareDescription }
+                ) {
+                    Text("📤")
+                }
+                val webSearchDescription = stringResource(R.string.cd_search_web)
+                IconButton(
+                    onClick = { openWebSearch(context, result.title, result.author) },
+                    modifier = Modifier.semantics { contentDescription = webSearchDescription }
+                ) {
+                    Text("🔍")
                 }
             }
         }
     }
 }
 
-@Composable
-private fun BranchStatusBadge(branch: BranchAvailability) {
-    val available = Color(0xFF388E3C)
-    val warning = Color(0xFFFBC02D)
-    val overdueColor = Color(0xFFD32F2F)
+// Port omnis-py cli.py:339-340 — dopisek typu nośnika, gdy inny niż zwykła książka drukowana
+// (np. "Audiobook"). Współdzielone przez widok karty i tekst do udostępnienia.
+private fun editionLabel(version: BookVersion): String {
+    val base = version.edition ?: "-"
+    return if (
+        version.resourceType != null && !version.resourceType.equals("book", ignoreCase = true)
+    )
+        "$base [${version.resourceType}]"
+    else base
+}
 
+private fun branchLabel(branch: BranchAvailability): String =
+    branch.subLocation?.let { "${branch.libraryName} – $it" } ?: branch.libraryName
+
+// Wersja nie-@Composable (Context.getString zamiast stringResource) — potrzebna, by
+// buildSearchResultShareText mogła być budowana leniwie w onClick, tak jak buildLoanShareText w
+// LoanComponents.kt, zamiast liczyć się przy każdej rekompozycji dla każdego wyniku na liście
+// (SearchTenantSectionView renderuje wszystkie karty naraz, bez LazyColumn per wynik).
+private fun branchStatusText(context: Context, branch: BranchAvailability): String =
     when {
-        branch.status == "available" ->
-            Text(
-                stringResource(R.string.status_available),
-                color = available,
-                style = MaterialTheme.typography.bodySmall
-            )
+        branch.status == "available" -> context.getString(R.string.status_available)
         branch.status == "unavailable" && branch.dueDate != null -> {
             // `dueDate` jest `var` (patrz BranchAvailability) — Kotlin nie smart-castuje
             // mutowalnych właściwości, stąd jednorazowe `!!` po już wykonanym null-checku wyżej.
             val formattedDate = formatPlainDate(branch.dueDate!!)
-            Text(
-                if (branch.overdue) stringResource(R.string.status_overdue_since, formattedDate)
-                else stringResource(R.string.status_borrowed_until, formattedDate),
-                color = if (branch.overdue) overdueColor else warning,
-                style = MaterialTheme.typography.bodySmall
-            )
+            if (branch.overdue) context.getString(R.string.status_overdue_since, formattedDate)
+            else context.getString(R.string.status_borrowed_until, formattedDate)
         }
-        branch.status == "unavailable" ->
-            Text(
-                stringResource(R.string.status_borrowed_unknown),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall
-            )
-        else ->
-            Text(
-                stringResource(R.string.status_unknown),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall
-            )
+        branch.status == "unavailable" -> context.getString(R.string.status_borrowed_unknown)
+        else -> context.getString(R.string.status_unknown)
     }
+
+@Composable
+private fun branchStatusColor(branch: BranchAvailability): Color =
+    when {
+        branch.status == "available" -> Color(0xFF388E3C)
+        branch.status == "unavailable" && branch.dueDate != null ->
+            if (branch.overdue) Color(0xFFD32F2F) else Color(0xFFFBC02D)
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+@Composable
+private fun BranchStatusBadge(branch: BranchAvailability) {
+    val context = LocalContext.current
+    Text(
+        branchStatusText(context, branch),
+        color = branchStatusColor(branch),
+        style = MaterialTheme.typography.bodySmall
+    )
+}
+
+// Świadomie pomija version.description (opis bywa wielozdaniowy) — udostępniana wiadomość ma
+// zostać zwięzła, tak samo jak przy wypożyczeniach; pełny opis czyta się w aplikacji.
+private fun buildSearchResultShareText(context: Context, result: SearchResult): String {
+    val versionBlocks =
+        result.versions.map { version ->
+            val lines = mutableListOf<String>()
+            lines.add(
+                context.getString(
+                    R.string.share_search_version_header,
+                    editionLabel(version),
+                    version.publicationDate ?: "-"
+                )
+            )
+            listOfNotNull(
+                    version.language?.let { context.getString(R.string.language_label, it) },
+                    version.physicalDescription
+                )
+                .takeIf { it.isNotEmpty() }
+                ?.let { lines.add(it.joinToString(" • ")) }
+            (version.genres + version.subjects)
+                .distinct()
+                .takeIf { it.isNotEmpty() }
+                ?.let { lines.add(it.joinToString(", ")) }
+            version.branches.forEach { branch ->
+                val branchLine = " • ${branchLabel(branch)}: ${branchStatusText(context, branch)}"
+                lines.add(branch.mapsUrl?.let { "$branchLine ($it)" } ?: branchLine)
+            }
+            lines.joinToString("\n")
+        }
+
+    val headerLines =
+        mutableListOf(
+            context.getString(
+                R.string.share_search_result_header,
+                result.title,
+                result.author ?: context.getString(R.string.unknown_author)
+            )
+        )
+    result.versions
+        .firstNotNullOfOrNull { it.series }
+        ?.let { headerLines.add(context.getString(R.string.series_label, it)) }
+    return (headerLines + versionBlocks).joinToString("\n\n")
 }

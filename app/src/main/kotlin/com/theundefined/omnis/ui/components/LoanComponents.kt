@@ -1,8 +1,6 @@
 package com.theundefined.omnis.ui.components
 
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -49,17 +47,7 @@ fun LoanList(
                     if (accountLoans.isNotEmpty()) {
                         val groupShareText = buildGroupShareText(groupKey, accountLoans, isHistory)
                         Row {
-                            IconButton(
-                                onClick = {
-                                    val sendIntent =
-                                        Intent().apply {
-                                            action = Intent.ACTION_SEND
-                                            putExtra(Intent.EXTRA_TEXT, groupShareText)
-                                            type = "text/plain"
-                                        }
-                                    context.startActivity(Intent.createChooser(sendIntent, null))
-                                }
-                            ) {
+                            IconButton(onClick = { sendShareIntent(context, groupShareText) }) {
                                 Text("📤")
                             }
                             if (!isHistory && renewableLoans.isNotEmpty()) {
@@ -142,8 +130,8 @@ private fun buildLoanShareText(context: Context, loan: Loan, formattedDueDate: S
 private fun buildGroupShareText(groupKey: String, loans: List<Loan>, isHistory: Boolean): String {
     val context = LocalContext.current
     // `joinToString { ... }` nie jest inline w stdlibie, więc Compose nie pozwala wywoływać z jego
-    // lambdy funkcji @Composable (formatPlainDate/formatRelativeDate) — zwykła pętla `for` działa,
-    // bo to inline'owana kontrola przepływu, a nie osobna lambda.
+    // lambdy funkcji @Composable (formatRelativeDate) — zwykła pętla `for` działa, bo to
+    // inline'owana kontrola przepływu, a nie osobna lambda.
     val loanTexts = mutableListOf<String>()
     for (loan in loans) {
         val formattedDueDate =
@@ -202,7 +190,6 @@ fun formatRelativeDate(dateStr: String): String {
     return "${date.format(DateTimeFormatter.ofPattern("yyyy.MM.dd"))} ($relative)"
 }
 
-@Composable
 fun formatPlainDate(dateStr: String): String {
     val date = parseFlexibleDate(dateStr) ?: return dateStr
     return date.format(DateTimeFormatter.ofPattern("yyyy.MM.dd"))
@@ -281,30 +268,13 @@ fun LoanItem(loan: Loan, onRenew: () -> Unit, isHistory: Boolean = false) {
                 IconButton(
                     onClick = {
                         val shareText = buildLoanShareText(context, loan, formattedDueDate)
-                        val sendIntent: Intent =
-                            Intent().apply {
-                                action = Intent.ACTION_SEND
-                                putExtra(Intent.EXTRA_TEXT, shareText)
-                                type = "text/plain"
-                            }
-                        val shareIntent = Intent.createChooser(sendIntent, null)
-                        context.startActivity(shareIntent)
+                        sendShareIntent(context, shareText)
                     }
                 ) {
                     Text("📤")
                 }
 
-                IconButton(
-                    onClick = {
-                        val query = Uri.encode("${loan.title} ${loan.author ?: ""}")
-                        val intent =
-                            Intent(
-                                Intent.ACTION_VIEW,
-                                Uri.parse("https://www.google.com/search?q=$query")
-                            )
-                        context.startActivity(intent)
-                    }
-                ) {
+                IconButton(onClick = { openWebSearch(context, loan.title, loan.author) }) {
                     Text("🔍")
                 }
                 if (loan.renewable) {

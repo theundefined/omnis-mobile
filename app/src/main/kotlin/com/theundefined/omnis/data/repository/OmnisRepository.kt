@@ -536,7 +536,8 @@ class OmnisRepository(private val accountManager: AccountManager) {
                                             libraryName = h.mainLocation,
                                             libraryCode = h.libraryCode,
                                             subLocation = h.subLocation,
-                                            status = h.availabilityStatus
+                                            status = h.availabilityStatus,
+                                            mapsUrl = h.stackMapUrl
                                         )
                                     if (branch.status == "unavailable") {
                                         enrichTargets.add(
@@ -555,7 +556,13 @@ class OmnisRepository(private val accountManager: AccountManager) {
                                 isbns = v.pnx.addata["isbn"] ?: emptyList(),
                                 frbrgroupid = frbrgroupid,
                                 branches = branches,
-                                resourceType = v.pnx.displayFirst("type")
+                                resourceType = v.pnx.displayFirst("type"),
+                                series = v.pnx.addataFirst("seriestitle"),
+                                genres = v.pnx.display["genre"] ?: emptyList(),
+                                subjects = v.pnx.display["subject"] ?: emptyList(),
+                                language = v.pnx.displayFirst("language"),
+                                physicalDescription = v.pnx.displayFirst("format"),
+                                description = v.pnx.addataFirst("abstract")
                             )
                         }
                     SearchResult(frbrgroupid, title, author, versions)
