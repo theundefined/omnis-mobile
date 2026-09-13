@@ -20,12 +20,12 @@ spotless {
 
 android {
     namespace = "com.theundefined.omnis"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.theundefined.omnis"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 45
         versionName = "0.5.10"
 
