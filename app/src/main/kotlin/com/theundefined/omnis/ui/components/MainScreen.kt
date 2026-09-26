@@ -12,9 +12,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.theundefined.omnis.R
-import com.theundefined.omnis.ui.GroupingMode
 import com.theundefined.omnis.ui.OmnisViewModel
-import com.theundefined.omnis.ui.SortMode
 import kotlinx.coroutines.flow.collectLatest
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -116,68 +114,12 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
                         Text("🔎")
                     }
 
-                    val groupingDescription =
-                        stringResource(
-                            if (uiState.groupingMode == GroupingMode.ACCOUNT)
-                                R.string.cd_group_by_account
-                            else R.string.cd_group_by_branch
-                        )
-                    IconButton(
-                        onClick = {
-                            val nextMode =
-                                if (uiState.groupingMode == GroupingMode.ACCOUNT)
-                                    GroupingMode.BRANCH
-                                else GroupingMode.ACCOUNT
-                            viewModel.setGroupingMode(nextMode)
-                        },
-                        modifier = Modifier.semantics { contentDescription = groupingDescription }
-                    ) {
-                        Text(if (uiState.groupingMode == GroupingMode.ACCOUNT) "👤" else "📍")
-                    }
-
                     val refreshDescription = stringResource(R.string.cd_refresh)
                     IconButton(
                         onClick = { viewModel.refreshAllLoans(isManual = true) },
                         modifier = Modifier.semantics { contentDescription = refreshDescription }
                     ) {
                         Text("🔄")
-                    }
-
-                    var showSortMenu by remember { mutableStateOf(false) }
-                    val sortDescription = stringResource(R.string.cd_sort)
-                    Box {
-                        IconButton(
-                            onClick = { showSortMenu = true },
-                            modifier = Modifier.semantics { contentDescription = sortDescription }
-                        ) {
-                            Text("🔃")
-                        }
-                        DropdownMenu(
-                            expanded = showSortMenu,
-                            onDismissRequest = { showSortMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.sort_by_due_date)) },
-                                onClick = {
-                                    viewModel.setSortMode(SortMode.DUE_DATE)
-                                    showSortMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.sort_by_loan_date)) },
-                                onClick = {
-                                    viewModel.setSortMode(SortMode.LOAN_DATE)
-                                    showSortMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.sort_by_title)) },
-                                onClick = {
-                                    viewModel.setSortMode(SortMode.TITLE)
-                                    showSortMenu = false
-                                }
-                            )
-                        }
                     }
 
                     var showMoreMenu by remember { mutableStateOf(false) }
@@ -224,16 +166,24 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
                     }
                 }
             } else {
-                PullToRefreshBox(
-                    isRefreshing = uiState.isLoading,
-                    onRefresh = { viewModel.refreshAllLoans(isManual = true) },
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    LoanList(
-                        groupedLoans = uiState.loans,
-                        onRenew = { loan -> viewModel.renewLoan(loan) },
-                        onRenewAll = { loans -> viewModel.renewAllInGroup(loans) }
+                Column {
+                    LoanViewBar(
+                        groupingMode = uiState.groupingMode,
+                        sortMode = uiState.sortMode,
+                        onGroupingChange = { viewModel.setGroupingMode(it) },
+                        onSortChange = { viewModel.setSortMode(it) }
                     )
+                    PullToRefreshBox(
+                        isRefreshing = uiState.isLoading,
+                        onRefresh = { viewModel.refreshAllLoans(isManual = true) },
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        LoanList(
+                            groupedLoans = uiState.loans,
+                            onRenew = { loan -> viewModel.renewLoan(loan) },
+                            onRenewAll = { loans -> viewModel.renewAllInGroup(loans) }
+                        )
+                    }
                 }
             }
         }

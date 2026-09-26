@@ -12,10 +12,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.theundefined.omnis.R
-import com.theundefined.omnis.ui.GroupingMode
 import com.theundefined.omnis.ui.HistoryUiState
 import com.theundefined.omnis.ui.OmnisViewModel
-import com.theundefined.omnis.ui.SortMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,67 +41,12 @@ fun HistoryScreen(viewModel: OmnisViewModel, onBack: () -> Unit) {
                     }
                 },
                 actions = {
-                    val groupingDescription =
-                        stringResource(
-                            if (state.groupingMode == GroupingMode.ACCOUNT)
-                                R.string.cd_group_by_account
-                            else R.string.cd_group_by_branch
-                        )
-                    IconButton(
-                        onClick = {
-                            val nextMode =
-                                if (state.groupingMode == GroupingMode.ACCOUNT) GroupingMode.BRANCH
-                                else GroupingMode.ACCOUNT
-                            viewModel.setHistoryGroupingMode(nextMode)
-                        },
-                        modifier = Modifier.semantics { contentDescription = groupingDescription }
-                    ) {
-                        Text(if (state.groupingMode == GroupingMode.ACCOUNT) "👤" else "📍")
-                    }
-
                     val refreshDescription = stringResource(R.string.cd_refresh)
                     IconButton(
                         onClick = { viewModel.loadHistory(forceRefresh = true) },
                         modifier = Modifier.semantics { contentDescription = refreshDescription }
                     ) {
                         Text("🔄")
-                    }
-
-                    var showSortMenu by remember { mutableStateOf(false) }
-                    val sortDescription = stringResource(R.string.cd_sort)
-                    Box {
-                        IconButton(
-                            onClick = { showSortMenu = true },
-                            modifier = Modifier.semantics { contentDescription = sortDescription }
-                        ) {
-                            Text("🔃")
-                        }
-                        DropdownMenu(
-                            expanded = showSortMenu,
-                            onDismissRequest = { showSortMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.sort_by_due_date)) },
-                                onClick = {
-                                    viewModel.setHistorySortMode(SortMode.DUE_DATE)
-                                    showSortMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.sort_by_loan_date)) },
-                                onClick = {
-                                    viewModel.setHistorySortMode(SortMode.LOAN_DATE)
-                                    showSortMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.sort_by_title)) },
-                                onClick = {
-                                    viewModel.setHistorySortMode(SortMode.TITLE)
-                                    showSortMenu = false
-                                }
-                            )
-                        }
                     }
                 }
             )
@@ -140,18 +83,29 @@ fun HistoryScreen(viewModel: OmnisViewModel, onBack: () -> Unit) {
                     }
                 }
                 else -> {
-                    PullToRefreshBox(
-                        isRefreshing = state.isLoading,
-                        onRefresh = { viewModel.loadHistory(forceRefresh = true) },
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        LoanList(
-                            groupedLoans = state.loans,
-                            isHistory = true,
-                            footer = {
-                                HistoryFooter(state, onLoadMore = { viewModel.loadMoreHistory() })
-                            }
+                    Column {
+                        LoanViewBar(
+                            groupingMode = state.groupingMode,
+                            sortMode = state.sortMode,
+                            onGroupingChange = { viewModel.setHistoryGroupingMode(it) },
+                            onSortChange = { viewModel.setHistorySortMode(it) }
                         )
+                        PullToRefreshBox(
+                            isRefreshing = state.isLoading,
+                            onRefresh = { viewModel.loadHistory(forceRefresh = true) },
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            LoanList(
+                                groupedLoans = state.loans,
+                                isHistory = true,
+                                footer = {
+                                    HistoryFooter(
+                                        state,
+                                        onLoadMore = { viewModel.loadMoreHistory() }
+                                    )
+                                }
+                            )
+                        }
                     }
                 }
             }

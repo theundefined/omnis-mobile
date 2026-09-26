@@ -1,8 +1,15 @@
 <resources>
     <string name="app_name">Omnis</string>
-    <string name="sort_by_due_date">Sortuj wg terminu zwrotu</string>
-    <string name="sort_by_loan_date">Sortuj wg daty wypożyczenia</string>
-    <string name="sort_by_title">Sortuj wg tytułu</string>
+    <string name="sort_by_due_date">Termin zwrotu</string>
+    <string name="sort_by_loan_date">Data wypożyczenia</string>
+    <string name="sort_by_title">Tytuł</string>
+    <string name="group_by_account">Według konta</string>
+    <string name="group_by_branch">Według filii</string>
+    <string name="group_none">Bez grupowania</string>
+    <string name="group_all_header">Wszystkie</string>
+    <string name="view_menu_group">Grupuj</string>
+    <string name="view_menu_sort">Sortuj</string>
+    <string name="view_summary">%1$s · %2$s ▾</string>
     <string name="add_first_account">Dodaj pierwsze konto</string>
     <string name="add_account">Dodaj konto</string>
     <string name="library">Biblioteka</string>
@@ -26,10 +33,7 @@
     <string name="remove_account_confirm">Czy na pewno chcesz usunąć konto %1$s?</string>
     <string name="remove">Usuń</string>
     <string name="cd_back">Wstecz</string>
-    <string name="cd_group_by_account">Grupowanie: według konta</string>
-    <string name="cd_group_by_branch">Grupowanie: według lokalizacji</string>
     <string name="cd_refresh">Odśwież</string>
-    <string name="cd_sort">Sortuj</string>
     <string name="cd_settings">Ustawienia</string>
     <string name="manage_accounts">Zarządzanie kontami</string>
     <string name="add_new_account">Dodaj nowe konto</string>

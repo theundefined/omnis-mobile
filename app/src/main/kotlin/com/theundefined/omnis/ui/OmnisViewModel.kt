@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.theundefined.omnis.R
+import com.theundefined.omnis.data.local.ViewPrefs
 import com.theundefined.omnis.data.model.Account
 import com.theundefined.omnis.data.model.HistoryCacheEntry
 import com.theundefined.omnis.data.model.Loan
@@ -14,7 +15,6 @@ import com.theundefined.omnis.data.model.SearchResult
 import com.theundefined.omnis.data.model.Tenant
 import com.theundefined.omnis.data.model.searchKey
 import com.theundefined.omnis.data.repository.OmnisRepository
-import com.theundefined.omnis.ui.components.parseFlexibleDate
 import java.text.Collator
 import java.util.Locale
 import kotlinx.coroutines.async
@@ -28,17 +28,6 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-
-enum class GroupingMode {
-    ACCOUNT,
-    BRANCH
-}
-
-enum class SortMode {
-    DUE_DATE,
-    LOAN_DATE,
-    TITLE
-}
 
 data class UiState(
     val accounts: List<Account> = emptyList(),
@@ -152,10 +141,24 @@ fun summarizeRenewResults(
 class OmnisViewModel(application: Application, private val repository: OmnisRepository) :
     AndroidViewModel(application) {
 
-    private val _uiState = MutableStateFlow(UiState())
+    private val viewPrefs = ViewPrefs(application)
+
+    private val _uiState =
+        MutableStateFlow(
+            UiState(
+                groupingMode = viewPrefs.get(PREF_LOANS_GROUPING, GroupingMode.ACCOUNT),
+                sortMode = viewPrefs.get(PREF_LOANS_SORT, SortMode.DUE_DATE)
+            )
+        )
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    private val _historyUiState = MutableStateFlow(HistoryUiState())
+    private val _historyUiState =
+        MutableStateFlow(
+            HistoryUiState(
+                groupingMode = viewPrefs.get(PREF_HISTORY_GROUPING, GroupingMode.ACCOUNT),
+                sortMode = viewPrefs.get(PREF_HISTORY_SORT, SortMode.LOAN_DATE)
+            )
+        )
     val historyUiState: StateFlow<HistoryUiState> = _historyUiState.asStateFlow()
 
     // Płaska lista wszystkich dotąd pobranych/wczytanych z cache'u pozycji historii — trzymana
@@ -269,53 +272,23 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
             groupAndSortLoans(
                 allLoans.map { it.second },
                 uiState.value.groupingMode,
-                uiState.value.sortMode
+                uiState.value.sortMode,
+                allGroupLabel()
             )
         _uiState.update { it.copy(loans = grouped, isLoading = isLoading) }
     }
 
-    private fun groupAndSortLoans(
-        loans: List<Loan>,
-        groupingMode: GroupingMode,
-        sortMode: SortMode
-    ): Map<String, List<Loan>> {
-        val grouped =
-            when (groupingMode) {
-                // ownerName jest ustawiane w OmnisRepository jako account.displayName ?:
-                // account.username, więc grupowanie po nim jest równoważne grupowaniu po Account.
-                GroupingMode.ACCOUNT -> loans.groupBy { it.ownerName ?: "?" }
-                GroupingMode.BRANCH -> loans.groupBy { it.libraryName + " - " + it.locationName }
-            }
-        return grouped.mapValues { entry -> sortLoans(entry.value, sortMode) }
-    }
-
-    private fun sortLoans(loans: List<Loan>, sortMode: SortMode): List<Loan> {
-        // Daty z API są tekstowe (dd/MM/yyyy) — sortowanie leksykograficzne po Stringu
-        // porównywałoby de facto tylko dzień miesiąca, ignorując rok. Parsujemy więc raz na
-        // element do LocalDate (nie w każdym porównaniu); wpisy z datą, której nie da się
-        // sparsować, lądują na końcu.
-        fun byDate(selector: (Loan) -> String, ascending: Boolean): List<Loan> {
-            val withKeys = loans.map { it to parseFlexibleDate(selector(it)) }
-            val (withDate, withoutDate) = withKeys.partition { it.second != null }
-            val sorted =
-                if (ascending) withDate.sortedBy { it.second }
-                else withDate.sortedByDescending { it.second }
-            return sorted.map { it.first } + withoutDate.map { it.first }
-        }
-
-        return when (sortMode) {
-            SortMode.DUE_DATE -> byDate({ it.dueDate }, ascending = true)
-            SortMode.LOAN_DATE -> byDate({ it.loanDate }, ascending = false)
-            SortMode.TITLE -> loans.sortedBy { it.title.lowercase() }
-        }
-    }
+    private fun allGroupLabel(): String =
+        getApplication<Application>().getString(R.string.group_all_header)
 
     fun setGroupingMode(mode: GroupingMode) {
+        viewPrefs.put(PREF_LOANS_GROUPING, mode)
         _uiState.update { it.copy(groupingMode = mode) }
         reapplyGroupingAndSorting()
     }
 
     fun setSortMode(mode: SortMode) {
+        viewPrefs.put(PREF_LOANS_SORT, mode)
         _uiState.update { it.copy(sortMode = mode) }
         reapplyGroupingAndSorting()
     }
@@ -603,7 +576,8 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
             groupAndSortLoans(
                 historyFlatLoans,
                 _historyUiState.value.groupingMode,
-                _historyUiState.value.sortMode
+                _historyUiState.value.sortMode,
+                allGroupLabel()
             )
         _historyUiState.update {
             it.copy(
@@ -624,11 +598,13 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
     }
 
     fun setHistoryGroupingMode(mode: GroupingMode) {
+        viewPrefs.put(PREF_HISTORY_GROUPING, mode)
         _historyUiState.update { it.copy(groupingMode = mode) }
         reapplyHistoryGroupingAndSorting()
     }
 
     fun setHistorySortMode(mode: SortMode) {
+        viewPrefs.put(PREF_HISTORY_SORT, mode)
         _historyUiState.update { it.copy(sortMode = mode) }
         reapplyHistoryGroupingAndSorting()
     }
@@ -638,7 +614,8 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
             groupAndSortLoans(
                 historyFlatLoans,
                 _historyUiState.value.groupingMode,
-                _historyUiState.value.sortMode
+                _historyUiState.value.sortMode,
+                allGroupLabel()
             )
         _historyUiState.update { it.copy(loans = grouped) }
     }
@@ -844,6 +821,13 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
     fun togglePreferredForSearch(account: Account) {
         repository.updateAccount(account.copy(preferredForSearch = !account.preferredForSearch))
         refreshAccounts()
+    }
+
+    private companion object {
+        const val PREF_LOANS_GROUPING = "loans_grouping"
+        const val PREF_LOANS_SORT = "loans_sort"
+        const val PREF_HISTORY_GROUPING = "history_grouping"
+        const val PREF_HISTORY_SORT = "history_sort"
     }
 
     class Factory(private val application: Application, private val repository: OmnisRepository) :
