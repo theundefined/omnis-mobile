@@ -129,11 +129,20 @@ private fun buildGroupShareText(groupKey: String, loans: List<Loan>, isHistory: 
     // `joinToString { ... }` nie jest inline w stdlibie, więc Compose nie pozwala wywoływać z jego
     // lambdy funkcji @Composable (formatRelativeDate) — zwykła pętla `for` działa, bo to
     // inline'owana kontrola przepływu, a nie osobna lambda.
+    // Przy grupowaniu po filii albo bez grupowania nagłówek nie mówi, czyje to wypożyczenia —
+    // wtedy (gdy w grupie jest więcej niż jedna osoba) dopisujemy właściciela do każdej pozycji.
+    val showOwner = loans.mapNotNull { it.ownerName }.distinct().size > 1
     val loanTexts = mutableListOf<String>()
     for (loan in loans) {
         val formattedDueDate =
             if (isHistory) formatPlainDate(loan.dueDate) else formatRelativeDate(loan.dueDate)
-        loanTexts.add(buildLoanShareText(context, loan, formattedDueDate))
+        val text = buildLoanShareText(context, loan, formattedDueDate)
+        val owner = loan.ownerName
+        loanTexts.add(
+            if (showOwner && owner != null)
+                text + "\n👤 " + context.getString(R.string.loaned_by, owner)
+            else text
+        )
     }
     return context.getString(R.string.share_loans_group_header, groupKey, loans.size) +
         "\n\n" +
