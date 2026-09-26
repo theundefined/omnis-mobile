@@ -46,7 +46,7 @@ fun LoanList(
                     if (accountLoans.isNotEmpty()) {
                         val groupShareText = buildGroupShareText(groupKey, accountLoans, isHistory)
                         Row {
-                            CopyShareButtons { groupShareText }
+                            ShareButton { groupShareText }
                             if (!isHistory && renewableLoans.isNotEmpty()) {
                                 IconButton(
                                     onClick = { renewConfirmGroup = groupKey to renewableLoans }
@@ -262,7 +262,7 @@ fun LoanItem(loan: Loan, onRenew: () -> Unit, isHistory: Boolean = false) {
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                CopyShareButtons { buildLoanShareText(context, loan, formattedDueDate) }
+                ShareButton { buildLoanShareText(context, loan, formattedDueDate) }
 
                 IconButton(onClick = { openWebSearch(context, loan.title, loan.author) }) {
                     Text("🔍")

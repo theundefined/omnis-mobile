@@ -448,7 +448,7 @@ private fun SearchResultCard(result: SearchResult) {
 
             Spacer(modifier = Modifier.height(4.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                CopyShareButtons { buildSearchResultShareText(context, result) }
+                ShareButton { buildSearchResultShareText(context, result) }
                 val webSearchDescription = stringResource(R.string.cd_search_web)
                 IconButton(
                     onClick = { openWebSearch(context, result.title, result.author) },
