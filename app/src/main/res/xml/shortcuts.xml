@@ -3,7 +3,7 @@
     <shortcut
         android:shortcutId="scan_isbn"
         android:enabled="true"
-        android:icon="@drawable/ic_shortcut_scan"
+        android:icon="@drawable/ic_barcode_scan"
         android:shortcutShortLabel="@string/shortcut_scan_short"
         android:shortcutLongLabel="@string/shortcut_scan_long">
         <!-- targetPackage = applicationId (bez suffixu dla debug), nie pakiet Kotlina. -->

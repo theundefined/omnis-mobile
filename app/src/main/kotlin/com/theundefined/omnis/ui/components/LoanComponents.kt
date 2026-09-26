@@ -26,7 +26,6 @@ fun LoanList(
     isHistory: Boolean = false,
     footer: (@Composable () -> Unit)? = null
 ) {
-    val context = LocalContext.current
     var renewConfirmGroup by remember { mutableStateOf<Pair<String, List<Loan>>?>(null) }
 
     LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -47,9 +46,7 @@ fun LoanList(
                     if (accountLoans.isNotEmpty()) {
                         val groupShareText = buildGroupShareText(groupKey, accountLoans, isHistory)
                         Row {
-                            IconButton(onClick = { sendShareIntent(context, groupShareText) }) {
-                                Text("📤")
-                            }
+                            CopyShareButtons { groupShareText }
                             if (!isHistory && renewableLoans.isNotEmpty()) {
                                 IconButton(
                                     onClick = { renewConfirmGroup = groupKey to renewableLoans }
@@ -265,14 +262,7 @@ fun LoanItem(loan: Loan, onRenew: () -> Unit, isHistory: Boolean = false) {
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(
-                    onClick = {
-                        val shareText = buildLoanShareText(context, loan, formattedDueDate)
-                        sendShareIntent(context, shareText)
-                    }
-                ) {
-                    Text("📤")
-                }
+                CopyShareButtons { buildLoanShareText(context, loan, formattedDueDate) }
 
                 IconButton(onClick = { openWebSearch(context, loan.title, loan.author) }) {
                     Text("🔍")

@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -108,13 +109,11 @@ fun SearchScreen(
                 keyboardActions = KeyboardActions(onSearch = { triggerSearch() }),
                 trailingIcon = {
                     Row {
-                        val scanDescription = stringResource(R.string.cd_scan_isbn)
-                        IconButton(
-                            onClick = startScan,
-                            enabled = !noEnabledAccounts,
-                            modifier = Modifier.semantics { contentDescription = scanDescription }
-                        ) {
-                            Text("📷")
+                        IconButton(onClick = startScan, enabled = !noEnabledAccounts) {
+                            Icon(
+                                painterResource(R.drawable.ic_barcode_scan),
+                                stringResource(R.string.cd_scan_isbn)
+                            )
                         }
                         val searchDescription = stringResource(R.string.cd_search)
                         IconButton(
@@ -449,15 +448,7 @@ private fun SearchResultCard(result: SearchResult) {
 
             Spacer(modifier = Modifier.height(4.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                val shareDescription = stringResource(R.string.cd_share_result)
-                IconButton(
-                    onClick = {
-                        sendShareIntent(context, buildSearchResultShareText(context, result))
-                    },
-                    modifier = Modifier.semantics { contentDescription = shareDescription }
-                ) {
-                    Text("📤")
-                }
+                CopyShareButtons { buildSearchResultShareText(context, result) }
                 val webSearchDescription = stringResource(R.string.cd_search_web)
                 IconButton(
                     onClick = { openWebSearch(context, result.title, result.author) },

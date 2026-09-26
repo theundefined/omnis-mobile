@@ -49,7 +49,9 @@
     <string name="share_loans_group_header">📚 Loans — %1$s (%2$d items):</string>
     <string name="share_search_result_header">📚 %1$s\n✍️ %2$s</string>
     <string name="share_search_version_header">%1$s (%2$s):</string>
-    <string name="cd_share_result">Share result</string>
+    <string name="cd_copy">Copy</string>
+    <string name="cd_share">Share</string>
+    <string name="copied_to_clipboard">Copied to clipboard</string>
     <string name="cd_search_web">Search the web</string>
     <string name="renew_all_confirm_title">Renew all?</string>
     <string name="renew_all_confirm_message">Renew %1$d loans in group \"%2$s\"?</string>
@@ -63,7 +65,7 @@
     <string name="all_branches">All branches</string>
     <string name="no_search_results">No search results.</string>
     <string name="no_search_results_filtered">No results in selected branches.</string>
-    <string name="search_before_hint">Enter a title or keyword, or scan the ISBN barcode on the cover (📷).</string>
+    <string name="search_before_hint">Enter a title or keyword, or scan the ISBN barcode on the cover.</string>
     <string name="cd_scan_isbn">Scan ISBN barcode</string>
     <string name="scan_not_isbn">The scanned code is not a book ISBN.</string>
     <string name="scan_unavailable">The scanner is temporarily unavailable (Google Play services may still be downloading the scanner module). Please try again in a moment.</string>
