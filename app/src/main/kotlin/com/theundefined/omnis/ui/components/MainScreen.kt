@@ -19,9 +19,12 @@ import kotlinx.coroutines.flow.collectLatest
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(viewModel: OmnisViewModel) {
+fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var currentScreen by remember { mutableStateOf("main") }
+    // Skan zlecony skrótem aplikacji, konsumowany jednorazowo przez SearchScreen — dzięki temu
+    // powrót do wyszukiwarki z listy nie odpala skanera ponownie.
+    var pendingScan by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
 
@@ -31,6 +34,13 @@ fun MainScreen(viewModel: OmnisViewModel) {
     LaunchedEffect(error) {
         if (error != null && currentScreen == "main") {
             snackbarHostState.showSnackbar(error)
+        }
+    }
+
+    LaunchedEffect(scanRequests) {
+        if (scanRequests > 0) {
+            currentScreen = "search"
+            pendingScan = true
         }
     }
 
@@ -83,7 +93,12 @@ fun MainScreen(viewModel: OmnisViewModel) {
     }
 
     if (currentScreen == "search") {
-        SearchScreen(viewModel = viewModel, onBack = { currentScreen = "main" })
+        SearchScreen(
+            viewModel = viewModel,
+            onBack = { currentScreen = "main" },
+            autoStartScan = pendingScan,
+            onAutoStartScanConsumed = { pendingScan = false }
+        )
         return
     }
 

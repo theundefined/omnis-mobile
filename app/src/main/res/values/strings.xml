@@ -63,7 +63,12 @@
     <string name="all_branches">Wszystkie filie</string>
     <string name="no_search_results">Brak wyników wyszukiwania.</string>
     <string name="no_search_results_filtered">Brak wyników w wybranych filiach.</string>
-    <string name="search_before_hint">Wpisz tytuł lub frazę, aby wyszukać.</string>
+    <string name="search_before_hint">Wpisz tytuł lub frazę albo zeskanuj kod kreskowy ISBN z okładki (📷).</string>
+    <string name="cd_scan_isbn">Skanuj kod ISBN</string>
+    <string name="scan_not_isbn">Zeskanowany kod nie jest numerem ISBN książki.</string>
+    <string name="scan_unavailable">Skaner jest chwilowo niedostępny (Usługi Google Play mogą jeszcze pobierać moduł skanera). Spróbuj ponownie za chwilę.</string>
+    <string name="shortcut_scan_short">Skanuj ISBN</string>
+    <string name="shortcut_scan_long">Skanuj ISBN i sprawdź w bibliotece</string>
     <string name="status_available">Dostępna</string>
     <string name="status_borrowed_until">Wypożyczona do %1$s</string>
     <string name="status_overdue_since">Przetrzymana od %1$s</string>

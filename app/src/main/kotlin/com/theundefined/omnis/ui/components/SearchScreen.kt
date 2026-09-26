@@ -30,22 +30,58 @@ import com.theundefined.omnis.ui.checkboxBranches
 import com.theundefined.omnis.ui.filteredResults
 import java.text.Collator
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 private val polishCollator: Collator =
     Collator.getInstance(Locale("pl")).apply { strength = Collator.PRIMARY }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SearchScreen(viewModel: OmnisViewModel, onBack: () -> Unit) {
+fun SearchScreen(
+    viewModel: OmnisViewModel,
+    onBack: () -> Unit,
+    autoStartScan: Boolean = false,
+    onAutoStartScanConsumed: () -> Unit = {}
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val state by viewModel.searchUiState.collectAsStateWithLifecycle()
     var queryInput by remember { mutableStateOf(state.query) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val noEnabledAccounts = uiState.accounts.none { it.isEnabled }
 
     fun triggerSearch() {
         viewModel.runSearch(queryInput)
     }
 
+    val startScan =
+        rememberIsbnScanner(
+            onIsbn = { isbn ->
+                queryInput = isbn
+                viewModel.runSearch(isbn)
+            },
+            onError = { error ->
+                val message =
+                    when (error) {
+                        IsbnScanError.NotIsbn -> R.string.scan_not_isbn
+                        IsbnScanError.Unavailable -> R.string.scan_unavailable
+                    }
+                scope.launch { snackbarHostState.showSnackbar(context.getString(message)) }
+            }
+        )
+
+    // Skan ze skrótu aplikacji. Bez włączonych kont nie ma w czym szukać — zostaje zwykły ekran
+    // z prośbą o dodanie konta zamiast skanowania w ślepą uliczkę.
+    LaunchedEffect(autoStartScan) {
+        if (autoStartScan) {
+            onAutoStartScanConsumed()
+            if (!noEnabledAccounts) startScan()
+        }
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.search_title)) },
@@ -71,17 +107,26 @@ fun SearchScreen(viewModel: OmnisViewModel, onBack: () -> Unit) {
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { triggerSearch() }),
                 trailingIcon = {
-                    val searchDescription = stringResource(R.string.cd_search)
-                    IconButton(
-                        onClick = { triggerSearch() },
-                        modifier = Modifier.semantics { contentDescription = searchDescription }
-                    ) {
-                        Text("🔎")
+                    Row {
+                        val scanDescription = stringResource(R.string.cd_scan_isbn)
+                        IconButton(
+                            onClick = startScan,
+                            enabled = !noEnabledAccounts,
+                            modifier = Modifier.semantics { contentDescription = scanDescription }
+                        ) {
+                            Text("📷")
+                        }
+                        val searchDescription = stringResource(R.string.cd_search)
+                        IconButton(
+                            onClick = { triggerSearch() },
+                            modifier = Modifier.semantics { contentDescription = searchDescription }
+                        ) {
+                            Text("🔎")
+                        }
                     }
                 }
             )
 
-            val noEnabledAccounts = uiState.accounts.none { it.isEnabled }
             val hasAnyRawResults = state.tenantSections.any { it.results.isNotEmpty() }
             val errorSections = state.tenantSections.filter { it.error != null }
             val allFilteredEmpty =

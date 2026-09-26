@@ -14,6 +14,8 @@
         
         <meta-data android:name="io.sentry.dsn" android:value="${sentryDsn}" />
         <meta-data android:name="io.sentry.traces.sample-rate" android:value="1.0" />
+        <!-- Google code scanner: Play services pobiera moduł UI skanera przy instalacji. -->
+        <meta-data android:name="com.google.mlkit.vision.DEPENDENCIES" android:value="barcode_ui" />
         
         <activity
             android:name=".MainActivity"
@@ -24,6 +26,7 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity>
     </application>
 

@@ -63,7 +63,12 @@
     <string name="all_branches">All branches</string>
     <string name="no_search_results">No search results.</string>
     <string name="no_search_results_filtered">No results in selected branches.</string>
-    <string name="search_before_hint">Enter a title or keyword to search.</string>
+    <string name="search_before_hint">Enter a title or keyword, or scan the ISBN barcode on the cover (📷).</string>
+    <string name="cd_scan_isbn">Scan ISBN barcode</string>
+    <string name="scan_not_isbn">The scanned code is not a book ISBN.</string>
+    <string name="scan_unavailable">The scanner is temporarily unavailable (Google Play services may still be downloading the scanner module). Please try again in a moment.</string>
+    <string name="shortcut_scan_short">Scan ISBN</string>
+    <string name="shortcut_scan_long">Scan ISBN and check the library</string>
     <string name="status_available">Available</string>
     <string name="status_borrowed_until">Borrowed until %1$s</string>
     <string name="status_overdue_since">Overdue since %1$s</string>
