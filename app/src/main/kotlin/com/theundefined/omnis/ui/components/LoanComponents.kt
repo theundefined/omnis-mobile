@@ -14,6 +14,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.theundefined.omnis.R
 import com.theundefined.omnis.data.model.Loan
+import com.theundefined.omnis.ui.branchLabel
+import com.theundefined.omnis.ui.spansSeveralLibraries
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
@@ -27,6 +29,10 @@ fun LoanList(
     footer: (@Composable () -> Unit)? = null
 ) {
     var renewConfirmGroup by remember { mutableStateOf<Pair<String, List<Loan>>?>(null) }
+    // Liczone po wszystkich grupach, nie per grupa — przy grupowaniu po koncie każda grupa ma
+    // zwykle jedną bibliotekę, a nazwa i tak powinna się pojawić, skoro na liście jest ich kilka.
+    val withLibrary =
+        remember(groupedLoans) { spansSeveralLibraries(groupedLoans.values.flatten()) }
 
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         groupedLoans.forEach { (groupKey, accountLoans) ->
@@ -71,7 +77,12 @@ fun LoanList(
                 // więc przy wielu kontach/tenantach mogłoby się powtórzyć w obrębie jednej
                 // LazyColumn (Compose wymaga unikalności kluczy globalnie, nie per grupa).
                 items(accountLoans, key = { "${it.accountId}:${it.id}" }) { loan ->
-                    LoanItem(loan, onRenew = { onRenew(loan) }, isHistory = isHistory)
+                    LoanItem(
+                        loan,
+                        onRenew = { onRenew(loan) },
+                        isHistory = isHistory,
+                        withLibrary = withLibrary
+                    )
                 }
             }
             item { Spacer(modifier = Modifier.height(16.dp)) }
@@ -113,13 +124,18 @@ fun LoanList(
     }
 }
 
-private fun buildLoanShareText(context: Context, loan: Loan, formattedDueDate: String): String =
+private fun buildLoanShareText(
+    context: Context,
+    loan: Loan,
+    formattedDueDate: String,
+    withLibrary: Boolean
+): String =
     context.getString(
         R.string.share_book,
         loan.title,
         loan.author ?: context.getString(R.string.unknown_author),
         formattedDueDate,
-        "${loan.libraryName} - ${loan.locationName}",
+        branchLabel(loan, withLibrary),
         loan.barcode
     )
 
@@ -132,11 +148,12 @@ private fun buildGroupShareText(groupKey: String, loans: List<Loan>, isHistory: 
     // Przy grupowaniu po filii albo bez grupowania nagłówek nie mówi, czyje to wypożyczenia —
     // wtedy (gdy w grupie jest więcej niż jedna osoba) dopisujemy właściciela do każdej pozycji.
     val showOwner = loans.mapNotNull { it.ownerName }.distinct().size > 1
+    val withLibrary = spansSeveralLibraries(loans)
     val loanTexts = mutableListOf<String>()
     for (loan in loans) {
         val formattedDueDate =
             if (isHistory) formatPlainDate(loan.dueDate) else formatRelativeDate(loan.dueDate)
-        val text = buildLoanShareText(context, loan, formattedDueDate)
+        val text = buildLoanShareText(context, loan, formattedDueDate, withLibrary)
         val owner = loan.ownerName
         loanTexts.add(
             if (showOwner && owner != null)
@@ -202,7 +219,12 @@ fun formatPlainDate(dateStr: String): String {
 }
 
 @Composable
-fun LoanItem(loan: Loan, onRenew: () -> Unit, isHistory: Boolean = false) {
+fun LoanItem(
+    loan: Loan,
+    onRenew: () -> Unit,
+    isHistory: Boolean = false,
+    withLibrary: Boolean = false
+) {
     val context = LocalContext.current
     // Dla historii wypożyczenie jest już zakończone — kolorowanie "ile dni zostało" i opis
     // relatywny ("za 3 dni") nie mają sensu, pokazujemy samą datę.
@@ -248,7 +270,7 @@ fun LoanItem(loan: Loan, onRenew: () -> Unit, isHistory: Boolean = false) {
 
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                stringResource(R.string.location_label, loan.libraryName, loan.locationName),
+                stringResource(R.string.location_label, branchLabel(loan, withLibrary)),
                 style = MaterialTheme.typography.bodySmall
             )
 
@@ -271,7 +293,7 @@ fun LoanItem(loan: Loan, onRenew: () -> Unit, isHistory: Boolean = false) {
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                ShareButton { buildLoanShareText(context, loan, formattedDueDate) }
+                ShareButton { buildLoanShareText(context, loan, formattedDueDate, withLibrary) }
 
                 IconButton(onClick = { openWebSearch(context, loan.title, loan.author) }) {
                     Text("🔍")

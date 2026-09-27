@@ -53,7 +53,12 @@ data class Loan(
     @SerializedName("itembarcode") @SerialName("itembarcode") val barcode: String,
     val renewable: Boolean = false,
     var accountId: String? = null,
-    var ownerName: String? = null
+    var ownerName: String? = null,
+    // Nazwa biblioteki z KNOWN_TENANTS (Tenant.name) — w odróżnieniu od libraryName
+    // (ilsinstitutionname), które dla wypożyczeń z sieci OMNIS (48OMNIS_NETWORK) jest etykietą z UI
+    // Primo ("Sprawdź dostępność w innych bibliotekach"), a nie nazwą biblioteki. null dla
+    // wypożyczeń z cache'u sprzed dodania tego pola — uzupełni się po odświeżeniu.
+    var tenantName: String? = null
 )
 
 data class LoanResponse(val data: LoanData)

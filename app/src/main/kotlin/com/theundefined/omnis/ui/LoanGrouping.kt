@@ -33,10 +33,31 @@ fun groupAndSortLoans(
             // ownerName jest ustawiane w OmnisRepository jako account.displayName ?:
             // account.username, więc grupowanie po nim jest równoważne grupowaniu po Account.
             GroupingMode.ACCOUNT -> loans.groupBy { it.ownerName ?: "?" }
-            GroupingMode.BRANCH -> loans.groupBy { it.libraryName + " - " + it.locationName }
+            GroupingMode.BRANCH -> {
+                val withLibrary = spansSeveralLibraries(loans)
+                loans.groupBy { branchLabel(it, withLibrary) }
+            }
             GroupingMode.NONE -> if (loans.isEmpty()) emptyMap() else mapOf(allGroupLabel to loans)
         }
     return grouped.mapValues { entry -> sortLoans(entry.value, sortMode) }
+}
+
+/**
+ * Czy wypożyczenia pochodzą z więcej niż jednej biblioteki (tenanta) — tylko wtedy nazwa biblioteki
+ * jest potrzebna przy nazwie filii, żeby np. dwie "Czytelnie" z różnych bibliotek się nie zlały.
+ */
+fun spansSeveralLibraries(loans: List<Loan>): Boolean =
+    loans.mapNotNull { it.tenantName }.distinct().size > 1
+
+/**
+ * Etykieta filii wypożyczenia. Celowo nie używa Loan.libraryName (ilsinstitutionname) — dla
+ * wypożyczeń z sieci OMNIS to tekst "Sprawdź dostępność w innych bibliotekach", nie nazwa
+ * biblioteki.
+ */
+fun branchLabel(loan: Loan, withLibrary: Boolean): String {
+    val tenant = loan.tenantName
+    return if (withLibrary && tenant != null) "$tenant - ${loan.locationName}"
+    else loan.locationName
 }
 
 fun sortLoans(loans: List<Loan>, sortMode: SortMode): List<Loan> {

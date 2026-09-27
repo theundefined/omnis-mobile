@@ -24,7 +24,7 @@
     <string name="in_days">in %d days</string>
     <string name="return_label">Due date: %1$s</string>
     <string name="loaned_on">Loaned on: %1$s</string>
-    <string name="location_label">Location: %1$s - %2$s</string>
+    <string name="location_label">Location: %1$s</string>
     <string name="loaned_by">Loaned by: %1$s</string>
     <string name="barcode_label">Barcode: %1$s</string>
     <string name="unknown_author">Unknown author</string>

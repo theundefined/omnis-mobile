@@ -24,7 +24,7 @@
     <string name="in_days">za %d dni</string>
     <string name="return_label">Zwrot: %1$s</string>
     <string name="loaned_on">Wypożyczono: %1$s</string>
-    <string name="location_label">Lokalizacja: %1$s - %2$s</string>
+    <string name="location_label">Lokalizacja: %1$s</string>
     <string name="loaned_by">Wypożyczone przez: %1$s</string>
     <string name="barcode_label">Kod kreskowy: %1$s</string>
     <string name="unknown_author">Autor nieznany</string>

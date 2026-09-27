@@ -260,7 +260,8 @@ class OmnisRepository(private val accountManager: AccountManager) {
             barcode = item.barcode,
             renewable = item.renew == "Y",
             accountId = account.id,
-            ownerName = account.displayName ?: account.username
+            ownerName = account.displayName ?: account.username,
+            tenantName = account.tenant.name
         )
 
     /** Pobiera WSZYSTKIE strony (przechodzi po `showmore`) — używane dla aktywnych wypożyczeń. */
