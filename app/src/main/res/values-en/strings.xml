@@ -101,6 +101,11 @@
     <string name="branch_map_resolving">Locating branches… (%1$d/%2$d)</string>
     <string name="branch_map_unresolved">Could not locate: %1$s</string>
     <string name="branch_map_empty">Could not locate any branch.</string>
+    <string name="map_only_available">Available only</string>
+    <string name="map_legend_available">Available</string>
+    <string name="map_legend_borrowed">Borrowed</string>
+    <string name="map_legend_overdue">Overdue</string>
+    <string name="map_legend_unknown">No due date / other</string>
 
     <string name="demo_mode_enable">Enable demo mode</string>
     <string name="demo_mode_disable">Disable demo mode</string>

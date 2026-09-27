@@ -101,6 +101,11 @@
     <string name="branch_map_resolving">Ustalanie położenia filii… (%1$d/%2$d)</string>
     <string name="branch_map_unresolved">Nie udało się ustalić położenia: %1$s</string>
     <string name="branch_map_empty">Nie udało się ustalić położenia żadnej filii.</string>
+    <string name="map_only_available">Tylko dostępne</string>
+    <string name="map_legend_available">Dostępna</string>
+    <string name="map_legend_borrowed">Wypożyczona</string>
+    <string name="map_legend_overdue">Przetrzymana</string>
+    <string name="map_legend_unknown">Brak terminu / inne</string>
 
     <string name="demo_mode_enable">Włącz tryb demo</string>
     <string name="demo_mode_disable">Wyłącz tryb demo</string>

@@ -3,8 +3,12 @@ package com.theundefined.omnis.ui.components
 import android.content.Context
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,6 +26,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -35,12 +40,14 @@ import com.theundefined.omnis.ui.OmnisViewModel
 import com.theundefined.omnis.ui.PinStatus
 import com.theundefined.omnis.ui.status
 import org.osmdroid.config.Configuration
+import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.CopyrightOverlay
+import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
 
 /** Mapa filii nad ekranem wyszukiwania — stan trzyma OmnisViewModel.branchMap. */
@@ -53,10 +60,16 @@ fun BranchMapDialogHost(viewModel: OmnisViewModel) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BranchMapDialog(state: BranchMapState, onDismiss: () -> Unit) {
-    val pins = state.pins
+    val allPins = state.pins
+    var onlyAvailable by remember { mutableStateOf(false) }
+    val pins = if (onlyAvailable) allPins.filter { it.status() == PinStatus.AVAILABLE } else allPins
+    // Filtr ma sens tylko, gdy coś odfiltruje i coś zostawi.
+    val canFilter =
+        allPins.any { it.status() == PinStatus.AVAILABLE } &&
+            allPins.any { it.status() != PinStatus.AVAILABLE }
     var selected by remember { mutableStateOf<MapPin?>(null) }
-    // Pinezka mogła się "rozrosnąć" (dołączyła kolejna filia z tego samego budynku) — bierzemy
-    // aktualną wersję po położeniu.
+    // Pinezka mogła się "rozrosnąć" (dołączyła kolejna filia z tego samego budynku) albo zniknąć
+    // przez filtr — bierzemy jej aktualną wersję po położeniu.
     val selectedPin = selected?.let { s -> pins.firstOrNull { it.lat == s.lat && it.lon == s.lon } }
 
     Dialog(
@@ -82,12 +95,34 @@ private fun BranchMapDialog(state: BranchMapState, onDismiss: () -> Unit) {
             Box(modifier = Modifier.padding(padding).fillMaxSize()) {
                 BranchMapView(
                     pins = pins,
-                    fitToPins = state.isResolving || selected == null,
+                    selected = selectedPin,
+                    fitToPins = state.isResolving || selectedPin == null,
                     onPinClick = { selected = it },
+                    onMapClick = { selected = null },
                     modifier = Modifier.fillMaxSize()
                 )
 
-                BranchMapStatus(state, modifier = Modifier.align(Alignment.TopCenter))
+                Column(
+                    modifier = Modifier.align(Alignment.TopStart).fillMaxWidth().padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.Top) {
+                        if (canFilter) {
+                            FilterChip(
+                                selected = onlyAvailable,
+                                onClick = { onlyAvailable = !onlyAvailable },
+                                label = { Text(stringResource(R.string.map_only_available)) },
+                                colors =
+                                    FilterChipDefaults.filterChipColors(
+                                        containerColor = MaterialTheme.colorScheme.surface
+                                    )
+                            )
+                        }
+                        Spacer(modifier = Modifier.weight(1f))
+                        if (allPins.isNotEmpty()) PinLegend()
+                    }
+                    BranchMapStatus(state)
+                }
 
                 selectedPin?.let { pin ->
                     PinDetailsCard(
@@ -115,7 +150,7 @@ private fun BranchMapStatus(state: BranchMapState, modifier: Modifier = Modifier
             else -> return
         }
     Surface(
-        modifier = modifier.padding(12.dp),
+        modifier = modifier,
         shape = MaterialTheme.shapes.medium,
         tonalElevation = 3.dp,
         shadowElevation = 3.dp
@@ -129,6 +164,35 @@ private fun BranchMapStatus(state: BranchMapState, modifier: Modifier = Modifier
                 Spacer(modifier = Modifier.width(8.dp))
             }
             Text(text, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+private fun PinLegend() {
+    val colors = PinColors.current()
+    Surface(shape = MaterialTheme.shapes.medium, tonalElevation = 3.dp, shadowElevation = 3.dp) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            listOf(
+                    PinStatus.AVAILABLE to R.string.map_legend_available,
+                    PinStatus.BORROWED to R.string.map_legend_borrowed,
+                    PinStatus.OVERDUE to R.string.map_legend_overdue,
+                    PinStatus.UNKNOWN to R.string.map_legend_unknown
+                )
+                .forEach { (status, label) ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier =
+                                Modifier.size(10.dp)
+                                    .background(colors.forStatus(status), CircleShape)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(stringResource(label), style = MaterialTheme.typography.labelSmall)
+                    }
+                }
         }
     }
 }
@@ -192,8 +256,10 @@ private fun navigationUrl(branch: MapBranch, pin: MapPin): String =
 @Composable
 private fun BranchMapView(
     pins: List<MapPin>,
+    selected: MapPin?,
     fitToPins: Boolean,
     onPinClick: (MapPin) -> Unit,
+    onMapClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -201,8 +267,27 @@ private fun BranchMapView(
     val darkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val pinColors = PinColors.current()
     val currentOnPinClick by rememberUpdatedState(onPinClick)
+    val currentOnMapClick by rememberUpdatedState(onMapClick)
 
-    val mapView = remember { createMapView(context) }
+    val mapView = remember {
+        createMapView(context).apply {
+            // Na spodzie stosu nakładek: tapnięcie w pinezkę obsłuży najpierw Marker, tu trafia
+            // tylko tapnięcie w pustą mapę.
+            overlays.add(
+                0,
+                MapEventsOverlay(
+                    object : MapEventsReceiver {
+                        override fun singleTapConfirmedHelper(p: GeoPoint?): Boolean {
+                            currentOnMapClick()
+                            return true
+                        }
+
+                        override fun longPressHelper(p: GeoPoint?): Boolean = false
+                    }
+                )
+            )
+        }
+    }
     val markers = remember { mutableListOf<Marker>() }
     mapView.mapOverlay.setColorFilter(if (darkTheme) DARK_TILES else null)
     mapView.overlays.filterIsInstance<CopyrightOverlay>().forEach {
@@ -230,30 +315,52 @@ private fun BranchMapView(
 
     AndroidView(factory = { mapView }, modifier = modifier)
 
-    LaunchedEffect(pins, pinColors) {
+    LaunchedEffect(pins, pinColors, selected) {
         mapView.overlays.removeAll(markers)
         markers.clear()
-        pins.forEach { pin ->
-            val marker = Marker(mapView)
-            marker.position = GeoPoint(pin.lat, pin.lon)
-            marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-            marker.icon =
-                ContextCompat.getDrawable(context, R.drawable.ic_map_pin)?.mutate()?.apply {
-                    setTint(pinColors.forStatus(pin.status()).toArgb())
+        // Zaznaczona pinezka na końcu — rysuje się nad sąsiednimi.
+        pins
+            .sortedBy { it == selected }
+            .forEach { pin ->
+                val marker = Marker(mapView)
+                marker.position = GeoPoint(pin.lat, pin.lon)
+                marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                marker.icon =
+                    pinIcon(
+                        context,
+                        pinColors.forStatus(pin.status()),
+                        if (pin == selected) 1.5f else 1f
+                    )
+                marker.setOnMarkerClickListener { _, _ ->
+                    currentOnPinClick(pin)
+                    true
                 }
-            marker.setOnMarkerClickListener { _, _ ->
-                currentOnPinClick(pin)
-                true
+                markers.add(marker)
             }
-            markers.add(marker)
-        }
         mapView.overlays.addAll(markers)
         mapView.invalidate()
+    }
+
+    // Osobno od odświeżania pinezek, żeby zaznaczenie nie przesuwało widoku z powrotem na całość.
+    LaunchedEffect(pins) {
         if (fitToPins && pins.isNotEmpty()) {
             if (mapView.width > 0 && mapView.height > 0) fitMap(mapView, pins)
             else mapView.addOnFirstLayoutListener { _, _, _, _, _ -> fitMap(mapView, pins) }
         }
     }
+
+    // Zaznaczona pinezka na środek — nad kartą ze szczegółami, która zajmuje dół ekranu.
+    LaunchedEffect(selected?.lat, selected?.lon) {
+        selected?.let { mapView.controller.animateTo(GeoPoint(it.lat, it.lon)) }
+    }
+}
+
+private fun pinIcon(context: Context, color: Color, scale: Float): Drawable {
+    val vector = ContextCompat.getDrawable(context, R.drawable.ic_map_pin)!!.mutate()
+    vector.setTint(color.toArgb())
+    val width = (vector.intrinsicWidth * scale).toInt()
+    val height = (vector.intrinsicHeight * scale).toInt()
+    return BitmapDrawable(context.resources, vector.toBitmap(width, height))
 }
 
 private fun createMapView(context: Context): MapView {
