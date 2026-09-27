@@ -122,6 +122,9 @@ dependencies {
     // Skaner kodów ISBN — UI z Google Play services, bez uprawnienia CAMERA
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
 
+    // Mapa filii — kafelki OpenStreetMap, bez klucza API i natywnych bibliotek
+    implementation("org.osmdroid:osmdroid-android:6.1.20")
+
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 

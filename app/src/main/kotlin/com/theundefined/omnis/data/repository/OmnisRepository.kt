@@ -3,16 +3,23 @@ package com.theundefined.omnis.data.repository
 import com.theundefined.omnis.data.local.AccountManager
 import com.theundefined.omnis.data.model.*
 import com.theundefined.omnis.data.remote.OmnisApi
+import java.net.URI
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -28,6 +35,19 @@ class OmnisRepository(private val accountManager: AccountManager) {
 
         // Adresy filii praktycznie się nie zmieniają — raz na miesiąc wystarczy.
         const val BRANCH_INFO_TTL_MILLIS = 30L * 24 * 60 * 60 * 1000
+
+        const val BRANCH_COORDINATES_TTL_MILLIS = 180L * 24 * 60 * 60 * 1000
+    }
+
+    // Osobny, goły klient do rozwijania skróconych linków do Map: bez logowania ciał i bez
+    // ciasteczek Primo z createClient, przekierowań nie podąża (czytamy tylko nagłówek Location).
+    private val redirectProbe by lazy {
+        OkHttpClient.Builder()
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .build()
     }
 
     private fun createClient(
@@ -386,6 +406,76 @@ class OmnisRepository(private val accountManager: AccountManager) {
             Result.success(info)
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    /**
+     * Współrzędne z linku do Map. Skrócony link (maps.app.goo.gl) rozwijamy o jeden skok naraz,
+     * czytając tylko nagłówek Location — pełny link ma już współrzędne, a samej strony
+     * google.com/maps nie otwieramy (w UE bywa za nią ekran zgody na ciasteczka).
+     */
+    private fun coordinatesFromLink(url: String): Pair<Double, Double>? {
+        var current = url
+        repeat(3) {
+            coordinatesFromMapsUrl(current)?.let {
+                return it
+            }
+            val host = runCatching { URI(current).host }.getOrNull()?.lowercase() ?: return null
+            if (host != "goo.gl" && !host.endsWith(".goo.gl")) return null
+            val request = Request.Builder().url(current).head().build()
+            current =
+                redirectProbe.newCall(request).execute().use { it.header("Location") }
+                    ?: return null
+        }
+        return coordinatesFromMapsUrl(current)
+    }
+
+    /**
+     * Ustala położenie filii: cache, potem link do Map z holdingu, na końcu geokoder. Wynik każdej
+     * filii trafia do [onResolved] od razu (null = nie udało się), żeby mapa mogła dokładać pinezki
+     * na bieżąco. Nieudanych prób nie cache'ujemy.
+     */
+    suspend fun resolveBranchLocations(
+        requests: List<BranchLocationRequest>,
+        geocode: (String) -> Pair<Double, Double>?,
+        onResolved: (key: String, coordinates: Coordinates?) -> Unit
+    ) {
+        val now = System.currentTimeMillis()
+        val cached = accountManager.getCachedBranchCoordinates()
+        val missing =
+            requests
+                .distinctBy { it.key }
+                .filter { r ->
+                    val hit =
+                        cached[r.key]?.takeIf {
+                            now - it.fetchedAtMillis < BRANCH_COORDINATES_TTL_MILLIS
+                        }
+                    if (hit != null) onResolved(r.key, hit)
+                    hit == null
+                }
+        if (missing.isEmpty()) return
+
+        val limit = Semaphore(4)
+        val cacheLock = Mutex()
+        coroutineScope {
+            missing.forEach { r ->
+                launch(Dispatchers.IO) {
+                    val point =
+                        limit.withPermit {
+                            r.mapsUrl?.let { runCatching { coordinatesFromLink(it) }.getOrNull() }
+                                ?: r.geocodeQueries.firstNotNullOfOrNull { geocode(it) }
+                        }
+                    val coordinates = point?.let { Coordinates(it.first, it.second, now) }
+                    onResolved(r.key, coordinates)
+                    if (coordinates != null) {
+                        cacheLock.withLock {
+                            accountManager.saveCachedBranchCoordinates(
+                                accountManager.getCachedBranchCoordinates() + (r.key to coordinates)
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 

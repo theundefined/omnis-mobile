@@ -15,6 +15,7 @@ import com.theundefined.omnis.data.model.SearchPage
 import com.theundefined.omnis.data.model.SearchResult
 import com.theundefined.omnis.data.model.Tenant
 import com.theundefined.omnis.data.model.searchKey
+import com.theundefined.omnis.data.remote.PlaceGeocoder
 import com.theundefined.omnis.data.repository.OmnisRepository
 import java.text.Collator
 import java.util.Locale
@@ -205,6 +206,12 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
     val branchDialog: StateFlow<BranchDialogState?> = _branchDialog.asStateFlow()
     private var branchDialogJob: Job? = null
 
+    // Mapa filii dla jednego wyniku wyszukiwania (SearchScreen).
+    private val _branchMap = MutableStateFlow<BranchMapState?>(null)
+    val branchMap: StateFlow<BranchMapState?> = _branchMap.asStateFlow()
+    private var branchMapJob: Job? = null
+    private val placeGeocoder by lazy { PlaceGeocoder(getApplication<Application>()) }
+
     private val _events = MutableSharedFlow<UiEvent>()
     val events: SharedFlow<UiEvent> = _events.asSharedFlow()
 
@@ -376,6 +383,36 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
     fun dismissBranchInfo() {
         branchDialogJob?.cancel()
         _branchDialog.value = null
+    }
+
+    /**
+     * Otwiera mapę wszystkich filii, w których jest [result] (już po filtrze filii z ekranu
+     * wyszukiwania). Pinezki dochodzą w miarę ustalania położenia kolejnych filii.
+     */
+    fun showBranchMap(result: SearchResult, tenantName: String?) {
+        val branches = mapBranchesOf(result, tenantName)
+        branchMapJob?.cancel()
+        _branchMap.value = BranchMapState(title = result.title, branches = branches)
+        branchMapJob =
+            viewModelScope.launch {
+                repository.resolveBranchLocations(
+                    branches.map { it.location },
+                    placeGeocoder::locate
+                ) { key, coordinates ->
+                    // Porównanie tożsamości: wynik spóźnionego zapytania dla wcześniej
+                    // otwartej mapy nie może trafić do nowej.
+                    _branchMap.update { state ->
+                        if (state?.branches === branches)
+                            state.copy(coordinates = state.coordinates + (key to coordinates))
+                        else state
+                    }
+                }
+            }
+    }
+
+    fun dismissBranchMap() {
+        branchMapJob?.cancel()
+        _branchMap.value = null
     }
 
     fun toggleAccount(account: Account) {

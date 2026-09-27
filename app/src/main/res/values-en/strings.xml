@@ -97,6 +97,10 @@
     <string name="branch_navigate">Navigate</string>
     <string name="branch_search_on_map">Search on map</string>
     <string name="close">Close</string>
+    <string name="cd_show_on_map">Show branches on map</string>
+    <string name="branch_map_resolving">Locating branches… (%1$d/%2$d)</string>
+    <string name="branch_map_unresolved">Could not locate: %1$s</string>
+    <string name="branch_map_empty">Could not locate any branch.</string>
 
     <string name="demo_mode_enable">Enable demo mode</string>
     <string name="demo_mode_disable">Disable demo mode</string>

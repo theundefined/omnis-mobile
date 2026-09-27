@@ -126,6 +126,28 @@ class AccountManager(context: Context) {
         sharedPreferences.edit().putString("branch_info_$tenantKey", jsonStr).apply()
     }
 
+    /**
+     * Współrzędne filii, kluczowane BranchLocationRequest.key (link do Map albo zapytanie
+     * geokodera) — wspólne dla wszystkich bibliotek, bo klucz już jednoznacznie wskazuje miejsce.
+     */
+    fun getCachedBranchCoordinates(): Map<String, com.theundefined.omnis.data.model.Coordinates> {
+        val jsonStr = sharedPreferences.getString("branch_coordinates", null) ?: return emptyMap()
+        return try {
+            json.decodeFromString<Map<String, com.theundefined.omnis.data.model.Coordinates>>(
+                jsonStr
+            )
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
+
+    fun saveCachedBranchCoordinates(
+        coordinates: Map<String, com.theundefined.omnis.data.model.Coordinates>
+    ) {
+        val jsonStr = json.encodeToString(coordinates)
+        sharedPreferences.edit().putString("branch_coordinates", jsonStr).apply()
+    }
+
     fun addAccount(account: Account) {
         val accounts = getAccounts().toMutableList()
         accounts.removeAll {

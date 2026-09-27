@@ -29,6 +29,7 @@ import com.theundefined.omnis.ui.SearchTenantSection
 import com.theundefined.omnis.ui.branchChipLabel
 import com.theundefined.omnis.ui.checkboxBranches
 import com.theundefined.omnis.ui.filteredResults
+import com.theundefined.omnis.ui.hasMappableBranches
 import java.text.Collator
 import java.util.Locale
 import kotlinx.coroutines.launch
@@ -191,6 +192,7 @@ fun SearchScreen(
                     }
                 }
                 else -> {
+                    BranchMapDialogHost(viewModel)
                     LazyColumn(modifier = Modifier.fillMaxSize()) {
                         state.tenantSections.forEach { section ->
                             item(key = section.tenantKey) {
@@ -262,7 +264,12 @@ private fun SearchTenantSectionView(section: SearchTenantSection, viewModel: Omn
             )
         }
 
-        section.filteredResults().forEach { result -> SearchResultCard(result) }
+        section.filteredResults().forEach { result ->
+            SearchResultCard(
+                result,
+                onShowMap = { viewModel.showBranchMap(result, section.tenantLabel) }
+            )
+        }
 
         // Paginacja per biblioteka — ten sam wzorzec co HistoryScreen.HistoryFooter, bez
         // trwałego cache'u (wyniki wyszukiwania są efemeryczne, patrz docs/plans/book-search.md
@@ -323,7 +330,7 @@ private fun SearchSortControl(section: SearchTenantSection, viewModel: OmnisView
 }
 
 @Composable
-private fun SearchResultCard(result: SearchResult) {
+private fun SearchResultCard(result: SearchResult, onShowMap: () -> Unit) {
     val context = LocalContext.current
 
     Card(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
@@ -448,6 +455,15 @@ private fun SearchResultCard(result: SearchResult) {
 
             Spacer(modifier = Modifier.height(4.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                if (hasMappableBranches(result)) {
+                    val mapDescription = stringResource(R.string.cd_show_on_map)
+                    IconButton(
+                        onClick = onShowMap,
+                        modifier = Modifier.semantics { contentDescription = mapDescription }
+                    ) {
+                        Text("🗺️")
+                    }
+                }
                 ShareButton { buildSearchResultShareText(context, result) }
                 val webSearchDescription = stringResource(R.string.cd_search_web)
                 IconButton(
@@ -463,7 +479,7 @@ private fun SearchResultCard(result: SearchResult) {
 
 // Port omnis-py cli.py:339-340 — dopisek typu nośnika, gdy inny niż zwykła książka drukowana
 // (np. "Audiobook"). Współdzielone przez widok karty i tekst do udostępnienia.
-private fun editionLabel(version: BookVersion): String {
+internal fun editionLabel(version: BookVersion): String {
     val base = version.edition ?: "-"
     return if (
         version.resourceType != null && !version.resourceType.equals("book", ignoreCase = true)
@@ -503,7 +519,7 @@ private fun branchStatusColor(branch: BranchAvailability): Color =
     }
 
 @Composable
-private fun BranchStatusBadge(branch: BranchAvailability) {
+internal fun BranchStatusBadge(branch: BranchAvailability) {
     val context = LocalContext.current
     Text(
         branchStatusText(context, branch),
