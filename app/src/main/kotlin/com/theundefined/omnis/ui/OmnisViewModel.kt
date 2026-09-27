@@ -11,6 +11,8 @@ import com.theundefined.omnis.data.model.BranchInfo
 import com.theundefined.omnis.data.model.HistoryCacheEntry
 import com.theundefined.omnis.data.model.Loan
 import com.theundefined.omnis.data.model.SearchBranchPrefs
+import com.theundefined.omnis.data.model.SearchField
+import com.theundefined.omnis.data.model.SearchHistoryEntry
 import com.theundefined.omnis.data.model.SearchPage
 import com.theundefined.omnis.data.model.SearchResult
 import com.theundefined.omnis.data.model.Tenant
@@ -69,6 +71,7 @@ private data class HistoryCursor(val nextOffset: Int, val hasMore: Boolean)
 
 data class SearchUiState(
     val query: String = "",
+    val field: SearchField = SearchField.ANY,
     val isLoading: Boolean = false,
     val hasSearched: Boolean = false,
     val tenantSections: List<SearchTenantSection> = emptyList()
@@ -201,6 +204,9 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
     // zdążyło wrócić z sieci: wynik "spóźnionego" pierwszego wyszukania jest wtedy porzucany
     // zamiast nadpisać świeżo ustawiony szkielet drugiego.
     private var searchGeneration = 0
+
+    private val _searchHistory = MutableStateFlow(repository.getSearchHistory())
+    val searchHistory: StateFlow<List<SearchHistoryEntry>> = _searchHistory.asStateFlow()
 
     private val _branchDialog = MutableStateFlow<BranchDialogState?>(null)
     val branchDialog: StateFlow<BranchDialogState?> = _branchDialog.asStateFlow()
@@ -770,8 +776,9 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         return getApplication<Application>().getString(R.string.search_error, detail)
     }
 
-    fun runSearch(query: String) {
+    fun runSearch(query: String, field: SearchField = SearchField.ANY) {
         if (query.isBlank()) return
+        recordSearchHistory(SearchHistoryEntry(query.trim(), field))
 
         searchGeneration++
         val generation = searchGeneration
@@ -806,14 +813,23 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
             }
 
         _searchUiState.update {
-            it.copy(query = query, hasSearched = true, isLoading = true, tenantSections = skeleton)
+            it.copy(
+                query = query,
+                field = field,
+                hasSearched = true,
+                isLoading = true,
+                tenantSections = skeleton
+            )
         }
 
         viewModelScope.launch {
             val outcomes = coroutineScope {
                 targets
                     .map { account ->
-                        async { account to repository.searchBooks(account, query, offset = 0) }
+                        async {
+                            account to
+                                repository.searchBooks(account, query, offset = 0, field = field)
+                        }
                     }
                     .awaitAll()
             }
@@ -857,6 +873,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         if (section.isLoadingMore || !section.canLoadMore) return
         val account = searchRepresentatives[tenantKey] ?: return
         val query = _searchUiState.value.query
+        val field = _searchUiState.value.field
         val generation = searchGeneration
         val offset = section.nextOffset
 
@@ -864,7 +881,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
 
         viewModelScope.launch {
             repository
-                .searchBooks(account, query, offset = offset)
+                .searchBooks(account, query, offset = offset, field = field)
                 .onSuccess { page ->
                     if (generation != searchGeneration) return@onSuccess
                     updateSearchSection(tenantKey) { s ->
@@ -886,6 +903,42 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
                     }
                 }
         }
+    }
+
+    /**
+     * Powrót do stanu "przed wyszukaniem" (ekran pokazuje wtedy historię). Podbija generację, żeby
+     * wynik trwającego jeszcze wyszukania nie wrócił na wyczyszczony ekran. Sekcje zostają, bo
+     * runSearch przenosi z nich poznane filie (confirmedBranches/branchAddresses).
+     */
+    fun clearSearch() {
+        searchGeneration++
+        _searchUiState.update {
+            it.copy(query = "", field = SearchField.ANY, hasSearched = false, isLoading = false)
+        }
+    }
+
+    // Duplikat (bez względu na wielkość liter, w obrębie tego samego pola) przesuwa się na
+    // początek zamiast dublować wpis.
+    private fun recordSearchHistory(entry: SearchHistoryEntry) {
+        val updated =
+            (listOf(entry) +
+                    _searchHistory.value.filterNot {
+                        it.field == entry.field && it.query.equals(entry.query, ignoreCase = true)
+                    })
+                .take(SEARCH_HISTORY_LIMIT)
+        _searchHistory.value = updated
+        repository.saveSearchHistory(updated)
+    }
+
+    fun removeSearchHistoryEntry(entry: SearchHistoryEntry) {
+        val updated = _searchHistory.value - entry
+        _searchHistory.value = updated
+        repository.saveSearchHistory(updated)
+    }
+
+    fun clearSearchHistory() {
+        _searchHistory.value = emptyList()
+        repository.clearSearchHistory()
     }
 
     fun setBranchSelection(tenantKey: String, branch: String, selected: Boolean) {
@@ -930,6 +983,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         const val PREF_LOANS_SORT = "loans_sort"
         const val PREF_HISTORY_GROUPING = "history_grouping"
         const val PREF_HISTORY_SORT = "history_sort"
+        const val SEARCH_HISTORY_LIMIT = 20
     }
 
     class Factory(private val application: Application, private val repository: OmnisRepository) :

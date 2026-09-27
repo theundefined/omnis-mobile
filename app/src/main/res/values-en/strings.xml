@@ -80,6 +80,13 @@
     <string name="status_unknown">Status unknown</string>
     <string name="search_error">Search error: %1$s</string>
     <string name="search_results_end">That\'s all the results.</string>
+    <string name="search_history_title">Recent searches</string>
+    <string name="search_history_clear">Clear history</string>
+    <string name="search_history_author_entry">Author: %1$s</string>
+    <string name="search_field_author">Author</string>
+    <string name="cd_remove_search_history_entry">Remove from history</string>
+    <string name="cd_clear_search">Clear search</string>
+    <string name="cd_search_by_author">Search books by this author</string>
     <string name="search_sort_relevance">Relevance</string>
     <string name="search_sort_title">Title</string>
     <string name="search_sort_hint_load_all">Sorting by title will be available once all results are loaded.</string>

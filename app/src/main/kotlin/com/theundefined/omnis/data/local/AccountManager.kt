@@ -148,6 +148,31 @@ class AccountManager(context: Context) {
         sharedPreferences.edit().putString("branch_coordinates", jsonStr).apply()
     }
 
+    /**
+     * Lokalna historia wyszukiwań, najnowsze pierwsze. W zaszyfrowanych prefs (a nie ViewPrefs), bo
+     * zapytania mogą zdradzać zainteresowania użytkownika. Wspólna dla wszystkich kont — nie
+     * czyszczona w removeAccount, tylko jawnie przez clearSearchHistory.
+     */
+    fun getSearchHistory(): List<com.theundefined.omnis.data.model.SearchHistoryEntry> {
+        val jsonStr = sharedPreferences.getString("search_history", null) ?: return emptyList()
+        return try {
+            json.decodeFromString<List<com.theundefined.omnis.data.model.SearchHistoryEntry>>(
+                jsonStr
+            )
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveSearchHistory(entries: List<com.theundefined.omnis.data.model.SearchHistoryEntry>) {
+        val jsonStr = json.encodeToString(entries)
+        sharedPreferences.edit().putString("search_history", jsonStr).apply()
+    }
+
+    fun clearSearchHistory() {
+        sharedPreferences.edit().remove("search_history").apply()
+    }
+
     fun addAccount(account: Account) {
         val accounts = getAccounts().toMutableList()
         accounts.removeAll {

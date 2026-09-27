@@ -99,6 +99,16 @@ data class SearchBranchPrefs(
     val showAllBranches: Boolean = true
 )
 
+/** Pole katalogu, w którym szuka zapytanie — przekłada się na pierwszy człon Primo `q`. */
+enum class SearchField(val primoField: String) {
+    ANY("any"),
+    AUTHOR("creator")
+}
+
+/** Pozycja lokalnej historii wyszukiwań (AccountManager.getSearchHistory). */
+@Serializable
+data class SearchHistoryEntry(val query: String, val field: SearchField = SearchField.ANY)
+
 // Wyniki wyszukiwania katalogu — dane efemeryczne (zależne od zapytania), NIE cache'owane
 // trwale, więc zwykłe (nie @Serializable) data class'y, w odróżnieniu od Loan/Account.
 data class BranchAvailability(

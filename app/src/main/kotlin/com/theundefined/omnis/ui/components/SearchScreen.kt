@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -22,6 +23,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.theundefined.omnis.R
 import com.theundefined.omnis.data.model.BookVersion
 import com.theundefined.omnis.data.model.BranchAvailability
+import com.theundefined.omnis.data.model.SearchField
+import com.theundefined.omnis.data.model.SearchHistoryEntry
 import com.theundefined.omnis.data.model.SearchResult
 import com.theundefined.omnis.ui.OmnisViewModel
 import com.theundefined.omnis.ui.SearchSortMode
@@ -47,22 +50,29 @@ fun SearchScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val state by viewModel.searchUiState.collectAsStateWithLifecycle()
+    val history by viewModel.searchHistory.collectAsStateWithLifecycle()
     var queryInput by remember { mutableStateOf(state.query) }
+    // Pole wyszukiwania dla NASTĘPNEGO wyszukania. Kliknięcie autora ustawia AUTHOR; ręczna edycja
+    // tekstu albo zamknięcie chipa "Autor" wraca do ANY (szukanie we wszystkich polach).
+    var searchField by remember { mutableStateOf(state.field) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val noEnabledAccounts = uiState.accounts.none { it.isEnabled }
 
     fun triggerSearch() {
-        viewModel.runSearch(queryInput)
+        viewModel.runSearch(queryInput, searchField)
+    }
+
+    fun searchFor(query: String, field: SearchField) {
+        queryInput = query
+        searchField = field
+        viewModel.runSearch(query, field)
     }
 
     val startScan =
         rememberIsbnScanner(
-            onIsbn = { isbn ->
-                queryInput = isbn
-                viewModel.runSearch(isbn)
-            },
+            onIsbn = { isbn -> searchFor(isbn, SearchField.ANY) },
             onError = { error ->
                 val message =
                     when (error) {
@@ -102,7 +112,10 @@ fun SearchScreen(
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
             OutlinedTextField(
                 value = queryInput,
-                onValueChange = { queryInput = it },
+                onValueChange = {
+                    queryInput = it
+                    searchField = SearchField.ANY
+                },
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
                 placeholder = { Text(stringResource(R.string.search_hint)) },
                 singleLine = true,
@@ -110,6 +123,20 @@ fun SearchScreen(
                 keyboardActions = KeyboardActions(onSearch = { triggerSearch() }),
                 trailingIcon = {
                     Row {
+                        if (queryInput.isNotEmpty() || state.hasSearched) {
+                            val clearDescription = stringResource(R.string.cd_clear_search)
+                            IconButton(
+                                onClick = {
+                                    queryInput = ""
+                                    searchField = SearchField.ANY
+                                    viewModel.clearSearch()
+                                },
+                                modifier =
+                                    Modifier.semantics { contentDescription = clearDescription }
+                            ) {
+                                Text("✕")
+                            }
+                        }
                         IconButton(onClick = startScan, enabled = !noEnabledAccounts) {
                             Icon(
                                 painterResource(R.drawable.ic_barcode_scan),
@@ -127,6 +154,16 @@ fun SearchScreen(
                 }
             )
 
+            if (searchField == SearchField.AUTHOR) {
+                InputChip(
+                    selected = true,
+                    onClick = { searchFor(queryInput, SearchField.ANY) },
+                    label = { Text(stringResource(R.string.search_field_author)) },
+                    trailingIcon = { Text("✕") },
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+
             val hasAnyRawResults = state.tenantSections.any { it.results.isNotEmpty() }
             val errorSections = state.tenantSections.filter { it.error != null }
             val allFilteredEmpty =
@@ -138,6 +175,14 @@ fun SearchScreen(
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(stringResource(R.string.add_first_account))
                     }
+                }
+                !state.hasSearched && history.isNotEmpty() -> {
+                    SearchHistoryList(
+                        history = history,
+                        onSelect = { searchFor(it.query, it.field) },
+                        onRemove = { viewModel.removeSearchHistoryEntry(it) },
+                        onClearAll = { viewModel.clearSearchHistory() }
+                    )
                 }
                 !state.hasSearched -> {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -196,7 +241,11 @@ fun SearchScreen(
                     LazyColumn(modifier = Modifier.fillMaxSize()) {
                         state.tenantSections.forEach { section ->
                             item(key = section.tenantKey) {
-                                SearchTenantSectionView(section = section, viewModel = viewModel)
+                                SearchTenantSectionView(
+                                    section = section,
+                                    viewModel = viewModel,
+                                    onAuthorClick = { searchFor(it, SearchField.AUTHOR) }
+                                )
                             }
                         }
                     }
@@ -207,7 +256,63 @@ fun SearchScreen(
 }
 
 @Composable
-private fun SearchTenantSectionView(section: SearchTenantSection, viewModel: OmnisViewModel) {
+private fun SearchHistoryList(
+    history: List<SearchHistoryEntry>,
+    onSelect: (SearchHistoryEntry) -> Unit,
+    onRemove: (SearchHistoryEntry) -> Unit,
+    onClearAll: () -> Unit
+) {
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    stringResource(R.string.search_history_title),
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+                TextButton(onClick = onClearAll) {
+                    Text(stringResource(R.string.search_history_clear))
+                }
+            }
+        }
+        items(history, key = { "${it.field}:${it.query}" }) { entry ->
+            Row(
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .clickable { onSelect(entry) }
+                        .padding(start = 16.dp, end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("🕘", modifier = Modifier.padding(end = 12.dp))
+                Text(
+                    if (entry.field == SearchField.AUTHOR)
+                        stringResource(R.string.search_history_author_entry, entry.query)
+                    else entry.query,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                val removeDescription = stringResource(R.string.cd_remove_search_history_entry)
+                IconButton(
+                    onClick = { onRemove(entry) },
+                    modifier = Modifier.semantics { contentDescription = removeDescription }
+                ) {
+                    Text("✕", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchTenantSectionView(
+    section: SearchTenantSection,
+    viewModel: OmnisViewModel,
+    onAuthorClick: (String) -> Unit
+) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         Text(
             text = section.tenantLabel,
@@ -267,7 +372,8 @@ private fun SearchTenantSectionView(section: SearchTenantSection, viewModel: Omn
         section.filteredResults().forEach { result ->
             SearchResultCard(
                 result,
-                onShowMap = { viewModel.showBranchMap(result, section.tenantLabel) }
+                onShowMap = { viewModel.showBranchMap(result, section.tenantLabel) },
+                onAuthorClick = onAuthorClick
             )
         }
 
@@ -330,13 +436,28 @@ private fun SearchSortControl(section: SearchTenantSection, viewModel: OmnisView
 }
 
 @Composable
-private fun SearchResultCard(result: SearchResult, onShowMap: () -> Unit) {
+private fun SearchResultCard(
+    result: SearchResult,
+    onShowMap: () -> Unit,
+    onAuthorClick: (String) -> Unit
+) {
     val context = LocalContext.current
 
     Card(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(result.title, style = MaterialTheme.typography.titleMedium)
-            result.author?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+            result.author?.let { author ->
+                val authorClickLabel = stringResource(R.string.cd_search_by_author)
+                Text(
+                    author,
+                    modifier =
+                        Modifier.clickable(onClickLabel = authorClickLabel) {
+                            onAuthorClick(author)
+                        },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
             result.versions
                 .firstNotNullOfOrNull { it.series }
                 ?.let {

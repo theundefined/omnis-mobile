@@ -80,6 +80,13 @@
     <string name="status_unknown">Status nieznany</string>
     <string name="search_error">Błąd wyszukiwania: %1$s</string>
     <string name="search_results_end">To już wszystkie wyniki.</string>
+    <string name="search_history_title">Ostatnie wyszukiwania</string>
+    <string name="search_history_clear">Wyczyść historię</string>
+    <string name="search_history_author_entry">Autor: %1$s</string>
+    <string name="search_field_author">Autor</string>
+    <string name="cd_remove_search_history_entry">Usuń z historii</string>
+    <string name="cd_clear_search">Wyczyść wyszukiwanie</string>
+    <string name="cd_search_by_author">Szukaj książek tego autora</string>
     <string name="search_sort_relevance">Trafność</string>
     <string name="search_sort_title">Tytuł</string>
     <string name="search_sort_hint_load_all">Sortowanie po tytule będzie dostępne po załadowaniu wszystkich wyników.</string>

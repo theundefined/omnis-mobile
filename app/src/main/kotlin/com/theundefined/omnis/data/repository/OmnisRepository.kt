@@ -525,7 +525,8 @@ class OmnisRepository(private val accountManager: AccountManager) {
         account: Account,
         query: String,
         offset: Int = 0,
-        limit: Int = 10
+        limit: Int = 10,
+        field: SearchField = SearchField.ANY
     ): Result<SearchPage> {
         return try {
             val api =
@@ -563,7 +564,7 @@ class OmnisRepository(private val accountManager: AccountManager) {
                         "offset" to offset.toString(),
                         "otbRanking" to "false",
                         "pcAvailability" to "true",
-                        "q" to "any,contains,$q",
+                        "q" to "${field.primoField},contains,$q",
                         "qExclude" to "",
                         "qInclude" to qInclude,
                         "rapido" to "false",
@@ -821,4 +822,11 @@ class OmnisRepository(private val accountManager: AccountManager) {
 
     fun saveSearchBranchPrefs(tenantKey: String, prefs: SearchBranchPrefs) =
         accountManager.saveSearchBranchPrefs(tenantKey, prefs)
+
+    fun getSearchHistory(): List<SearchHistoryEntry> = accountManager.getSearchHistory()
+
+    fun saveSearchHistory(entries: List<SearchHistoryEntry>) =
+        accountManager.saveSearchHistory(entries)
+
+    fun clearSearchHistory() = accountManager.clearSearchHistory()
 }
