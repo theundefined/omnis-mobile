@@ -12,6 +12,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.theundefined.omnis.R
+import com.theundefined.omnis.ui.GroupingMode
 import com.theundefined.omnis.ui.OmnisViewModel
 import kotlinx.coroutines.flow.collectLatest
 
@@ -181,8 +182,11 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
                         LoanList(
                             groupedLoans = uiState.loans,
                             onRenew = { loan -> viewModel.renewLoan(loan) },
-                            onRenewAll = { loans -> viewModel.renewAllInGroup(loans) }
+                            onRenewAll = { loans -> viewModel.renewAllInGroup(loans) },
+                            onBranchClick = { loans -> viewModel.showBranchInfo(loans) },
+                            branchHeaders = uiState.groupingMode == GroupingMode.BRANCH
                         )
+                        BranchInfoDialogHost(viewModel)
                     }
                 }
             }

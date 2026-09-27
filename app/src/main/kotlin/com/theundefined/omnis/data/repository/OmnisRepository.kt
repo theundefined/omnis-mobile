@@ -25,6 +25,9 @@ class OmnisRepository(private val accountManager: AccountManager) {
         // Ten sam domyślny timeout co httpx.AsyncClient w omnis-py: ustawiony jawnie, zamiast
         // polegać na cichych domyślnych wartościach OkHttp (10s connect/read/write).
         const val DEFAULT_TIMEOUT_SECONDS = 30L
+
+        // Adresy filii praktycznie się nie zmieniają — raz na miesiąc wystarczy.
+        const val BRANCH_INFO_TTL_MILLIS = 30L * 24 * 60 * 60 * 1000
     }
 
     private fun createClient(
@@ -341,6 +344,46 @@ class OmnisRepository(private val accountManager: AccountManager) {
             val hasMore = loansList?.showmore?.let { "Y" in it } ?: false
 
             Result.success(loans to hasMore)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Adres i link do mapy filii [branchName] z holdingów rekordu [mmsid] (dowolnego egzemplarza
+     * wypożyczonego z tej filii). Publiczny endpoint — bez logowania. Znaleziony wynik trafia do
+     * cache'u per biblioteka na BRANCH_INFO_TTL_MILLIS. Result.success(null) = filii nie ma w
+     * holdingach tego rekordu — tego nie cache'ujemy, bo inny rekord z tej filii może ją mieć.
+     */
+    suspend fun getBranchInfo(
+        tenant: Tenant,
+        mmsid: String,
+        branchName: String,
+        timeoutSeconds: Long? = null
+    ): Result<BranchInfo?> {
+        val tenantKey = tenant.searchKey()
+        val cached = accountManager.getCachedBranchInfo(tenantKey)
+        val now = System.currentTimeMillis()
+        cached[branchName]
+            ?.takeIf { now - it.fetchedAtMillis < BRANCH_INFO_TTL_MILLIS }
+            ?.let {
+                return Result.success(it)
+            }
+        return try {
+            val api =
+                createClient(
+                    tenant.baseUrl,
+                    timeoutSeconds ?: tenant.defaultTimeoutSeconds ?: DEFAULT_TIMEOUT_SECONDS
+                )
+            val response = api.getRecord("alma$mmsid", tenant.view)
+            if (!response.isSuccessful) {
+                return Result.failure(Exception("HTTP ${response.code()}"))
+            }
+            val holdings = response.body()?.delivery?.holding ?: emptyList()
+            val info =
+                branchInfoFromHoldings(holdings, branchName, now) ?: return Result.success(null)
+            accountManager.saveCachedBranchInfo(tenantKey, cached + (branchName to info))
+            Result.success(info)
         } catch (e: Exception) {
             Result.failure(e)
         }

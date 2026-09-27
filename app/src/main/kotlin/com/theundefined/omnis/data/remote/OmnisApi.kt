@@ -55,6 +55,14 @@ interface OmnisApi {
         @Body almaIds: List<String>
     ): Response<List<DeliveryItem>>
 
+    // Pełny rekord z holdingami (delivery.holding) — publiczny, działa bez tokena.
+    @GET("/primaws/rest/pub/pnxs/L/{recordId}")
+    suspend fun getRecord(
+        @Path("recordId") recordId: String,
+        @Query("vid") view: String,
+        @Query("lang") lang: String = "pl"
+    ): Response<RecordResponse>
+
     @GET("/primaws/rest/pub/getPhysicalService/{bareMmsid}")
     suspend fun getPhysicalServiceId(
         @Path("bareMmsid") bareMmsid: String,

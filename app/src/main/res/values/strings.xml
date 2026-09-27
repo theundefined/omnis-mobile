@@ -89,6 +89,15 @@
     <string name="hide_description">Ukryj opis</string>
     <string name="cd_shelf_map">Pokaż na regale</string>
 
+    <string name="cd_branch_info">Informacje o filii</string>
+    <string name="branch_info_loading">Pobieranie danych filii…</string>
+    <string name="branch_address_label">Adres: %1$s</string>
+    <string name="branch_info_no_address">Katalog biblioteki nie podaje adresu tej filii.</string>
+    <string name="branch_website">Strona filii</string>
+    <string name="branch_navigate">Nawiguj</string>
+    <string name="branch_search_on_map">Szukaj na mapie</string>
+    <string name="close">Zamknij</string>
+
     <string name="demo_mode_enable">Włącz tryb demo</string>
     <string name="demo_mode_disable">Wyłącz tryb demo</string>
     <string name="demo_mode_hint">Tryb demo wyłącza pozostałe konta i włącza konto testowe biblioteki demonstracyjnej, bez potrzeby podawania prawdziwych danych logowania. Pierwsze pobranie danych może potrwać do ok. 50 sekund.</string>

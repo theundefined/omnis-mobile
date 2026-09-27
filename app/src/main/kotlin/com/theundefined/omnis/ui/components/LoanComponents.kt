@@ -1,6 +1,7 @@
 package com.theundefined.omnis.ui.components
 
 import android.content.Context
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -11,9 +12,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.theundefined.omnis.R
 import com.theundefined.omnis.data.model.Loan
+import com.theundefined.omnis.data.model.branchMapsQuery
+import com.theundefined.omnis.data.model.isMapsLink
+import com.theundefined.omnis.data.model.mapsSearchUrl
+import com.theundefined.omnis.ui.BranchDialogState
+import com.theundefined.omnis.ui.OmnisViewModel
 import com.theundefined.omnis.ui.branchLabel
 import com.theundefined.omnis.ui.spansSeveralLibraries
 import java.time.LocalDate
@@ -26,6 +35,9 @@ fun LoanList(
     onRenew: (Loan) -> Unit = {},
     onRenewAll: (List<Loan>) -> Unit = {},
     isHistory: Boolean = false,
+    onBranchClick: ((List<Loan>) -> Unit)? = null,
+    // true przy grupowaniu po filii — tylko wtedy nagłówek grupy jest nazwą filii.
+    branchHeaders: Boolean = false,
     footer: (@Composable () -> Unit)? = null
 ) {
     var renewConfirmGroup by remember { mutableStateOf<Pair<String, List<Loan>>?>(null) }
@@ -38,6 +50,15 @@ fun LoanList(
         groupedLoans.forEach { (groupKey, accountLoans) ->
             item {
                 val renewableLoans = accountLoans.filter { it.renewable }
+                // Nagłówek jest klikalny tylko przy grupowaniu po filii (przy grupowaniu po koncie
+                // nagłówkiem jest osoba, nawet jeśli wszystko ma z jednej filii) i tylko, gdy grupa
+                // to faktycznie jedna filia jednej biblioteki.
+                val onHeaderClick =
+                    onBranchClick?.takeIf {
+                        branchHeaders &&
+                            accountLoans.isNotEmpty() &&
+                            accountLoans.distinctBy { it.tenantName to it.locationName }.size == 1
+                    }
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -45,13 +66,23 @@ fun LoanList(
                 ) {
                     Text(
                         text = groupKey,
-                        modifier = Modifier.padding(vertical = 16.dp),
+                        modifier =
+                            Modifier.weight(1f, fill = false)
+                                .then(
+                                    if (onHeaderClick != null)
+                                        Modifier.clickable { onHeaderClick(accountLoans) }
+                                    else Modifier
+                                )
+                                .padding(vertical = 16.dp),
                         style = MaterialTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.secondary
                     )
                     if (accountLoans.isNotEmpty()) {
                         val groupShareText = buildGroupShareText(groupKey, accountLoans, isHistory)
                         Row {
+                            if (onHeaderClick != null) {
+                                BranchButton { onHeaderClick(accountLoans) }
+                            }
                             ShareButton { groupShareText }
                             if (!isHistory && renewableLoans.isNotEmpty()) {
                                 IconButton(
@@ -81,7 +112,8 @@ fun LoanList(
                         loan,
                         onRenew = { onRenew(loan) },
                         isHistory = isHistory,
-                        withLibrary = withLibrary
+                        withLibrary = withLibrary,
+                        onBranchClick = onBranchClick?.let { { it(listOf(loan)) } }
                     )
                 }
             }
@@ -223,7 +255,8 @@ fun LoanItem(
     loan: Loan,
     onRenew: () -> Unit,
     isHistory: Boolean = false,
-    withLibrary: Boolean = false
+    withLibrary: Boolean = false,
+    onBranchClick: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     // Dla historii wypożyczenie jest już zakończone — kolorowanie "ile dni zostało" i opis
@@ -271,7 +304,13 @@ fun LoanItem(
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 stringResource(R.string.location_label, branchLabel(loan, withLibrary)),
-                style = MaterialTheme.typography.bodySmall
+                modifier =
+                    if (onBranchClick != null) Modifier.clickable(onClick = onBranchClick)
+                    else Modifier,
+                style = MaterialTheme.typography.bodySmall,
+                color =
+                    if (onBranchClick != null) MaterialTheme.colorScheme.primary
+                    else Color.Unspecified
             )
 
             loan.ownerName?.let {
@@ -304,4 +343,94 @@ fun LoanItem(
             }
         }
     }
+}
+
+@Composable
+private fun BranchButton(onClick: () -> Unit) {
+    val description = stringResource(R.string.cd_branch_info)
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.semantics { contentDescription = description }
+    ) {
+        Text("📍")
+    }
+}
+
+/** Okienko filii nad listą wypożyczeń — stan trzyma OmnisViewModel.branchDialog. */
+@Composable
+fun BranchInfoDialogHost(viewModel: OmnisViewModel) {
+    val state by viewModel.branchDialog.collectAsStateWithLifecycle()
+    state?.let { BranchInfoDialog(it, onDismiss = { viewModel.dismissBranchInfo() }) }
+}
+
+@Composable
+fun BranchInfoDialog(state: BranchDialogState, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val info = state.info
+    // stackMapUrl nie zawsze prowadzi do mapy (Łódź podaje tam stronę z listą filii) — wtedy
+    // nawigujemy przez wyszukanie w mapach, a link pokazujemy osobno jako stronę filii.
+    val mapsUrl = info?.mapsUrl?.takeIf { isMapsLink(it) }
+    val websiteUrl = info?.mapsUrl?.takeIf { !isMapsLink(it) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(state.branchName) },
+        text = {
+            Column {
+                state.tenantName?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+                val address = info?.address
+                when {
+                    state.isLoading ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(stringResource(R.string.branch_info_loading))
+                        }
+                    address != null -> Text(stringResource(R.string.branch_address_label, address))
+                    else ->
+                        Text(
+                            stringResource(R.string.branch_info_no_address),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                }
+                if (websiteUrl != null) {
+                    TextButton(onClick = { openUrl(context, websiteUrl) }) {
+                        Text(stringResource(R.string.branch_website))
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !state.isLoading,
+                onClick = {
+                    openUrl(
+                        context,
+                        mapsUrl
+                            ?: mapsSearchUrl(
+                                branchMapsQuery(state.tenantName, state.branchName, info?.address)
+                            )
+                    )
+                }
+            ) {
+                Text(
+                    stringResource(
+                        if (mapsUrl != null) R.string.branch_navigate
+                        else R.string.branch_search_on_map
+                    )
+                )
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } }
+    )
 }

@@ -89,6 +89,15 @@
     <string name="hide_description">Hide description</string>
     <string name="cd_shelf_map">Show on shelf</string>
 
+    <string name="cd_branch_info">Branch info</string>
+    <string name="branch_info_loading">Loading branch details…</string>
+    <string name="branch_address_label">Address: %1$s</string>
+    <string name="branch_info_no_address">The library catalog lists no address for this branch.</string>
+    <string name="branch_website">Branch website</string>
+    <string name="branch_navigate">Navigate</string>
+    <string name="branch_search_on_map">Search on map</string>
+    <string name="close">Close</string>
+
     <string name="demo_mode_enable">Enable demo mode</string>
     <string name="demo_mode_disable">Disable demo mode</string>
     <string name="demo_mode_hint">Demo mode disables your other accounts and enables a test account for the demo library, without needing real login credentials. The first data fetch may take up to about 50 seconds.</string>

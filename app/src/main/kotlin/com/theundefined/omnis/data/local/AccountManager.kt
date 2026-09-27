@@ -100,6 +100,32 @@ class AccountManager(context: Context) {
         sharedPreferences.edit().putString("search_branches_$tenantKey", jsonStr).apply()
     }
 
+    /**
+     * Dane filii (adres/link do mapy) per biblioteka — klucz jak w getSearchBranchPrefs, z tego
+     * samego powodu nie czyszczony przy usuwaniu konta. To publiczne dane z katalogu, nie osobowe.
+     */
+    fun getCachedBranchInfo(
+        tenantKey: String
+    ): Map<String, com.theundefined.omnis.data.model.BranchInfo> {
+        val jsonStr =
+            sharedPreferences.getString("branch_info_$tenantKey", null) ?: return emptyMap()
+        return try {
+            json.decodeFromString<Map<String, com.theundefined.omnis.data.model.BranchInfo>>(
+                jsonStr
+            )
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
+
+    fun saveCachedBranchInfo(
+        tenantKey: String,
+        branches: Map<String, com.theundefined.omnis.data.model.BranchInfo>
+    ) {
+        val jsonStr = json.encodeToString(branches)
+        sharedPreferences.edit().putString("branch_info_$tenantKey", jsonStr).apply()
+    }
+
     fun addAccount(account: Account) {
         val accounts = getAccounts().toMutableList()
         accounts.removeAll {

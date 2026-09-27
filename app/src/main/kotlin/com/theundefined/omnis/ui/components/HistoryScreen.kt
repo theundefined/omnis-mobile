@@ -12,6 +12,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.theundefined.omnis.R
+import com.theundefined.omnis.ui.GroupingMode
 import com.theundefined.omnis.ui.HistoryUiState
 import com.theundefined.omnis.ui.OmnisViewModel
 
@@ -98,6 +99,8 @@ fun HistoryScreen(viewModel: OmnisViewModel, onBack: () -> Unit) {
                             LoanList(
                                 groupedLoans = state.loans,
                                 isHistory = true,
+                                onBranchClick = { loans -> viewModel.showBranchInfo(loans) },
+                                branchHeaders = state.groupingMode == GroupingMode.BRANCH,
                                 footer = {
                                     HistoryFooter(
                                         state,
@@ -105,6 +108,7 @@ fun HistoryScreen(viewModel: OmnisViewModel, onBack: () -> Unit) {
                                     )
                                 }
                             )
+                            BranchInfoDialogHost(viewModel)
                         }
                     }
                 }

@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.theundefined.omnis.R
 import com.theundefined.omnis.data.local.ViewPrefs
 import com.theundefined.omnis.data.model.Account
+import com.theundefined.omnis.data.model.BranchInfo
 import com.theundefined.omnis.data.model.HistoryCacheEntry
 import com.theundefined.omnis.data.model.Loan
 import com.theundefined.omnis.data.model.SearchBranchPrefs
@@ -17,9 +18,11 @@ import com.theundefined.omnis.data.model.searchKey
 import com.theundefined.omnis.data.repository.OmnisRepository
 import java.text.Collator
 import java.util.Locale
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -47,6 +50,17 @@ data class HistoryUiState(
     val hasLoadedOnce: Boolean = false,
     val canLoadMore: Boolean = false,
     val error: String? = null
+)
+
+/**
+ * Okienko z informacją o filii (po kliknięciu jej nazwy). `info == null` po zakończeniu ładowania =
+ * Primo nic nie podało — UI i tak oferuje wyszukanie filii w mapach po nazwie.
+ */
+data class BranchDialogState(
+    val branchName: String,
+    val tenantName: String?,
+    val isLoading: Boolean = false,
+    val info: BranchInfo? = null
 )
 
 /** Kursor paginacji historii pojedynczego konta — dokąd doszliśmy i czy jest więcej stron. */
@@ -187,6 +201,10 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
     // zamiast nadpisać świeżo ustawiony szkielet drugiego.
     private var searchGeneration = 0
 
+    private val _branchDialog = MutableStateFlow<BranchDialogState?>(null)
+    val branchDialog: StateFlow<BranchDialogState?> = _branchDialog.asStateFlow()
+    private var branchDialogJob: Job? = null
+
     private val _events = MutableSharedFlow<UiEvent>()
     val events: SharedFlow<UiEvent> = _events.asSharedFlow()
 
@@ -311,6 +329,53 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
             }
         }
         updateGroupedLoans(allLoansList, _uiState.value.isLoading)
+    }
+
+    /**
+     * Otwiera okienko filii dla wypożyczeń z JEDNEJ filii (karta albo nagłówek grupy filii).
+     * Rekordy próbujemy po kolei (max 3), bo nie każdy musi mieć holding w tej filii — np.
+     * egzemplarz sprowadzony z innej biblioteki sieci.
+     */
+    fun showBranchInfo(loans: List<Loan>) {
+        val first = loans.firstOrNull() ?: return
+        val branchName = first.locationName
+        val account = _uiState.value.accounts.firstOrNull { it.id == first.accountId }
+        // Serwer demo nie ma tego endpointu (i bywa wolny) — od razu pokazujemy wariant bez danych.
+        val fetchAccount = account?.takeIf { !it.isDemo && !it.tenant.isDemo }
+        branchDialogJob?.cancel()
+        _branchDialog.value =
+            BranchDialogState(
+                branchName = branchName,
+                tenantName = first.tenantName ?: account?.tenant?.name,
+                isLoading = fetchAccount != null
+            )
+        if (fetchAccount == null) return
+        branchDialogJob =
+            viewModelScope.launch {
+                var info: BranchInfo? = null
+                for (mmsid in loans.map { it.mmsid }.distinct().take(3)) {
+                    info =
+                        repository
+                            .getBranchInfo(
+                                fetchAccount.tenant,
+                                mmsid,
+                                branchName,
+                                fetchAccount.timeoutSeconds
+                            )
+                            .getOrNull()
+                    // getBranchInfo łapie Exception, więc połyka też anulowanie — bez tego
+                    // porzucony job (dialog zamknięty/otwarty dla innej filii) nadpisałby nowy
+                    // stan.
+                    ensureActive()
+                    if (info != null) break
+                }
+                _branchDialog.update { it?.copy(isLoading = false, info = info) }
+            }
+    }
+
+    fun dismissBranchInfo() {
+        branchDialogJob?.cancel()
+        _branchDialog.value = null
     }
 
     fun toggleAccount(account: Account) {
