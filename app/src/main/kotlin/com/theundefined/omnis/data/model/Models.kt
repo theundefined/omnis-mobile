@@ -158,13 +158,14 @@ data class BranchAvailability(
     val libraryCode: String,
     val subLocation: String?,
     val status: String, // "available" | "unavailable" | inne
-    // var (nie val) celowo — OmnisRepository.searchBooks dopisuje termin zwrotu in-place po
-    // fakcie (osobny request per niedostępna filia), analogicznie do mutowalnego modelu
-    // Pydantic w client.py (branch.due_date = due_date).
-    var dueDate: String? = null,
-    var overdue: Boolean = false,
+    // Termin zwrotu przychodzi po wynikach (OmnisRepository.fetchDueDates, osobne zapytania per
+    // niedostępna filia) — do tego czasu dueDatePending=true, potem kopia z datą (lub bez, gdy
+    // Primo jej nie podało albo zapytanie się nie udało).
+    val dueDate: String? = null,
+    val overdue: Boolean = false,
     // Google Maps — fizyczna lokalizacja na regale. holding.stackMapUrl, patrz Holding.
-    val mapsUrl: String? = null
+    val mapsUrl: String? = null,
+    val dueDatePending: Boolean = false
 )
 
 data class BookVersion(
@@ -202,7 +203,20 @@ data class SearchResult(
     val versions: List<BookVersion>
 )
 
-data class SearchPage(val results: List<SearchResult>, val hasMore: Boolean)
+data class SearchPage(
+    val results: List<SearchResult>,
+    val hasMore: Boolean,
+    // Egzemplarze wypożyczone, których termin zwrotu dociąga dopiero fetchDueDates — wyniki
+    // pokazujemy wcześniej, bo te zapytania to przy popularnych tytułach większość czasu
+    // wyszukiwania (Harry Potter w Raczyńskich: ~22 z ~29 s, pomiar 2026-09-28).
+    val dueDateLookups: List<DueDateLookup> = emptyList(),
+    val guestToken: String? = null
+)
+
+/** Filia `branchIndex` w wydaniu `bareMmsid` (BookVersion.mmsid), czekająca na termin zwrotu. */
+data class DueDateLookup(val bareMmsid: String, val branchIndex: Int, val holding: Holding)
+
+data class DueDate(val date: String, val overdue: Boolean)
 
 data class LoginResponse(val jwtData: String?)
 

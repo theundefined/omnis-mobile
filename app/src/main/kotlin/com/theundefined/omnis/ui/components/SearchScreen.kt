@@ -762,12 +762,12 @@ private fun branchStatusText(context: Context, branch: BranchAvailability): Stri
     when {
         branch.status == "available" -> context.getString(R.string.status_available)
         branch.status == "unavailable" && branch.dueDate != null -> {
-            // `dueDate` jest `var` (patrz BranchAvailability) — Kotlin nie smart-castuje
-            // mutowalnych właściwości, stąd jednorazowe `!!` po już wykonanym null-checku wyżej.
-            val formattedDate = formatPlainDate(branch.dueDate!!)
+            val formattedDate = formatPlainDate(branch.dueDate)
             if (branch.overdue) context.getString(R.string.status_overdue_since, formattedDate)
             else context.getString(R.string.status_borrowed_until, formattedDate)
         }
+        branch.status == "unavailable" && branch.dueDatePending ->
+            context.getString(R.string.status_borrowed_pending)
         branch.status == "unavailable" -> context.getString(R.string.status_borrowed_unknown)
         else -> context.getString(R.string.status_unknown)
     }

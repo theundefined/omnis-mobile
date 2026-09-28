@@ -7,6 +7,7 @@ import java.net.URI
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -608,8 +609,9 @@ class OmnisRepository(private val accountManager: AccountManager) {
      * nie wymagało ponownego wyszukiwania za każdym kliknięciem.
      *
      * Token gościa pozyskany raz na początku i reużywany przez CAŁY pipeline (top search +
-     * per-dzieło wyszukanie wydań + delivery + doładowanie dat zwrotu) — nie pobierać nowego per
-     * pod-request.
+     * per-dzieło wyszukanie wydań + delivery, a potem fetchDueDates przez SearchPage.guestToken) —
+     * nie pobierać nowego per pod-request. Terminy zwrotu NIE są tu pobierane — patrz
+     * fetchDueDates.
      */
     suspend fun searchBooks(
         tenant: Tenant,
@@ -739,13 +741,8 @@ class OmnisRepository(private val accountManager: AccountManager) {
                     .awaitAll()
             }
 
-            // Zbierz wyniki + listę "brakujących dat" do dociągnięcia w kroku 4.
-            data class EnrichTarget(
-                val branch: BranchAvailability,
-                val bareMmsid: String,
-                val holding: Holding
-            )
-            val enrichTargets = mutableListOf<EnrichTarget>()
+            // Zbierz wyniki + listę "brakujących dat" do dociągnięcia w fetchDueDates.
+            val dueDateLookups = mutableListOf<DueDateLookup>()
             val results =
                 topDocs.zip(resolved).map { (doc, r) ->
                     val frbrgroupid = doc.pnx.frbrgroupid()
@@ -758,21 +755,21 @@ class OmnisRepository(private val accountManager: AccountManager) {
                             val delivery = v.pnx.almaId()?.let { r.deliveryById[it] }
                             val holdings = delivery?.delivery?.holding ?: emptyList()
                             val branches =
-                                holdings.map { h ->
-                                    val branch =
-                                        BranchAvailability(
-                                            libraryName = h.mainLocation,
-                                            libraryCode = h.libraryCode,
-                                            subLocation = h.subLocation,
-                                            status = h.availabilityStatus,
-                                            mapsUrl = h.stackMapUrl
-                                        )
-                                    if (branch.status == "unavailable") {
-                                        enrichTargets.add(
-                                            EnrichTarget(branch, v.pnx.bareMmsid(), h)
+                                holdings.mapIndexed { index, h ->
+                                    val unavailable = h.availabilityStatus == "unavailable"
+                                    if (unavailable) {
+                                        dueDateLookups.add(
+                                            DueDateLookup(v.pnx.bareMmsid(), index, h)
                                         )
                                     }
-                                    branch
+                                    BranchAvailability(
+                                        libraryName = h.mainLocation,
+                                        libraryCode = h.libraryCode,
+                                        subLocation = h.subLocation,
+                                        status = h.availabilityStatus,
+                                        mapsUrl = h.stackMapUrl,
+                                        dueDatePending = unavailable
+                                    )
                                 }
                             BookVersion(
                                 mmsid = v.pnx.bareMmsid(),
@@ -796,14 +793,35 @@ class OmnisRepository(private val accountManager: AccountManager) {
                     SearchResult(frbrgroupid, title, author, versions)
                 }
 
-            // Krok 4: doładuj termin zwrotu tylko dla niedostępnych filii, równolegle.
-            if (enrichTargets.isNotEmpty()) {
-                val serviceIds = coroutineScope {
-                    enrichTargets
-                        .map { it.bareMmsid }
-                        .distinct()
-                        .associateWith { mmsid ->
-                            async {
+            Result.success(SearchPage(results, hasMore, dueDateLookups, token))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Termin zwrotu dla wypożyczonych egzemplarzy z wyników (SearchPage.dueDateLookups) — te same
+     * zapytania co dotąd, tylko już po pokazaniu wyników: getPhysicalService raz na wydanie, potem
+     * ILSServices/holdings per filia. Równoległość ogranicza OkHttp (5 zapytań naraz na host,
+     * domyślnie) — celowo nie więcej niż strona biblioteki. `onResult` dostaje każdy egzemplarz
+     * dokładnie raz: z datą albo z null, gdy Primo jej nie podało lub zapytanie się nie udało —
+     * jeden wolny czy błędny egzemplarz nie psuje reszty wyników.
+     */
+    suspend fun fetchDueDates(
+        tenant: Tenant,
+        page: SearchPage,
+        onResult: (DueDateLookup, DueDate?) -> Unit
+    ) {
+        val bearer = "Bearer ${page.guestToken ?: return}"
+        val api =
+            createClient(tenant.baseUrl, tenant.defaultTimeoutSeconds ?: DEFAULT_TIMEOUT_SECONDS)
+        coroutineScope {
+            page.dueDateLookups
+                .groupBy { it.bareMmsid }
+                .forEach { (mmsid, lookups) ->
+                    launch {
+                        val serviceId =
+                            try {
                                 api.getPhysicalServiceId(
                                         mmsid,
                                         mapOf(
@@ -818,73 +836,68 @@ class OmnisRepository(private val accountManager: AccountManager) {
                                     )
                                     .body()
                                     ?.physicalServiceId
+                            } catch (e: Exception) {
+                                if (e is CancellationException) throw e
+                                null
                             }
-                        }
-                        .mapValues { it.value.await() }
-                }
-                coroutineScope {
-                    enrichTargets.forEach { target ->
-                        val serviceId = serviceIds[target.bareMmsid] ?: return@forEach
-                        launch {
-                            val body =
-                                HoldingsStatusRequest(
-                                    filters =
-                                        HoldingsFilters(
-                                            sublibrary = target.holding.mainLocation,
-                                            holid = target.holding.holdId ?: "",
-                                            sublibs = target.holding.mainLocation,
-                                            ilsRecordList =
-                                                listOf(
-                                                    IlsRecordRef(
-                                                        tenant.institution,
-                                                        target.bareMmsid
-                                                    )
-                                                ),
-                                            vid = tenant.view
-                                        ),
-                                    locations = listOf(target.holding)
-                                )
-                            val status =
-                                api.getHoldingsStatus(
-                                        serviceId,
-                                        mapOf(
-                                            "record-institution" to tenant.institution,
-                                            "lang" to "pl"
-                                        ),
-                                        bearer,
-                                        body
-                                    )
-                                    .body()
-                            val statusName =
-                                status
-                                    ?.data
-                                    ?.itemInfo
-                                    ?.locations
-                                    ?.flatMap { it.items ?: emptyList() }
-                                    ?.firstNotNullOfOrNull { item ->
-                                        Regex("""(\d{2}/\d{2}/\d{4})""")
-                                            .find(item.itemstatusname)
-                                            ?.value
-                                            ?.let {
-                                                it to
-                                                    item.itemstatusname
-                                                        .lowercase()
-                                                        .contains("przekroczon")
-                                            }
+                        lookups.forEach { lookup ->
+                            if (serviceId == null) {
+                                onResult(lookup, null)
+                                return@forEach
+                            }
+                            launch {
+                                val dueDate =
+                                    try {
+                                        holdingDueDate(api, tenant, bearer, serviceId, lookup)
+                                    } catch (e: Exception) {
+                                        if (e is CancellationException) throw e
+                                        null
                                     }
-                            statusName?.let { (date, overdue) ->
-                                target.branch.dueDate = date
-                                target.branch.overdue = overdue
+                                onResult(lookup, dueDate)
                             }
                         }
                     }
                 }
-            }
-
-            Result.success(SearchPage(results, hasMore))
-        } catch (e: Exception) {
-            Result.failure(e)
         }
+    }
+
+    private suspend fun holdingDueDate(
+        api: OmnisApi,
+        tenant: Tenant,
+        bearer: String,
+        serviceId: String,
+        lookup: DueDateLookup
+    ): DueDate? {
+        val body =
+            HoldingsStatusRequest(
+                filters =
+                    HoldingsFilters(
+                        sublibrary = lookup.holding.mainLocation,
+                        holid = lookup.holding.holdId ?: "",
+                        sublibs = lookup.holding.mainLocation,
+                        ilsRecordList = listOf(IlsRecordRef(tenant.institution, lookup.bareMmsid)),
+                        vid = tenant.view
+                    ),
+                locations = listOf(lookup.holding)
+            )
+        val status =
+            api.getHoldingsStatus(
+                    serviceId,
+                    mapOf("record-institution" to tenant.institution, "lang" to "pl"),
+                    bearer,
+                    body
+                )
+                .body()
+        return status
+            ?.data
+            ?.itemInfo
+            ?.locations
+            ?.flatMap { it.items ?: emptyList() }
+            ?.firstNotNullOfOrNull { item ->
+                Regex("""(\d{2}/\d{2}/\d{4})""").find(item.itemstatusname)?.value?.let {
+                    DueDate(it, item.itemstatusname.lowercase().contains("przekroczon"))
+                }
+            }
     }
 
     fun getAccounts() = accountManager.getAccounts()

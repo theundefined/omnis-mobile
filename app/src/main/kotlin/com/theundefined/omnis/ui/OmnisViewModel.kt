@@ -8,6 +8,8 @@ import com.theundefined.omnis.R
 import com.theundefined.omnis.data.local.ViewPrefs
 import com.theundefined.omnis.data.model.Account
 import com.theundefined.omnis.data.model.BranchInfo
+import com.theundefined.omnis.data.model.DueDate
+import com.theundefined.omnis.data.model.DueDateLookup
 import com.theundefined.omnis.data.model.HistoryCacheEntry
 import com.theundefined.omnis.data.model.KNOWN_TENANTS
 import com.theundefined.omnis.data.model.Loan
@@ -197,6 +199,37 @@ fun SearchTenantSection.filteredResults(): List<SearchResult> {
 }
 
 /**
+ * Wpisuje termin zwrotu (albo jego brak) w filię wskazaną przez `lookup` — wszędzie, gdzie w
+ * wynikach występuje to wydanie. Pozostałe elementy zostają tymi samymi obiektami.
+ */
+internal fun List<SearchResult>.withDueDate(
+    lookup: DueDateLookup,
+    dueDate: DueDate?
+): List<SearchResult> = map { result ->
+    if (result.versions.none { it.mmsid == lookup.bareMmsid }) result
+    else
+        result.copy(
+            versions =
+                result.versions.map { version ->
+                    if (version.mmsid != lookup.bareMmsid) version
+                    else
+                        version.copy(
+                            branches =
+                                version.branches.mapIndexed { index, branch ->
+                                    if (index != lookup.branchIndex) branch
+                                    else
+                                        branch.copy(
+                                            dueDate = dueDate?.date,
+                                            overdue = dueDate?.overdue ?: false,
+                                            dueDatePending = false
+                                        )
+                                }
+                        )
+                }
+        )
+}
+
+/**
  * Seria (bez tomu i odpowiedzialności, jak w wyszukiwaniu po serii), potem numer tomu, potem tytuł.
  * Książki bez serii i tomy bez numeru trafiają na koniec swojej grupy.
  */
@@ -269,6 +302,29 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
     // zdążyło wrócić z sieci: wynik "spóźnionego" pierwszego wyszukania jest wtedy porzucany
     // zamiast nadpisać świeżo ustawiony szkielet drugiego.
     private var searchGeneration = 0
+    // Dociąganie terminów zwrotu po pokazaniu wyników — anulowane przy nowym wyszukaniu, żeby nie
+    // obciążać serwera zapytaniami, których wyników nikt już nie zobaczy.
+    private val dueDateJobs = mutableListOf<Job>()
+
+    private fun cancelDueDateJobs() {
+        dueDateJobs.forEach { it.cancel() }
+        dueDateJobs.clear()
+    }
+
+    private fun launchDueDates(tenant: Tenant, page: SearchPage, generation: Int) {
+        if (page.dueDateLookups.isEmpty()) return
+        val tenantKey = tenant.searchKey()
+        dueDateJobs +=
+            viewModelScope.launch {
+                repository.fetchDueDates(tenant, page) { lookup, dueDate ->
+                    if (generation == searchGeneration) {
+                        updateSearchSection(tenantKey) {
+                            it.copy(results = it.results.withDueDate(lookup, dueDate))
+                        }
+                    }
+                }
+            }
+    }
 
     private val _searchTenantOverride = MutableStateFlow(repository.getSearchTenantKeys())
     val searchLibraries: StateFlow<SearchLibrariesState> =
@@ -863,6 +919,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         recordSearchHistory(SearchHistoryEntry(query.trim(), field))
 
         searchGeneration++
+        cancelDueDateJobs()
         val generation = searchGeneration
 
         // Wybór czytany z tych samych źródeł co searchLibraries, a nie z jego .value — stateIn
@@ -941,6 +998,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
                                 error = null
                             )
                         }
+                        launchDueDates(tenant, page, generation)
                     }
                     .onFailure { e ->
                         updateSearchSection(tenantKey) { section ->
@@ -983,6 +1041,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
                             isLoadingMore = false
                         )
                     }
+                    launchDueDates(tenant, page, generation)
                 }
                 .onFailure { e ->
                     if (generation != searchGeneration) return@onFailure
@@ -1000,6 +1059,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
      */
     fun clearSearch() {
         searchGeneration++
+        cancelDueDateJobs()
         _searchUiState.update {
             it.copy(query = "", field = SearchField.ANY, hasSearched = false, isLoading = false)
         }

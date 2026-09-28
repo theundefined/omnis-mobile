@@ -76,6 +76,7 @@
     <string name="status_borrowed_until">Borrowed until %1$s</string>
     <string name="status_overdue_since">Overdue since %1$s</string>
     <string name="status_borrowed_unknown">Borrowed</string>
+    <string name="status_borrowed_pending">Borrowed until …</string>
     <string name="status_unknown">Status unknown</string>
     <string name="search_error">Search error: %1$s</string>
     <string name="search_results_end">That\'s all the results.</string>
