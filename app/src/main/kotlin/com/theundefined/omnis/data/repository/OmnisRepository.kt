@@ -570,7 +570,10 @@ class OmnisRepository(private val accountManager: AccountManager) {
                         "rapido" to "false",
                         "refEntryActive" to "false",
                         "rtaLinks" to "true",
-                        "scope" to "MyInstitution2",
+                        // MyInstitution (lokalny katalog instytucji) istnieje we wszystkich
+                        // KNOWN_TENANTS; wcześniejsze MyInstitution2 miały tylko Raczyńscy, a
+                        // reszta zwracała 400. `tab` Primo ignoruje (sprawdzone na żywo).
+                        "scope" to "MyInstitution",
                         "searchInFulltextUserSelection" to "true",
                         "skipDelivery" to "Y",
                         "sort" to sort,
