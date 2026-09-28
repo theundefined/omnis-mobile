@@ -10,10 +10,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.theundefined.omnis.R
 import com.theundefined.omnis.ui.GroupingMode
 import com.theundefined.omnis.ui.OmnisViewModel
+import com.theundefined.omnis.ui.RefreshProgress
 import kotlinx.coroutines.flow.collectLatest
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -174,6 +176,7 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
                 }
             } else {
                 Column {
+                    uiState.refreshProgress?.let { RefreshProgressBar(it) }
                     LoanViewBar(
                         groupingMode = uiState.groupingMode,
                         sortMode = uiState.sortMode,
@@ -201,5 +204,33 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun RefreshProgressBar(progress: RefreshProgress) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+        Text(
+            if (progress.catalogTotal != null)
+                stringResource(
+                    R.string.refresh_progress_catalog,
+                    progress.accountName,
+                    progress.catalogDone,
+                    progress.catalogTotal
+                )
+            else
+                stringResource(
+                    R.string.refresh_progress_account,
+                    progress.account,
+                    progress.accounts,
+                    progress.accountName
+                ),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        LinearProgressIndicator(
+            progress = { progress.fraction },
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+        )
     }
 }

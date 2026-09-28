@@ -99,6 +99,8 @@
     <string name="search_sort_relevance">Trafność</string>
     <string name="search_sort_title">Tytuł</string>
     <string name="search_sort_series">Seria</string>
+    <string name="refresh_progress_account">Konto %1$d z %2$d: %3$s</string>
+    <string name="refresh_progress_catalog">Serie z katalogu (%1$s): %2$d z %3$d</string>
     <string name="search_sort_hint_load_all">Zmiana sortowania będzie dostępna po załadowaniu wszystkich wyników.</string>
     <string name="series_label">Seria: %1$s</string>
     <string name="language_label">Język: %1$s</string>

@@ -6,6 +6,7 @@ import com.theundefined.omnis.data.remote.OmnisApi
 import java.net.URI
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -359,7 +360,8 @@ class OmnisRepository(private val accountManager: AccountManager) {
     suspend fun withCatalogDetails(
         account: Account,
         loans: List<Loan>,
-        previous: List<Loan>
+        previous: List<Loan>,
+        onProgress: (done: Int, total: Int) -> Unit = { _, _ -> }
     ): List<Loan> {
         val known =
             previous
@@ -375,6 +377,8 @@ class OmnisRepository(private val accountManager: AccountManager) {
                         account.timeoutSeconds ?: DEFAULT_TIMEOUT_SECONDS
                     )
                 val limit = Semaphore(4)
+                val done = AtomicInteger(0)
+                onProgress(0, missing.size)
                 coroutineScope {
                     missing
                         .map { mmsid ->
@@ -393,6 +397,8 @@ class OmnisRepository(private val accountManager: AccountManager) {
                                                 )
                                     } catch (e: Exception) {
                                         null
+                                    } finally {
+                                        onProgress(done.incrementAndGet(), missing.size)
                                     }
                                 }
                             }

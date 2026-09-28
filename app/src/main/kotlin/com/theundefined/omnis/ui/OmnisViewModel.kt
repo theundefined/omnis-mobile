@@ -47,8 +47,27 @@ data class UiState(
     val groupingMode: GroupingMode = GroupingMode.ACCOUNT,
     val sortMode: SortMode = SortMode.DUE_DATE,
     val isLoading: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val refreshProgress: RefreshProgress? = null
 )
+
+/**
+ * Postęp odświeżania wypożyczeń (refreshAllLoans). Konta idą po kolei; dla każdego najpierw
+ * logowanie i wypożyczenia, potem — tylko jeśli są książki jeszcze niesprawdzone w katalogu —
+ * pobieranie serii (catalogTotal != null). Pasek wypełnia się osobno w każdym z tych etapów.
+ */
+data class RefreshProgress(
+    val account: Int, // 1-based
+    val accounts: Int,
+    val accountName: String,
+    val catalogDone: Int = 0,
+    val catalogTotal: Int? = null
+) {
+    val fraction: Float
+        get() =
+            if (catalogTotal != null && catalogTotal > 0) catalogDone.toFloat() / catalogTotal
+            else (account - 1).toFloat() / accounts
+}
 
 data class HistoryUiState(
     val loans: Map<String, List<Loan>> = emptyMap(), // groupKey -> loans
@@ -318,7 +337,14 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
             var hasError = false
             var errorMessage: String? = null
 
-            currentAccounts.forEach { account ->
+            currentAccounts.forEachIndexed { index, account ->
+                val progress =
+                    RefreshProgress(
+                        account = index + 1,
+                        accounts = currentAccounts.size,
+                        accountName = account.displayName ?: account.username
+                    )
+                _uiState.update { it.copy(refreshProgress = progress) }
                 if (account.displayName == null || account.displayName == account.username) {
                     repository.fetchAccountProfile(account)
                 }
@@ -331,7 +357,14 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
                                 account,
                                 fetched,
                                 repository.getCachedLoans(account.id)
-                            )
+                            ) { done, total ->
+                                _uiState.update {
+                                    it.copy(
+                                        refreshProgress =
+                                            progress.copy(catalogDone = done, catalogTotal = total)
+                                    )
+                                }
+                            }
                         repository.saveCachedLoans(account.id, loans)
                         loans.forEach { allLoansList.add(account to it) }
                     }
@@ -345,7 +378,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
             }
 
             val updatedAccounts = repository.getAccounts()
-            _uiState.update { it.copy(accounts = updatedAccounts) }
+            _uiState.update { it.copy(accounts = updatedAccounts, refreshProgress = null) }
 
             updateGroupedLoans(allLoansList, false)
 

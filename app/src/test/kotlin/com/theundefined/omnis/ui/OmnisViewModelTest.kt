@@ -62,3 +62,25 @@ class OmnisViewModelTest {
         assertEquals(emptyList<String>(), summary.failedTitles)
     }
 }
+
+class RefreshProgressTest {
+
+    @Test
+    fun `account stage fills by finished accounts`() {
+        assertEquals(0f, RefreshProgress(account = 1, accounts = 4, accountName = "A").fraction)
+        assertEquals(0.5f, RefreshProgress(account = 3, accounts = 4, accountName = "A").fraction)
+    }
+
+    @Test
+    fun `catalog stage fills by fetched records`() {
+        val progress =
+            RefreshProgress(
+                account = 2,
+                accounts = 2,
+                accountName = "A",
+                catalogDone = 3,
+                catalogTotal = 12
+            )
+        assertEquals(0.25f, progress.fraction)
+    }
+}
