@@ -1,8 +1,10 @@
 package com.theundefined.omnis.ui.components
 
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
@@ -36,6 +38,11 @@ fun openWebSearch(context: Context, title: String, author: String?) {
     context.startActivity(intent)
 }
 
+/** Link niedający się otworzyć (brak aplikacji, pusty/niepoprawny adres) kończy się komunikatem. */
 fun openUrl(context: Context, url: String) {
-    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    } catch (e: ActivityNotFoundException) {
+        Toast.makeText(context, R.string.cannot_open_link, Toast.LENGTH_SHORT).show()
+    }
 }

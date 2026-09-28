@@ -767,7 +767,9 @@ class OmnisRepository(private val accountManager: AccountManager) {
                                         libraryCode = h.libraryCode,
                                         subLocation = h.subLocation,
                                         status = h.availabilityStatus,
-                                        mapsUrl = h.stackMapUrl,
+                                        // Primo bywa, że daje "" zamiast null (np. UWr) —
+                                        // pusty link otwierany jako VIEW wywalał aplikację.
+                                        mapsUrl = h.stackMapUrl?.trim()?.takeIf { it.isNotEmpty() },
                                         dueDatePending = unavailable
                                     )
                                 }

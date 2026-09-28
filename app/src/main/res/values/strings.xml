@@ -77,6 +77,7 @@
     <string name="status_overdue_since">Przetrzymana od %1$s</string>
     <string name="status_borrowed_unknown">Wypożyczona</string>
     <string name="status_borrowed_pending">Wypożyczona do …</string>
+    <string name="cannot_open_link">Nie można otworzyć linku</string>
     <string name="status_unknown">Status nieznany</string>
     <string name="search_error">Błąd wyszukiwania: %1$s</string>
     <string name="search_results_end">To już wszystkie wyniki.</string>
