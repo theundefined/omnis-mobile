@@ -63,7 +63,6 @@
     <string name="search_title">Szukaj</string>
     <string name="search_hint">Szukaj w katalogu…</string>
     <string name="cd_search">Szukaj</string>
-    <string name="cd_preferred_for_search">Preferowane do wyszukiwania</string>
     <string name="all_branches">Wszystkie filie</string>
     <string name="no_search_results">Brak wyników wyszukiwania.</string>
     <string name="no_search_results_filtered">Brak wyników w wybranych filiach.</string>
@@ -80,6 +79,13 @@
     <string name="status_unknown">Status nieznany</string>
     <string name="search_error">Błąd wyszukiwania: %1$s</string>
     <string name="search_results_end">To już wszystkie wyniki.</string>
+    <string name="search_libraries_choose">Wybierz bibliotekę</string>
+    <string name="search_libraries_summary">%1$s +%2$d</string>
+    <string name="search_libraries_title">Biblioteki do przeszukania</string>
+    <string name="search_libraries_filter">Filtruj biblioteki…</string>
+    <string name="search_libraries_done">Gotowe</string>
+    <string name="search_no_libraries">Wybierz co najmniej jedną bibliotekę, w której chcesz szukać.</string>
+    <string name="search_library_has_account">Masz tu konto</string>
     <string name="search_history_title">Ostatnie wyszukiwania</string>
     <string name="search_history_clear">Wyczyść historię</string>
     <string name="search_history_author_entry">Autor: %1$s</string>

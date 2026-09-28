@@ -251,6 +251,24 @@ class OmnisRepository(private val accountManager: AccountManager) {
         }
     }
 
+    /**
+     * Wyszukiwanie w katalogu jest anonimowe (token gościa, jak w oficjalnym UI Primo) — działa w
+     * każdej bibliotece z listy, bez konta w niej i bez wysyłania hasła.
+     */
+    private suspend fun guestToken(api: OmnisApi, tenant: Tenant): Result<String> {
+        val response =
+            api.getGuestJwt(
+                institution = tenant.institution,
+                view = tenant.view,
+                targetUrl = "${tenant.baseUrl}/discovery/search?vid=${tenant.view}"
+            )
+        val token = response.body()?.string()?.trim()?.trim('"')
+        if (!response.isSuccessful || token.isNullOrEmpty()) {
+            return Result.failure(Exception("Błąd pobierania tokenu gościa: ${response.code()}"))
+        }
+        return Result.success(token)
+    }
+
     private suspend fun loginForToken(api: OmnisApi, account: Account): Result<String> {
         api.getInitialCookies(account.tenant.view)
         val loginResponse =
@@ -515,14 +533,14 @@ class OmnisRepository(private val accountManager: AccountManager) {
      * filie dla wszystkich wydań (bez branch_filter po stronie serwera) — filtrowanie po
      * zaznaczonych filiach dzieje się po stronie klienta w ViewModelu (patrz
      * docs/plans/book-search.md §7), żeby zaznaczanie/odznaczanie checkboxów było natychmiastowe i
-     * nie wymagało ponownego logowania+wyszukiwania za każdym kliknięciem.
+     * nie wymagało ponownego wyszukiwania za każdym kliknięciem.
      *
-     * Token pozyskany raz na początku i reużywany przez CAŁY pipeline (top search + per-dzieło
-     * wyszukanie wydań + delivery + doładowanie dat zwrotu) — analogicznie do getLoansForAccount,
-     * NIE re-logować się per pod-request.
+     * Token gościa pozyskany raz na początku i reużywany przez CAŁY pipeline (top search +
+     * per-dzieło wyszukanie wydań + delivery + doładowanie dat zwrotu) — nie pobierać nowego per
+     * pod-request.
      */
     suspend fun searchBooks(
-        account: Account,
+        tenant: Tenant,
         query: String,
         offset: Int = 0,
         limit: Int = 10,
@@ -531,11 +549,11 @@ class OmnisRepository(private val accountManager: AccountManager) {
         return try {
             val api =
                 createClient(
-                    account.tenant.baseUrl,
-                    account.timeoutSeconds ?: DEFAULT_TIMEOUT_SECONDS
+                    tenant.baseUrl,
+                    tenant.defaultTimeoutSeconds ?: DEFAULT_TIMEOUT_SECONDS
                 )
             val token =
-                loginForToken(api, account).getOrElse {
+                guestToken(api, tenant).getOrElse {
                     return Result.failure(it)
                 }
             val bearer = "Bearer $token"
@@ -555,7 +573,7 @@ class OmnisRepository(private val accountManager: AccountManager) {
                         "citationTrailFilterByAvailability" to "true",
                         "disableCache" to "false",
                         "getMore" to "0",
-                        "inst" to account.tenant.institution,
+                        "inst" to tenant.institution,
                         "isCDSearch" to "false",
                         "lang" to "pl",
                         "limit" to limit.toString(),
@@ -578,7 +596,7 @@ class OmnisRepository(private val accountManager: AccountManager) {
                         "skipDelivery" to "Y",
                         "sort" to sort,
                         "tab" to "LibraryCatalog",
-                        "vid" to account.tenant.view
+                        "vid" to tenant.view
                     )
                 cameFrom?.let { params["came_from"] = it }
                 return params
@@ -717,7 +735,7 @@ class OmnisRepository(private val accountManager: AccountManager) {
                                 api.getPhysicalServiceId(
                                         mmsid,
                                         mapOf(
-                                            "vid" to account.tenant.view,
+                                            "vid" to tenant.view,
                                             "lang" to "pl",
                                             "recordOwner" to "48OMNIS_NETWORK",
                                             "sourceRecordId" to mmsid,
@@ -746,11 +764,11 @@ class OmnisRepository(private val accountManager: AccountManager) {
                                             ilsRecordList =
                                                 listOf(
                                                     IlsRecordRef(
-                                                        account.tenant.institution,
+                                                        tenant.institution,
                                                         target.bareMmsid
                                                     )
                                                 ),
-                                            vid = account.tenant.view
+                                            vid = tenant.view
                                         ),
                                     locations = listOf(target.holding)
                                 )
@@ -758,7 +776,7 @@ class OmnisRepository(private val accountManager: AccountManager) {
                                 api.getHoldingsStatus(
                                         serviceId,
                                         mapOf(
-                                            "record-institution" to account.tenant.institution,
+                                            "record-institution" to tenant.institution,
                                             "lang" to "pl"
                                         ),
                                         bearer,
@@ -832,4 +850,8 @@ class OmnisRepository(private val accountManager: AccountManager) {
         accountManager.saveSearchHistory(entries)
 
     fun clearSearchHistory() = accountManager.clearSearchHistory()
+
+    fun getSearchTenantKeys(): Set<String>? = accountManager.getSearchTenantKeys()
+
+    fun saveSearchTenantKeys(keys: Set<String>) = accountManager.saveSearchTenantKeys(keys)
 }

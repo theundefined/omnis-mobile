@@ -15,7 +15,6 @@ data class Account(
     val finesAmount: Double = 0.0,
     private val _finesCurrency: String? = "PLN",
     val loansCount: Int = 0,
-    val preferredForSearch: Boolean = false,
     val timeoutSeconds: Long? = null,
     val isDemo: Boolean = false,
     val disabledByDemo: Boolean = false

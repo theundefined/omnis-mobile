@@ -173,6 +173,23 @@ class AccountManager(context: Context) {
         sharedPreferences.edit().remove("search_history").apply()
     }
 
+    /**
+     * Biblioteki (Tenant.searchKey()), w których szuka ekran wyszukiwania. `null` = użytkownik
+     * nigdy nie zmieniał wyboru — wtedy domyślnie biblioteki włączonych kont (OmnisViewModel).
+     */
+    fun getSearchTenantKeys(): Set<String>? {
+        val jsonStr = sharedPreferences.getString("search_tenants", null) ?: return null
+        return try {
+            json.decodeFromString<Set<String>>(jsonStr)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun saveSearchTenantKeys(keys: Set<String>) {
+        sharedPreferences.edit().putString("search_tenants", json.encodeToString(keys)).apply()
+    }
+
     fun addAccount(account: Account) {
         val accounts = getAccounts().toMutableList()
         accounts.removeAll {

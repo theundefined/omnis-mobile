@@ -9,6 +9,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -26,7 +27,10 @@ import com.theundefined.omnis.data.model.BranchAvailability
 import com.theundefined.omnis.data.model.SearchField
 import com.theundefined.omnis.data.model.SearchHistoryEntry
 import com.theundefined.omnis.data.model.SearchResult
+import com.theundefined.omnis.data.model.Tenant
+import com.theundefined.omnis.data.model.searchKey
 import com.theundefined.omnis.ui.OmnisViewModel
+import com.theundefined.omnis.ui.SearchLibrariesState
 import com.theundefined.omnis.ui.SearchSortMode
 import com.theundefined.omnis.ui.SearchTenantSection
 import com.theundefined.omnis.ui.branchChipLabel
@@ -51,6 +55,8 @@ fun SearchScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val state by viewModel.searchUiState.collectAsStateWithLifecycle()
     val history by viewModel.searchHistory.collectAsStateWithLifecycle()
+    val libraries by viewModel.searchLibraries.collectAsStateWithLifecycle()
+    var showLibraryPicker by rememberSaveable { mutableStateOf(false) }
     var queryInput by remember { mutableStateOf(state.query) }
     // Pole wyszukiwania dla NASTĘPNEGO wyszukania. Kliknięcie autora ustawia AUTHOR; ręczna edycja
     // tekstu albo zamknięcie chipa "Autor" wraca do ANY (szukanie we wszystkich polach).
@@ -58,7 +64,7 @@ fun SearchScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val noEnabledAccounts = uiState.accounts.none { it.isEnabled }
+    val noLibraries = libraries.selectedKeys.isEmpty()
 
     fun triggerSearch() {
         viewModel.runSearch(queryInput, searchField)
@@ -83,13 +89,22 @@ fun SearchScreen(
             }
         )
 
-    // Skan ze skrótu aplikacji. Bez włączonych kont nie ma w czym szukać — zostaje zwykły ekran
-    // z prośbą o dodanie konta zamiast skanowania w ślepą uliczkę.
+    // Skan ze skrótu aplikacji. Bez wybranej biblioteki nie ma w czym szukać — zostaje zwykły
+    // ekran z prośbą o wybór zamiast skanowania w ślepą uliczkę.
     LaunchedEffect(autoStartScan) {
         if (autoStartScan) {
             onAutoStartScanConsumed()
-            if (!noEnabledAccounts) startScan()
+            if (!noLibraries) startScan()
         }
+    }
+
+    if (showLibraryPicker) {
+        SearchLibraryPicker(
+            libraries = libraries,
+            accountTenantKeys = uiState.accounts.map { it.tenant.searchKey() }.toSet(),
+            onToggle = { tenant, selected -> viewModel.setSearchLibrarySelected(tenant, selected) },
+            onDismiss = { showLibraryPicker = false }
+        )
     }
 
     Scaffold(
@@ -137,7 +152,7 @@ fun SearchScreen(
                                 Text("✕")
                             }
                         }
-                        IconButton(onClick = startScan, enabled = !noEnabledAccounts) {
+                        IconButton(onClick = startScan, enabled = !noLibraries) {
                             Icon(
                                 painterResource(R.drawable.ic_barcode_scan),
                                 stringResource(R.string.cd_scan_isbn)
@@ -154,14 +169,24 @@ fun SearchScreen(
                 }
             )
 
-            if (searchField == SearchField.AUTHOR) {
-                InputChip(
-                    selected = true,
-                    onClick = { searchFor(queryInput, SearchField.ANY) },
-                    label = { Text(stringResource(R.string.search_field_author)) },
-                    trailingIcon = { Text("✕") },
-                    modifier = Modifier.padding(horizontal = 16.dp)
+            FlowRow(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                AssistChip(
+                    onClick = { showLibraryPicker = true },
+                    label = { Text(librariesSummary(libraries)) },
+                    leadingIcon = { Text("📚") },
+                    trailingIcon = { Text("▾") }
                 )
+                if (searchField == SearchField.AUTHOR) {
+                    InputChip(
+                        selected = true,
+                        onClick = { searchFor(queryInput, SearchField.ANY) },
+                        label = { Text(stringResource(R.string.search_field_author)) },
+                        trailingIcon = { Text("✕") }
+                    )
+                }
             }
 
             val hasAnyRawResults = state.tenantSections.any { it.results.isNotEmpty() }
@@ -171,9 +196,17 @@ fun SearchScreen(
                     state.tenantSections.all { it.filteredResults().isEmpty() && !it.isLoading }
 
             when {
-                noEnabledAccounts -> {
+                noLibraries -> {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(stringResource(R.string.add_first_account))
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                stringResource(R.string.search_no_libraries),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            TextButton(onClick = { showLibraryPicker = true }) {
+                                Text(stringResource(R.string.search_libraries_choose))
+                            }
+                        }
                     }
                 }
                 !state.hasSearched && history.isNotEmpty() -> {
@@ -245,6 +278,90 @@ fun SearchScreen(
                                     section = section,
                                     viewModel = viewModel,
                                     onAuthorClick = { searchFor(it, SearchField.AUTHOR) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun librariesSummary(libraries: SearchLibrariesState): String {
+    val names = libraries.selected.map { it.name }.sortedWith(compareBy(polishCollator) { it })
+    return when (names.size) {
+        0 -> stringResource(R.string.search_libraries_choose)
+        1 -> names.first()
+        else -> stringResource(R.string.search_libraries_summary, names.first(), names.size - 1)
+    }
+}
+
+/**
+ * Wybór bibliotek w dolnym arkuszu (a nie rozwijanej liście na ekranie) — lista ma kilkadziesiąt
+ * pozycji. Kolejność ustalana raz przy otwarciu (wybrane na górze), żeby wiersze nie skakały pod
+ * palcem przy zaznaczaniu.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SearchLibraryPicker(
+    libraries: SearchLibrariesState,
+    accountTenantKeys: Set<String>,
+    onToggle: (Tenant, Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var filter by remember { mutableStateOf("") }
+    val order = remember {
+        libraries.available.sortedWith(
+            compareBy<Tenant> { it.searchKey() !in libraries.selectedKeys }
+                .thenBy(polishCollator) { it.name }
+        )
+    }
+    val visible =
+        order.filter { filter.isBlank() || it.name.contains(filter.trim(), ignoreCase = true) }
+
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    stringResource(R.string.search_libraries_title),
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleMedium
+                )
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.search_libraries_done))
+                }
+            }
+            OutlinedTextField(
+                value = filter,
+                onValueChange = { filter = it },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                placeholder = { Text(stringResource(R.string.search_libraries_filter)) },
+                singleLine = true
+            )
+            LazyColumn(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                items(visible, key = { it.searchKey() }) { tenant ->
+                    val selected = tenant.searchKey() in libraries.selectedKeys
+                    Row(
+                        modifier =
+                            Modifier.fillMaxWidth()
+                                .clickable { onToggle(tenant, !selected) }
+                                .padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(checked = selected, onCheckedChange = { onToggle(tenant, it) })
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(tenant.name, style = MaterialTheme.typography.bodyLarge)
+                            if (tenant.searchKey() in accountTenantKeys) {
+                                Text(
+                                    stringResource(R.string.search_library_has_account),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }

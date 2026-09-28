@@ -9,6 +9,7 @@ import com.theundefined.omnis.data.local.ViewPrefs
 import com.theundefined.omnis.data.model.Account
 import com.theundefined.omnis.data.model.BranchInfo
 import com.theundefined.omnis.data.model.HistoryCacheEntry
+import com.theundefined.omnis.data.model.KNOWN_TENANTS
 import com.theundefined.omnis.data.model.Loan
 import com.theundefined.omnis.data.model.SearchBranchPrefs
 import com.theundefined.omnis.data.model.SearchField
@@ -29,9 +30,12 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -76,6 +80,31 @@ data class SearchUiState(
     val hasSearched: Boolean = false,
     val tenantSections: List<SearchTenantSection> = emptyList()
 )
+
+/** Biblioteki do wyboru na ekranie wyszukiwania + te, w których faktycznie szukamy. */
+data class SearchLibrariesState(
+    val available: List<Tenant> = emptyList(),
+    val selectedKeys: Set<String> = emptySet()
+) {
+    val selected: List<Tenant>
+        get() = available.filter { it.searchKey() in selectedKeys }
+}
+
+/**
+ * Lista do wyboru: znane biblioteki + biblioteki kont spoza listy (np. demo). Przy tym samym
+ * searchKey wygrywa wpis z KNOWN_TENANTS (świeższe baseUrl niż zapisany w starym koncie). Domyślny
+ * wybór, dopóki użytkownik go nie zmieni: biblioteki włączonych kont.
+ */
+internal fun buildSearchLibrariesState(
+    accounts: List<Account>,
+    override: Set<String>?
+): SearchLibrariesState {
+    val available = (KNOWN_TENANTS + accounts.map { it.tenant }).distinctBy { it.searchKey() }
+    val keys = available.map { it.searchKey() }.toSet()
+    val selected =
+        override ?: accounts.filter { it.isEnabled }.map { it.tenant.searchKey() }.toSet()
+    return SearchLibrariesState(available, selected intersect keys)
+}
 
 /** Sortowanie wyników wyszukiwania w obrębie jednej biblioteki — czysto klient-side. */
 enum class SearchSortMode {
@@ -194,16 +223,26 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
     private val _searchUiState = MutableStateFlow(SearchUiState())
     val searchUiState: StateFlow<SearchUiState> = _searchUiState.asStateFlow()
 
-    // Konto użyte do wykonania OSTATNIEGO wyszukania per biblioteka — loadMoreResults() musi
-    // doładowywać kolejne strony tym samym kontem/loginem, nawet jeśli w międzyczasie zmienił
-    // się zestaw kont/flaga preferowania (patrz docs/plans/book-search.md §8.3a).
-    private var searchRepresentatives: Map<String, Account> = emptyMap()
+    // Biblioteki OSTATNIEGO wyszukania — loadMoreResults() doładowuje kolejne strony z tej samej
+    // biblioteki, nawet jeśli w międzyczasie zmienił się wybór bibliotek.
+    private var searchTargets: Map<String, Tenant> = emptyMap()
 
     // Zwiększane przy każdym runSearch() — analogicznie do historyGeneration (patrz wyżej),
     // chroni przed sytuacją, w której użytkownik odpala drugie wyszukanie zanim pierwsze
     // zdążyło wrócić z sieci: wynik "spóźnionego" pierwszego wyszukania jest wtedy porzucany
     // zamiast nadpisać świeżo ustawiony szkielet drugiego.
     private var searchGeneration = 0
+
+    private val _searchTenantOverride = MutableStateFlow(repository.getSearchTenantKeys())
+    val searchLibraries: StateFlow<SearchLibrariesState> =
+        combine(_uiState, _searchTenantOverride) { ui, override ->
+                buildSearchLibrariesState(ui.accounts, override)
+            }
+            .stateIn(
+                viewModelScope,
+                SharingStarted.Eagerly,
+                buildSearchLibrariesState(_uiState.value.accounts, _searchTenantOverride.value)
+            )
 
     private val _searchHistory = MutableStateFlow(repository.getSearchHistory())
     val searchHistory: StateFlow<List<SearchHistoryEntry>> = _searchHistory.asStateFlow()
@@ -728,20 +767,6 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         _historyUiState.update { it.copy(loans = grouped) }
     }
 
-    /**
-     * Wybiera JEDNO konto reprezentujące każdą unikalną bibliotekę (tenant.searchKey()) wśród
-     * włączonych kont — kilka kont dzielących ten sam katalog dałoby identyczne wyniki, więc
-     * wyszukujemy raz, nie N razy. Preferuje konto oznaczone `preferredForSearch`; w przeciwnym
-     * razie pierwsze wg kolejności z AccountManager.getAccounts() (kolejność dodania) —
-     * deterministyczny fallback, patrz docs/plans/book-search.md §8.1.
-     */
-    private fun pickSearchAccounts(accounts: List<Account>): List<Account> =
-        accounts
-            .filter { it.isEnabled }
-            .groupBy { it.tenant.searchKey() }
-            .values
-            .map { group -> group.firstOrNull { it.preferredForSearch } ?: group.first() }
-
     private fun updateSearchSection(
         tenantKey: String,
         transform: (SearchTenantSection) -> SearchTenantSection
@@ -783,14 +808,17 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         searchGeneration++
         val generation = searchGeneration
 
-        val targets = pickSearchAccounts(_uiState.value.accounts)
-        searchRepresentatives = targets.associateBy { it.tenant.searchKey() }
+        // Wybór czytany z tych samych źródeł co searchLibraries, a nie z jego .value — stateIn
+        // przelicza się asynchronicznie, więc tuż po zmianie wyboru .value mógłby być nieaktualny.
+        val targets =
+            buildSearchLibrariesState(_uiState.value.accounts, _searchTenantOverride.value).selected
+        searchTargets = targets.associateBy { it.searchKey() }
 
         val existingSections = _searchUiState.value.tenantSections.associateBy { it.tenantKey }
         val allAccounts = _uiState.value.accounts
         val skeleton =
-            targets.map { account ->
-                val tenantKey = account.tenant.searchKey()
+            targets.map { tenant ->
+                val tenantKey = tenant.searchKey()
                 val siblingIds =
                     allAccounts.filter { it.tenant.searchKey() == tenantKey }.map { it.id }
                 val seeded =
@@ -801,7 +829,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
                 val prefs = repository.getSearchBranchPrefs(tenantKey)
                 SearchTenantSection(
                     tenantKey = tenantKey,
-                    tenantLabel = account.tenant.name,
+                    tenantLabel = tenant.name,
                     confirmedBranches =
                         existingSections[tenantKey]?.confirmedBranches ?: emptyList(),
                     branchAddresses = existingSections[tenantKey]?.branchAddresses ?: emptyMap(),
@@ -825,10 +853,10 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         viewModelScope.launch {
             val outcomes = coroutineScope {
                 targets
-                    .map { account ->
+                    .map { tenant ->
                         async {
-                            account to
-                                repository.searchBooks(account, query, offset = 0, field = field)
+                            tenant to
+                                repository.searchBooks(tenant, query, offset = 0, field = field)
                         }
                     }
                     .awaitAll()
@@ -837,8 +865,8 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
             if (generation != searchGeneration)
                 return@launch // nowsze wyszukanie już wystartowało — porzucamy wynik
 
-            outcomes.forEach { (account, result) ->
-                val tenantKey = account.tenant.searchKey()
+            outcomes.forEach { (tenant, result) ->
+                val tenantKey = tenant.searchKey()
                 result
                     .onSuccess { page ->
                         updateSearchSection(tenantKey) { section ->
@@ -871,7 +899,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         val section =
             _searchUiState.value.tenantSections.find { it.tenantKey == tenantKey } ?: return
         if (section.isLoadingMore || !section.canLoadMore) return
-        val account = searchRepresentatives[tenantKey] ?: return
+        val tenant = searchTargets[tenantKey] ?: return
         val query = _searchUiState.value.query
         val field = _searchUiState.value.field
         val generation = searchGeneration
@@ -881,7 +909,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
 
         viewModelScope.launch {
             repository
-                .searchBooks(account, query, offset = offset, field = field)
+                .searchBooks(tenant, query, offset = offset, field = field)
                 .onSuccess { page ->
                     if (generation != searchGeneration) return@onSuccess
                     updateSearchSection(tenantKey) { s ->
@@ -973,9 +1001,16 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         updateSearchSection(tenantKey) { section -> section.copy(sortMode = mode) }
     }
 
-    fun togglePreferredForSearch(account: Account) {
-        repository.updateAccount(account.copy(preferredForSearch = !account.preferredForSearch))
-        refreshAccounts()
+    fun setSearchLibrarySelected(tenant: Tenant, selected: Boolean) {
+        // Z bieżących źródeł, nie z searchLibraries.value (patrz komentarz w runSearch) — szybkie
+        // kolejne kliknięcia nie mogą zgubić poprzedniej zmiany.
+        val current =
+            buildSearchLibrariesState(_uiState.value.accounts, _searchTenantOverride.value)
+                .selectedKeys
+        val key = tenant.searchKey()
+        val updated = if (selected) current + key else current - key
+        _searchTenantOverride.value = updated
+        repository.saveSearchTenantKeys(updated)
     }
 
     private companion object {

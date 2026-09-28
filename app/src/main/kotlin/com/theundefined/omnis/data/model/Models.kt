@@ -19,10 +19,10 @@ data class Tenant(
 )
 
 /**
- * Dwa konta "są tą samą biblioteką" (ten sam katalog, te same filie) wtedy i tylko wtedy, gdy mają
- * ten sam institution i view — to one, nie baseUrl, definiują zakres wyszukiwania w Primo. Używane
- * do grupowania kont na potrzeby wyszukiwania (patrz OmnisViewModel.pickSearchAccounts) i jako
- * klucz persystencji preferencji filii (patrz SearchBranchPrefs/AccountManager).
+ * Dwa tenanty "są tą samą biblioteką" (ten sam katalog, te same filie) wtedy i tylko wtedy, gdy
+ * mają ten sam institution i view — to one, nie baseUrl, definiują zakres wyszukiwania w Primo.
+ * Klucz wyboru bibliotek do wyszukiwania (OmnisViewModel.buildSearchLibrariesState) i persystencji
+ * preferencji filii (patrz SearchBranchPrefs/AccountManager).
  */
 fun Tenant.searchKey(): String = "$institution|$view"
 

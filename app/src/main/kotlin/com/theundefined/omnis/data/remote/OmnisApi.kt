@@ -1,6 +1,7 @@
 package com.theundefined.omnis.data.remote
 
 import com.theundefined.omnis.data.model.*
+import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.*
 
@@ -19,6 +20,17 @@ interface OmnisApi {
         @Field("view") view: String,
         @Field("targetUrl") targetUrl: String
     ): Response<LoginResponse>
+
+    // Token gościa — ten sam, którym oficjalny interfejs WWW Primo przegląda katalog bez logowania.
+    // Body to literał stringu JSON (token w cudzysłowach), stąd ResponseBody zamiast modelu.
+    @GET("/primaws/rest/pub/institution/{institution}/guestJwt")
+    suspend fun getGuestJwt(
+        @Path("institution") institution: String,
+        @Query("viewId") view: String,
+        @Query("targetUrl") targetUrl: String,
+        @Query("isGuest") isGuest: Boolean = true,
+        @Query("lang") lang: String = "pl"
+    ): Response<ResponseBody>
 
     @GET("/primaws/rest/priv/myaccount/counters")
     suspend fun getCounters(

@@ -63,7 +63,6 @@
     <string name="search_title">Search</string>
     <string name="search_hint">Search the catalog…</string>
     <string name="cd_search">Search</string>
-    <string name="cd_preferred_for_search">Preferred for search</string>
     <string name="all_branches">All branches</string>
     <string name="no_search_results">No search results.</string>
     <string name="no_search_results_filtered">No results in selected branches.</string>
@@ -80,6 +79,13 @@
     <string name="status_unknown">Status unknown</string>
     <string name="search_error">Search error: %1$s</string>
     <string name="search_results_end">That\'s all the results.</string>
+    <string name="search_libraries_choose">Choose a library</string>
+    <string name="search_libraries_summary">%1$s +%2$d</string>
+    <string name="search_libraries_title">Libraries to search</string>
+    <string name="search_libraries_filter">Filter libraries…</string>
+    <string name="search_libraries_done">Done</string>
+    <string name="search_no_libraries">Choose at least one library to search in.</string>
+    <string name="search_library_has_account">You have an account here</string>
     <string name="search_history_title">Recent searches</string>
     <string name="search_history_clear">Clear history</string>
     <string name="search_history_author_entry">Author: %1$s</string>

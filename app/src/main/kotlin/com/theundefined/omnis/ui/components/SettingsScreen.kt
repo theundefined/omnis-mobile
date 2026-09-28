@@ -28,7 +28,6 @@ fun SettingsScreen(
     viewModel: OmnisViewModel,
     accounts: List<Account>,
     onToggleAccount: (Account) -> Unit,
-    onTogglePreferredForSearch: (Account) -> Unit,
     onRemoveAccount: (Account) -> Unit,
     onAddAccount: (String, String, Tenant) -> Unit,
     onEnterDemoMode: () -> Unit,
@@ -109,7 +108,6 @@ fun SettingsScreen(
                         AccountSettingsItem(
                             account = account,
                             onToggle = { onToggleAccount(account) },
-                            onTogglePreferredForSearch = { onTogglePreferredForSearch(account) },
                             onRemove = { accountToRemove = account }
                         )
                     }
@@ -176,12 +174,7 @@ fun SettingsScreen(
 }
 
 @Composable
-fun AccountSettingsItem(
-    account: Account,
-    onToggle: () -> Unit,
-    onTogglePreferredForSearch: () -> Unit,
-    onRemove: () -> Unit
-) {
+fun AccountSettingsItem(account: Account, onToggle: () -> Unit, onRemove: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
@@ -207,14 +200,6 @@ fun AccountSettingsItem(
             }
 
             Switch(checked = account.isEnabled, onCheckedChange = { onToggle() })
-
-            val preferredForSearchDescription = stringResource(R.string.cd_preferred_for_search)
-            IconButton(
-                onClick = onTogglePreferredForSearch,
-                modifier = Modifier.semantics { contentDescription = preferredForSearchDescription }
-            ) {
-                Text(if (account.preferredForSearch) "⭐" else "☆")
-            }
 
             val removeDescription = stringResource(R.string.remove_account)
             IconButton(

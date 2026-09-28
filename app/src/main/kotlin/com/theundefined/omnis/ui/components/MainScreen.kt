@@ -74,7 +74,6 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
             viewModel = viewModel,
             accounts = uiState.accounts,
             onToggleAccount = { viewModel.toggleAccount(it) },
-            onTogglePreferredForSearch = { viewModel.togglePreferredForSearch(it) },
             onRemoveAccount = { viewModel.removeAccount(it) },
             onAddAccount = { user, pass, tenant -> viewModel.addAccount(user, pass, tenant) },
             onEnterDemoMode = { viewModel.enterDemoMode() },
