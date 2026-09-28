@@ -6,6 +6,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -53,7 +54,7 @@ fun HistoryScreen(
                         onClick = { viewModel.loadHistory(forceRefresh = true) },
                         modifier = Modifier.semantics { contentDescription = refreshDescription }
                     ) {
-                        Text("🔄")
+                        Icon(painterResource(R.drawable.ic_refresh), contentDescription = null)
                     }
                 }
             )

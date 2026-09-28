@@ -65,7 +65,21 @@ data class Loan(
     // serii" od "jeszcze nie sprawdzone", żeby nie odpytywać katalogu przy każdym odświeżeniu.
     val series: String? = null,
     val catalogAuthor: String? = null,
-    val catalogFetched: Boolean = false
+    val catalogFetched: Boolean = false,
+    // Pola pokazywane tylko w oknie szczegółów. Nullable z domyślnym null: starszy cache ich nie
+    // ma, a nie każda biblioteka musi je zwracać (sprawdzone na żywo tylko w Raczyńskich).
+    @SerializedName("callnumber2") @SerialName("callnumber2") val callNumber: String? = null,
+    val year: String? = null,
+    @SerializedName("itemcategoryname")
+    @SerialName("itemcategoryname")
+    val itemCategoryName: String? = null,
+    // Najpóźniejsza data, do której da się przedłużać (yyyyMMdd); tylko aktywne wypożyczenia.
+    @SerializedName("maxrenewdate") @SerialName("maxrenewdate") val maxRenewDate: String? = null,
+    // Komunikaty z `renewstatuses.renewstatus`, np. dlaczego nie można teraz przedłużyć.
+    val renewStatuses: List<String> = emptyList(),
+    // Faktyczny zwrot — tylko w historii.
+    @SerializedName("returndate") @SerialName("returndate") val returnDate: String? = null,
+    @SerializedName("returnhour") @SerialName("returnhour") val returnHour: String? = null
 )
 
 data class LoanResponse(val data: LoanData)
@@ -90,8 +104,30 @@ data class LoanResponseItem(
     @SerializedName("mainlocationname") val locationName: String,
     @SerializedName("secondarylocationname") val subLocationName: String?,
     @SerializedName("itembarcode") val barcode: String,
-    val renew: String?
+    val renew: String?,
+    // Wszystkie poniżej nullable — Gson omija konstruktor, więc brak klucza daje null niezależnie
+    // od typu Kotlinowego.
+    val callnumber2: String?,
+    val year: String?,
+    val itemcategoryname: String?,
+    val maxrenewdate: String?,
+    // {"renewstatus": [String]} — surowy JsonElement, bo Primo potrafi zamienić jednoelementową
+    // tablicę na goły string (patrz pnxDeserializer); rozpakowuje renewStatusMessages.
+    val renewstatuses: JsonElement?,
+    val returndate: String?,
+    val returnhour: String?
 )
+
+fun renewStatusMessages(element: JsonElement?): List<String> {
+    val inner =
+        when {
+            element == null || element.isJsonNull -> return emptyList()
+            element.isJsonObject -> element.asJsonObject.get("renewstatus") ?: return emptyList()
+            else -> element
+        }
+    val items = if (inner.isJsonArray) inner.asJsonArray.toList() else listOf(inner)
+    return items.filter { it.isJsonPrimitive }.map { it.asString.trim() }.filter { it.isNotEmpty() }
+}
 
 @Serializable
 data class HistoryCacheEntry(
@@ -146,6 +182,27 @@ fun seriesVolume(series: String): Int? =
  * słów — z datami „Jadowska, Aneta” w Raczyńskich znajduje 44 zamiast 108 pozycji.
  */
 fun authorSearchTerm(author: String): String = author.substringBefore(" (").trim().trimEnd(',')
+
+/**
+ * Tytuł wypożyczenia bez oznaczenia odpowiedzialności: API podaje pełny opis z katalogu ("Lalka /
+ * Bolesław Prus ; posłowie …"), a autor i tak jest w osobnej linii. Ukośnik tylko otoczony
+ * spacjami, jak w seriesSearchTerm.
+ */
+fun displayTitle(title: String): String =
+    title
+        .split(Regex("""\s+/\s+"""), limit = 2)
+        .first()
+        .trim()
+        .trimEnd('.', ',', ':', ';', '=')
+        .trim()
+        .ifEmpty { title }
+
+// Status "zwykłego" wypożyczenia (Primo loanstatus, zależnie od języka) — nic nie mówi, więc go
+// nie pokazujemy; inne (np. zgubione) zostają widoczne.
+private val REGULAR_LOAN_STATUSES = setOf("zwykłe", "active", "normal", "aktywne")
+
+fun isRegularLoanStatus(status: String): Boolean =
+    status.trim().lowercase() in REGULAR_LOAN_STATUSES
 
 /** Pozycja lokalnej historii wyszukiwań (AccountManager.getSearchHistory). */
 @Serializable

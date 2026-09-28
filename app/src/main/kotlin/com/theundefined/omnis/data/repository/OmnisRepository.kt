@@ -304,7 +304,14 @@ class OmnisRepository(private val accountManager: AccountManager) {
             renewable = item.renew == "Y",
             accountId = account.id,
             ownerName = account.displayName ?: account.username,
-            tenantName = account.tenant.name
+            tenantName = account.tenant.name,
+            callNumber = item.callnumber2,
+            year = item.year,
+            itemCategoryName = item.itemcategoryname,
+            maxRenewDate = item.maxrenewdate,
+            renewStatuses = renewStatusMessages(item.renewstatuses),
+            returnDate = item.returndate,
+            returnHour = item.returnhour
         )
 
     /** Pobiera WSZYSTKIE strony (przechodzi po `showmore`) — używane dla aktywnych wypożyczeń. */

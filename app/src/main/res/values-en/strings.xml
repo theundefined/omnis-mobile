@@ -18,10 +18,21 @@
     <string name="cancel">Cancel</string>
     <string name="login_and_add">Login and add</string>
     <string name="no_loans">No loans.</string>
-    <string name="days_overdue">%d days overdue</string>
+    <plurals name="days_overdue">
+        <item quantity="one">%d day overdue</item>
+        <item quantity="other">%d days overdue</item>
+    </plurals>
     <string name="today">today</string>
     <string name="tomorrow">tomorrow</string>
-    <string name="in_days">in %d days</string>
+    <plurals name="in_days">
+        <item quantity="one">in %d day</item>
+        <item quantity="other">in %d days</item>
+    </plurals>
+    <string name="yesterday">yesterday</string>
+    <plurals name="days_ago">
+        <item quantity="one">%d day ago</item>
+        <item quantity="other">%d days ago</item>
+    </plurals>
     <string name="return_label">Due date: %1$s</string>
     <string name="loaned_on">Loaned on: %1$s</string>
     <string name="location_label">Location: %1$s</string>
@@ -55,6 +66,7 @@
     <string name="share_search_version_header">%1$s (%2$s):</string>
     <string name="cd_share">Share</string>
     <string name="cd_search_web">Search the web</string>
+    <string name="cd_renew_all">Renew all in group</string>
     <string name="renew_all_confirm_title">Renew all?</string>
     <string name="renew_all_confirm_message">Renew %1$d loans in group \"%2$s\"?</string>
     <string name="bulk_renew_success">Renewed all (%1$d).</string>
@@ -132,4 +144,20 @@
     <string name="demo_mode_disable">Disable demo mode</string>
     <string name="demo_mode_hint">Demo mode disables your other accounts and enables a test account for the demo library, without needing real login credentials. The first data fetch may take up to about 50 seconds.</string>
     <string name="demo_credentials_hint">Demo account — username: %1$s, password: %2$s (filled in automatically).</string>
+    <string name="cd_loan_details">Details</string>
+    <string name="detail_full_title">Catalog description</string>
+    <string name="detail_author">Author</string>
+    <string name="detail_series">Series</string>
+    <string name="detail_year">Publication year</string>
+    <string name="detail_call_number">Call number</string>
+    <string name="detail_category">Loan category</string>
+    <string name="detail_branch">Branch</string>
+    <string name="detail_loaned">Loaned on</string>
+    <string name="detail_due">Due date</string>
+    <string name="detail_returned">Returned</string>
+    <string name="detail_status">Status</string>
+    <string name="detail_renewal">Renewal</string>
+    <string name="detail_renew_until">Can be renewed until %1$s</string>
+    <string name="detail_barcode">Barcode</string>
+    <string name="detail_owner">Loaned by</string>
 </resources>

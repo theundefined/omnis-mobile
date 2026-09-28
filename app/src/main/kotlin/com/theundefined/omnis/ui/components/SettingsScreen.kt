@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -206,7 +207,7 @@ fun AccountSettingsItem(account: Account, onToggle: () -> Unit, onRemove: () -> 
                 onClick = onRemove,
                 modifier = Modifier.semantics { contentDescription = removeDescription }
             ) {
-                Text("🗑️")
+                Icon(painterResource(R.drawable.ic_delete), contentDescription = null)
             }
         }
     }

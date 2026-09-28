@@ -5,12 +5,15 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -21,7 +24,9 @@ import com.theundefined.omnis.data.model.Loan
 import com.theundefined.omnis.data.model.SearchField
 import com.theundefined.omnis.data.model.authorSearchTerm
 import com.theundefined.omnis.data.model.branchMapsQuery
+import com.theundefined.omnis.data.model.displayTitle
 import com.theundefined.omnis.data.model.isMapsLink
+import com.theundefined.omnis.data.model.isRegularLoanStatus
 import com.theundefined.omnis.data.model.mapsSearchUrl
 import com.theundefined.omnis.data.model.seriesSearchTerm
 import com.theundefined.omnis.ui.BranchDialogState
@@ -93,7 +98,10 @@ fun LoanList(
                                 IconButton(
                                     onClick = { renewConfirmGroup = groupKey to renewableLoans }
                                 ) {
-                                    Text("🔁")
+                                    Icon(
+                                        painterResource(R.drawable.ic_autorenew),
+                                        stringResource(R.string.cd_renew_all)
+                                    )
                                 }
                             }
                         }
@@ -170,7 +178,7 @@ private fun buildLoanShareText(
 ): String =
     context.getString(
         R.string.share_book,
-        loan.title,
+        displayTitle(loan.title),
         loan.author ?: context.getString(R.string.unknown_author),
         formattedDueDate,
         branchLabel(loan, withLibrary),
@@ -234,6 +242,11 @@ fun parseFlexibleDate(dateStr: String): LocalDate? {
     return null
 }
 
+// Polski ma kilka form liczby mnogiej ("1 dzień", "2 dni", "5 dni") — stąd plurals, nie string.
+@Composable
+private fun daysPlural(id: Int, days: Long): String =
+    LocalContext.current.resources.getQuantityString(id, days.toInt(), days.toInt())
+
 @Composable
 fun formatRelativeDate(dateStr: String): String {
     val date = parseFlexibleDate(dateStr) ?: return dateStr
@@ -242,10 +255,26 @@ fun formatRelativeDate(dateStr: String): String {
 
     val relative =
         when {
-            daysUntil < 0 -> stringResource(R.string.days_overdue, Math.abs(daysUntil))
+            daysUntil < 0 -> daysPlural(R.plurals.days_overdue, -daysUntil)
             daysUntil == 0L -> stringResource(R.string.today)
             daysUntil == 1L -> stringResource(R.string.tomorrow)
-            else -> stringResource(R.string.in_days, daysUntil)
+            else -> daysPlural(R.plurals.in_days, daysUntil)
+        }
+
+    return "${date.format(DateTimeFormatter.ofPattern("yyyy.MM.dd"))} ($relative)"
+}
+
+/** Jak formatRelativeDate, ale dla dat z przeszłości (data wypożyczenia): "(12 dni temu)". */
+@Composable
+fun formatPastRelativeDate(dateStr: String): String {
+    val date = parseFlexibleDate(dateStr) ?: return dateStr
+    val daysAgo = ChronoUnit.DAYS.between(date, LocalDate.now())
+
+    val relative =
+        when {
+            daysAgo <= 0L -> stringResource(R.string.today)
+            daysAgo == 1L -> stringResource(R.string.yesterday)
+            else -> daysPlural(R.plurals.days_ago, daysAgo)
         }
 
     return "${date.format(DateTimeFormatter.ofPattern("yyyy.MM.dd"))} ($relative)"
@@ -272,10 +301,18 @@ fun LoanItem(
         if (isHistory) MaterialTheme.colorScheme.onSurfaceVariant else getDueDateColor(loan.dueDate)
     val formattedDueDate =
         if (isHistory) formatPlainDate(loan.dueDate) else formatRelativeDate(loan.dueDate)
+    var showDetails by remember { mutableStateOf(false) }
 
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(loan.title, style = MaterialTheme.typography.titleMedium)
+            Text(
+                displayTitle(loan.title),
+                modifier =
+                    Modifier.clickable(onClickLabel = stringResource(R.string.cd_loan_details)) {
+                        showDetails = true
+                    },
+                style = MaterialTheme.typography.titleMedium
+            )
             // Do wyszukania autor z katalogu (format pola `creator`), a gdy go nie ma (np.
             // historia,
             // której nie uzupełniamy z katalogu) — z API wypożyczeń; wyświetlamy zawsze ten drugi.
@@ -328,15 +365,21 @@ fun LoanItem(
                             )
                     )
                     Text(
-                        stringResource(R.string.loaned_on, loan.loanDate),
+                        stringResource(
+                            R.string.loaned_on,
+                            if (isHistory) formatPlainDate(loan.loanDate)
+                            else formatPastRelativeDate(loan.loanDate)
+                        ),
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
-                Text(
-                    loan.status,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.secondary
-                )
+                if (!isRegularLoanStatus(loan.status)) {
+                    Text(
+                        loan.status,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -370,10 +413,21 @@ fun LoanItem(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                IconButton(onClick = { showDetails = true }) {
+                    Icon(
+                        painterResource(R.drawable.ic_info),
+                        stringResource(R.string.cd_loan_details)
+                    )
+                }
                 ShareButton { buildLoanShareText(context, loan, formattedDueDate, withLibrary) }
 
-                IconButton(onClick = { openWebSearch(context, loan.title, loan.author) }) {
-                    Text("🔍")
+                IconButton(
+                    onClick = { openWebSearch(context, displayTitle(loan.title), loan.author) }
+                ) {
+                    Icon(
+                        painterResource(R.drawable.ic_public),
+                        stringResource(R.string.cd_search_web)
+                    )
                 }
                 if (loan.renewable) {
                     Button(onClick = onRenew) { Text(stringResource(R.string.renew)) }
@@ -381,6 +435,91 @@ fun LoanItem(
             }
         }
     }
+    if (showDetails) {
+        LoanDetailsDialog(loan, isHistory, withLibrary, onDismiss = { showDetails = false })
+    }
+}
+
+/** Wszystko, co wiemy o wypożyczeniu — łącznie z polami API, których nie ma na karcie. */
+@Composable
+private fun LoanDetailsDialog(
+    loan: Loan,
+    isHistory: Boolean,
+    withLibrary: Boolean,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(displayTitle(loan.title)) },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                // Pełny opis tylko, gdy różni się od nagłówka (zawiera tłumacza, ilustratora itp.).
+                if (displayTitle(loan.title) != loan.title) {
+                    DetailRow(stringResource(R.string.detail_full_title), loan.title)
+                }
+                DetailRow(stringResource(R.string.detail_author), loan.author)
+                DetailRow(stringResource(R.string.detail_series), loan.series)
+                DetailRow(stringResource(R.string.detail_year), loan.year?.trimEnd('.'))
+                DetailRow(stringResource(R.string.detail_call_number), loan.callNumber)
+                DetailRow(stringResource(R.string.detail_category), loan.itemCategoryName)
+                DetailRow(
+                    stringResource(R.string.detail_branch),
+                    listOfNotNull(branchLabel(loan, withLibrary), loan.subLocationName)
+                        .filter { it.isNotBlank() }
+                        .joinToString("\n")
+                )
+                DetailRow(stringResource(R.string.detail_loaned), formatPlainDate(loan.loanDate))
+                DetailRow(
+                    stringResource(R.string.detail_due),
+                    withHour(
+                        if (isHistory) formatPlainDate(loan.dueDate)
+                        else formatRelativeDate(loan.dueDate),
+                        loan.dueHour
+                    )
+                )
+                loan.returnDate?.let {
+                    DetailRow(
+                        stringResource(R.string.detail_returned),
+                        withHour(formatPlainDate(it), loan.returnHour)
+                    )
+                }
+                DetailRow(stringResource(R.string.detail_status), loan.status)
+                if (!isHistory) {
+                    val renewal =
+                        listOfNotNull(
+                            loan.maxRenewDate?.let {
+                                stringResource(R.string.detail_renew_until, formatPlainDate(it))
+                            }
+                        ) + loan.renewStatuses
+                    DetailRow(stringResource(R.string.detail_renewal), renewal.joinToString("\n"))
+                }
+                DetailRow(stringResource(R.string.detail_barcode), loan.barcode)
+                DetailRow(stringResource(R.string.detail_owner), loan.ownerName)
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } }
+    )
+}
+
+@Composable
+private fun DetailRow(label: String, value: String?) {
+    if (value.isNullOrBlank()) return
+    Column(modifier = Modifier.padding(bottom = 8.dp)) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(value, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+// Godzina z API to "2359" (Raczyńskie) albo "23:59" (mock). Domyślnego końca dnia nie pokazujemy —
+// nic nie wnosi; inne godziny (np. faktyczny zwrot "1749") tak.
+private fun withHour(date: String, hour: String?): String {
+    val digits = hour?.filter { it.isDigit() }
+    if (digits == null || digits.length != 4 || digits == "2359") return date
+    return "$date, ${digits.substring(0, 2)}:${digits.substring(2)}"
 }
 
 @Composable
@@ -390,7 +529,7 @@ private fun BranchButton(onClick: () -> Unit) {
         onClick = onClick,
         modifier = Modifier.semantics { contentDescription = description }
     ) {
-        Text("📍")
+        Icon(painterResource(R.drawable.ic_place), contentDescription = null)
     }
 }
 

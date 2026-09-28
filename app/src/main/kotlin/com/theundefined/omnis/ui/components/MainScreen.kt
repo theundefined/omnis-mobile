@@ -7,6 +7,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -120,7 +121,7 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
                         onClick = { currentScreen = "search" },
                         modifier = Modifier.semantics { contentDescription = searchDescription }
                     ) {
-                        Text("🔎")
+                        Icon(painterResource(R.drawable.ic_search), contentDescription = null)
                     }
 
                     val refreshDescription = stringResource(R.string.cd_refresh)
@@ -128,7 +129,7 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
                         onClick = { viewModel.refreshAllLoans(isManual = true) },
                         modifier = Modifier.semantics { contentDescription = refreshDescription }
                     ) {
-                        Text("🔄")
+                        Icon(painterResource(R.drawable.ic_refresh), contentDescription = null)
                     }
 
                     var showMoreMenu by remember { mutableStateOf(false) }

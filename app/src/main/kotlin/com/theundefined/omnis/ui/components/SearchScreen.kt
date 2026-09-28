@@ -164,7 +164,7 @@ fun SearchScreen(
                             onClick = { triggerSearch() },
                             modifier = Modifier.semantics { contentDescription = searchDescription }
                         ) {
-                            Text("🔎")
+                            Icon(painterResource(R.drawable.ic_search), contentDescription = null)
                         }
                     }
                 }
@@ -707,7 +707,11 @@ private fun SearchResultCard(
                                                 },
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text("📍", style = MaterialTheme.typography.bodySmall)
+                                        Icon(
+                                            painterResource(R.drawable.ic_place),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
                                     }
                                 }
                             }
@@ -724,7 +728,7 @@ private fun SearchResultCard(
                         onClick = onShowMap,
                         modifier = Modifier.semantics { contentDescription = mapDescription }
                     ) {
-                        Text("🗺️")
+                        Icon(painterResource(R.drawable.ic_map), contentDescription = null)
                     }
                 }
                 ShareButton { buildSearchResultShareText(context, result) }
@@ -733,7 +737,7 @@ private fun SearchResultCard(
                     onClick = { openWebSearch(context, result.title, result.author) },
                     modifier = Modifier.semantics { contentDescription = webSearchDescription }
                 ) {
-                    Text("🔍")
+                    Icon(painterResource(R.drawable.ic_public), contentDescription = null)
                 }
             }
         }

@@ -226,3 +226,55 @@ class AuthorSearchTermTest {
         assertEquals("Rowling, J. K.", authorSearchTerm("Rowling, J. K."))
     }
 }
+
+class DisplayTitleTest {
+
+    @Test
+    fun `strips statement of responsibility`() {
+        assertEquals(
+            "Pan Tadeusz, czyli Ostatni zajazd na Litwie",
+            displayTitle(
+                "Pan Tadeusz, czyli Ostatni zajazd na Litwie / Adam Mickiewicz ; " +
+                    "opracował Stanisław Pigoń ; [ilustracje Michał Elwiro Andriolli]."
+            )
+        )
+        assertEquals("Lalka", displayTitle("Lalka / Bolesław Prus ; posłowie Józef Bachórz."))
+    }
+
+    @Test
+    fun `keeps subtitle and slash without spaces`() {
+        assertEquals("Diuna : powieść", displayTitle("Diuna : powieść / Frank Herbert."))
+        assertEquals("AC/DC", displayTitle("AC/DC"))
+    }
+
+    @Test
+    fun `recognises regular loan status only`() {
+        assert(isRegularLoanStatus("Zwykłe"))
+        assert(isRegularLoanStatus("Active"))
+        assert(!isRegularLoanStatus("Zagubione"))
+    }
+}
+
+class RenewStatusMessagesTest {
+
+    private fun parse(json: String) = com.google.gson.JsonParser.parseString(json)
+
+    @Test
+    fun `reads list of messages`() {
+        assertEquals(
+            listOf("Okres, na który można dokonać prolongaty to 7 dni przed datą zwrotu"),
+            renewStatusMessages(
+                parse(
+                    """{"renewstatus": ["Okres, na który można dokonać prolongaty to 7 dni przed datą zwrotu"]}"""
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `accepts bare string and missing values`() {
+        assertEquals(listOf("Nie"), renewStatusMessages(parse("""{"renewstatus": "Nie"}""")))
+        assertEquals(emptyList<String>(), renewStatusMessages(null))
+        assertEquals(emptyList<String>(), renewStatusMessages(parse("""{}""")))
+    }
+}
