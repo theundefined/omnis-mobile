@@ -102,8 +102,25 @@ data class SearchBranchPrefs(
 /** Pole katalogu, w którym szuka zapytanie — przekłada się na pierwszy człon Primo `q`. */
 enum class SearchField(val primoField: String) {
     ANY("any"),
-    AUTHOR("creator")
+    AUTHOR("creator"),
+    SERIES("series")
 }
+
+/**
+ * Nazwa serii do wyszukania po polu SERIES, wycięta z `addata.seriestitle`, które niesie też tom i
+ * często odpowiedzialność, np. "Garstka z Ustki / Aneta Jadowska ; [t. 1]", "Heksalogia o Dorze
+ * Wilk ; 2", "Harry Potter ; T.8". `contains` w Primo wymaga obecności wszystkich słów, więc
+ * zostawienie autora gubiłoby tomy, których opis serii go nie podaje. Ukośnik tylko otoczony
+ * spacjami, żeby nie ciąć nazw typu "AC/DC".
+ */
+fun seriesSearchTerm(series: String): String =
+    series
+        .substringBefore(';')
+        .split(Regex("""\s+/\s+"""), limit = 2)
+        .first()
+        .trim()
+        .trimEnd('.', ',', ':')
+        .trim()
 
 /** Pozycja lokalnej historii wyszukiwań (AccountManager.getSearchHistory). */
 @Serializable

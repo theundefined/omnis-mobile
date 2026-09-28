@@ -132,3 +132,49 @@ class PnxHelpersTest {
         assertEquals("", Pnx().bareMmsid())
     }
 }
+
+// Surowe addata.seriestitle z żywego katalogu Primo (Raczyńscy, UJ, MBP) — tom i odpowiedzialność
+// muszą zniknąć, bo szukanie po polu SERIES z nimi gubi tomy o innym opisie serii.
+class SeriesSearchTermTest {
+
+    @Test
+    fun `strips volume in brackets and statement of responsibility`() {
+        assertEquals(
+            "Garstka z Ustki",
+            seriesSearchTerm("Garstka z Ustki / Aneta Jadowska ; [t. 1]")
+        )
+    }
+
+    @Test
+    fun `strips volume after semicolon with irregular spacing`() {
+        assertEquals("Heksalogia o Dorze Wilk", seriesSearchTerm("Heksalogia o Dorze Wilk ;  2"))
+    }
+
+    @Test
+    fun `strips author and numeric volume`() {
+        assertEquals(
+            "Heksalogia o Dorze Wilk",
+            seriesSearchTerm("Heksalogia o Dorze Wilk / Aneta Jadowska ; 5")
+        )
+    }
+
+    @Test
+    fun `strips abbreviated volume`() {
+        assertEquals("Harry Potter", seriesSearchTerm("Harry Potter ; T.8"))
+    }
+
+    @Test
+    fun `keeps series without volume unchanged`() {
+        assertEquals("Harry Potter", seriesSearchTerm("Harry Potter"))
+    }
+
+    @Test
+    fun `keeps slash without surrounding spaces`() {
+        assertEquals("AC/DC", seriesSearchTerm("AC/DC ; 3"))
+    }
+
+    @Test
+    fun `keeps comma inside series name`() {
+        assertEquals("Fantastyka, Przygoda", seriesSearchTerm("Fantastyka, Przygoda / \"Iskry\""))
+    }
+}

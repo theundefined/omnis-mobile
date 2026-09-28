@@ -29,6 +29,7 @@ import com.theundefined.omnis.data.model.SearchHistoryEntry
 import com.theundefined.omnis.data.model.SearchResult
 import com.theundefined.omnis.data.model.Tenant
 import com.theundefined.omnis.data.model.searchKey
+import com.theundefined.omnis.data.model.seriesSearchTerm
 import com.theundefined.omnis.ui.OmnisViewModel
 import com.theundefined.omnis.ui.SearchLibrariesState
 import com.theundefined.omnis.ui.SearchSortMode
@@ -58,8 +59,8 @@ fun SearchScreen(
     val libraries by viewModel.searchLibraries.collectAsStateWithLifecycle()
     var showLibraryPicker by rememberSaveable { mutableStateOf(false) }
     var queryInput by remember { mutableStateOf(state.query) }
-    // Pole wyszukiwania dla NASTĘPNEGO wyszukania. Kliknięcie autora ustawia AUTHOR; ręczna edycja
-    // tekstu albo zamknięcie chipa "Autor" wraca do ANY (szukanie we wszystkich polach).
+    // Pole wyszukiwania dla NASTĘPNEGO wyszukania. Kliknięcie autora/serii ustawia AUTHOR/SERIES;
+    // ręczna edycja tekstu albo zamknięcie chipa pola wraca do ANY (szukanie we wszystkich polach).
     var searchField by remember { mutableStateOf(state.field) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -179,11 +180,17 @@ fun SearchScreen(
                     leadingIcon = { Text("📚") },
                     trailingIcon = { Text("▾") }
                 )
-                if (searchField == SearchField.AUTHOR) {
+                val fieldLabel =
+                    when (searchField) {
+                        SearchField.ANY -> null
+                        SearchField.AUTHOR -> R.string.search_field_author
+                        SearchField.SERIES -> R.string.search_field_series
+                    }
+                if (fieldLabel != null) {
                     InputChip(
                         selected = true,
                         onClick = { searchFor(queryInput, SearchField.ANY) },
-                        label = { Text(stringResource(R.string.search_field_author)) },
+                        label = { Text(stringResource(fieldLabel)) },
                         trailingIcon = { Text("✕") }
                     )
                 }
@@ -277,7 +284,8 @@ fun SearchScreen(
                                 SearchTenantSectionView(
                                     section = section,
                                     viewModel = viewModel,
-                                    onAuthorClick = { searchFor(it, SearchField.AUTHOR) }
+                                    onAuthorClick = { searchFor(it, SearchField.AUTHOR) },
+                                    onSeriesClick = { searchFor(it, SearchField.SERIES) }
                                 )
                             }
                         }
@@ -406,9 +414,13 @@ private fun SearchHistoryList(
             ) {
                 Text("🕘", modifier = Modifier.padding(end = 12.dp))
                 Text(
-                    if (entry.field == SearchField.AUTHOR)
-                        stringResource(R.string.search_history_author_entry, entry.query)
-                    else entry.query,
+                    when (entry.field) {
+                        SearchField.ANY -> entry.query
+                        SearchField.AUTHOR ->
+                            stringResource(R.string.search_history_author_entry, entry.query)
+                        SearchField.SERIES ->
+                            stringResource(R.string.search_history_series_entry, entry.query)
+                    },
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.bodyLarge
                 )
@@ -428,7 +440,8 @@ private fun SearchHistoryList(
 private fun SearchTenantSectionView(
     section: SearchTenantSection,
     viewModel: OmnisViewModel,
-    onAuthorClick: (String) -> Unit
+    onAuthorClick: (String) -> Unit,
+    onSeriesClick: (String) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         Text(
@@ -490,7 +503,8 @@ private fun SearchTenantSectionView(
             SearchResultCard(
                 result,
                 onShowMap = { viewModel.showBranchMap(result, section.tenantLabel) },
-                onAuthorClick = onAuthorClick
+                onAuthorClick = onAuthorClick,
+                onSeriesClick = onSeriesClick
             )
         }
 
@@ -556,7 +570,8 @@ private fun SearchSortControl(section: SearchTenantSection, viewModel: OmnisView
 private fun SearchResultCard(
     result: SearchResult,
     onShowMap: () -> Unit,
-    onAuthorClick: (String) -> Unit
+    onAuthorClick: (String) -> Unit,
+    onSeriesClick: (String) -> Unit
 ) {
     val context = LocalContext.current
 
@@ -577,9 +592,14 @@ private fun SearchResultCard(
             }
             result.versions
                 .firstNotNullOfOrNull { it.series }
-                ?.let {
+                ?.let { series ->
+                    val seriesClickLabel = stringResource(R.string.cd_search_by_series)
                     Text(
-                        stringResource(R.string.series_label, it),
+                        stringResource(R.string.series_label, series),
+                        modifier =
+                            Modifier.clickable(onClickLabel = seriesClickLabel) {
+                                onSeriesClick(seriesSearchTerm(series))
+                            },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.tertiary
                     )
