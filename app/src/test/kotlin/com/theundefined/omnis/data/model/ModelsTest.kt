@@ -178,3 +178,51 @@ class SeriesSearchTermTest {
         assertEquals("Fantastyka, Przygoda", seriesSearchTerm("Fantastyka, Przygoda / \"Iskry\""))
     }
 }
+
+class SeriesVolumeTest {
+
+    @Test
+    fun `reads volume in its various notations`() {
+        assertEquals(1, seriesVolume("Garstka z Ustki / Aneta Jadowska ; [t. 1]"))
+        assertEquals(2, seriesVolume("Heksalogia o Dorze Wilk ;  2"))
+        assertEquals(8, seriesVolume("Harry Potter ; T.8"))
+        assertEquals(2, seriesVolume("Harry Potter ; rok 2"))
+    }
+
+    @Test
+    fun `returns null without volume after semicolon`() {
+        assertNull(seriesVolume("Garstka z Ustki / Aneta Jadowska"))
+        assertNull(seriesVolume("Filologia Polska / Uniwersytet, nr 239"))
+    }
+}
+
+// Seria i autor wypożyczenia pochodzą z pnx rekordu (OmnisRepository.withCatalogDetails) — pnx musi
+// się sparsować przez createPrimoGson(), z tym samym deserializerem co w wynikach wyszukiwania.
+class RecordResponsePnxTest {
+
+    @Test
+    fun `parses series and author from record pnx`() {
+        val json =
+            """{"pnx":{"addata":{"seriestitle":["Garstka z Ustki / Aneta Jadowska"],"au":"Jadowska, Aneta"}},"delivery":{"holding":[]}}"""
+        val pnx = createPrimoGson().fromJson(json, RecordResponse::class.java).pnx
+
+        assertEquals("Garstka z Ustki / Aneta Jadowska", pnx?.addataFirst("seriestitle"))
+        assertEquals("Jadowska, Aneta", pnx?.addataFirst("au"))
+    }
+}
+
+class AuthorSearchTermTest {
+
+    @Test
+    fun `strips dates and role from authority-style name`() {
+        assertEquals("Jadowska, Aneta", authorSearchTerm("Jadowska, Aneta (1981- ). Autor"))
+        assertEquals("Lem, Stanisław", authorSearchTerm("Lem, Stanisław (1921-2006)"))
+    }
+
+    @Test
+    fun `keeps plain name unchanged`() {
+        assertEquals("Jadowska, Aneta", authorSearchTerm("Jadowska, Aneta"))
+        assertEquals("J. K. Rowling", authorSearchTerm("J. K. Rowling"))
+        assertEquals("Rowling, J. K.", authorSearchTerm("Rowling, J. K."))
+    }
+}

@@ -98,7 +98,8 @@
     <string name="cd_search_by_series">Szukaj innych książek z tej serii</string>
     <string name="search_sort_relevance">Trafność</string>
     <string name="search_sort_title">Tytuł</string>
-    <string name="search_sort_hint_load_all">Sortowanie po tytule będzie dostępne po załadowaniu wszystkich wyników.</string>
+    <string name="search_sort_series">Seria</string>
+    <string name="search_sort_hint_load_all">Zmiana sortowania będzie dostępna po załadowaniu wszystkich wyników.</string>
     <string name="series_label">Seria: %1$s</string>
     <string name="language_label">Język: %1$s</string>
     <string name="show_description">Pokaż opis</string>

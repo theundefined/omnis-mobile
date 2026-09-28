@@ -58,7 +58,14 @@ data class Loan(
     // (ilsinstitutionname), które dla wypożyczeń z sieci OMNIS (48OMNIS_NETWORK) jest etykietą z UI
     // Primo ("Sprawdź dostępność w innych bibliotekach"), a nie nazwą biblioteki. null dla
     // wypożyczeń z cache'u sprzed dodania tego pola — uzupełni się po odświeżeniu.
-    var tenantName: String? = null
+    var tenantName: String? = null,
+    // Z rekordu katalogu (pub/pnxs/L/alma{mmsid}) — API wypożyczeń serii nie podaje, a autora daje
+    // w formacie niekoniecznie zgodnym z polem `creator` wyszukiwarki. catalogFetched odróżnia
+    // "brak
+    // serii" od "jeszcze nie sprawdzone", żeby nie odpytywać katalogu przy każdym odświeżeniu.
+    val series: String? = null,
+    val catalogAuthor: String? = null,
+    val catalogFetched: Boolean = false
 )
 
 data class LoanResponse(val data: LoanData)
@@ -121,6 +128,24 @@ fun seriesSearchTerm(series: String): String =
         .trim()
         .trimEnd('.', ',', ':')
         .trim()
+
+/**
+ * Numer tomu z `addata.seriestitle` — pierwsza liczba po średniku ("… ; [t. 1]" → 1, "… ; T.8" → 8,
+ * "… ; rok 2" → 2). null, gdy opis serii nie podaje tomu.
+ */
+fun seriesVolume(series: String): Int? =
+    series
+        .substringAfter(';', missingDelimiterValue = "")
+        .let { Regex("""\d+""").find(it) }
+        ?.value
+        ?.toIntOrNull()
+
+/**
+ * Autor z API wypożyczeń do wyszukania po polu AUTHOR (`creator`). Bywa w formie z katalogu haseł
+ * wzorcowych, z datami i rolą ("Jadowska, Aneta (1981- ). Autor"), a `contains` wymaga wszystkich
+ * słów — z datami „Jadowska, Aneta” w Raczyńskich znajduje 44 zamiast 108 pozycji.
+ */
+fun authorSearchTerm(author: String): String = author.substringBefore(" (").trim().trimEnd(',')
 
 /** Pozycja lokalnej historii wyszukiwań (AccountManager.getSearchHistory). */
 @Serializable

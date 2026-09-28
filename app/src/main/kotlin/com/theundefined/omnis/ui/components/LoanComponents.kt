@@ -18,9 +18,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.theundefined.omnis.R
 import com.theundefined.omnis.data.model.Loan
+import com.theundefined.omnis.data.model.SearchField
+import com.theundefined.omnis.data.model.authorSearchTerm
 import com.theundefined.omnis.data.model.branchMapsQuery
 import com.theundefined.omnis.data.model.isMapsLink
 import com.theundefined.omnis.data.model.mapsSearchUrl
+import com.theundefined.omnis.data.model.seriesSearchTerm
 import com.theundefined.omnis.ui.BranchDialogState
 import com.theundefined.omnis.ui.OmnisViewModel
 import com.theundefined.omnis.ui.branchLabel
@@ -38,6 +41,8 @@ fun LoanList(
     onBranchClick: ((List<Loan>) -> Unit)? = null,
     // true przy grupowaniu po filii — tylko wtedy nagłówek grupy jest nazwą filii.
     branchHeaders: Boolean = false,
+    // Kliknięcie autora/serii — przejście do wyszukiwarki (OmnisViewModel.searchFromLoan).
+    onSearch: ((Loan, String, SearchField) -> Unit)? = null,
     footer: (@Composable () -> Unit)? = null
 ) {
     var renewConfirmGroup by remember { mutableStateOf<Pair<String, List<Loan>>?>(null) }
@@ -113,7 +118,8 @@ fun LoanList(
                         onRenew = { onRenew(loan) },
                         isHistory = isHistory,
                         withLibrary = withLibrary,
-                        onBranchClick = onBranchClick?.let { { it(listOf(loan)) } }
+                        onBranchClick = onBranchClick?.let { { it(listOf(loan)) } },
+                        onSearch = onSearch?.let { { query, field -> it(loan, query, field) } }
                     )
                 }
             }
@@ -256,7 +262,8 @@ fun LoanItem(
     onRenew: () -> Unit,
     isHistory: Boolean = false,
     withLibrary: Boolean = false,
-    onBranchClick: (() -> Unit)? = null
+    onBranchClick: (() -> Unit)? = null,
+    onSearch: ((String, SearchField) -> Unit)? = null
 ) {
     val context = LocalContext.current
     // Dla historii wypożyczenie jest już zakończone — kolorowanie "ile dni zostało" i opis
@@ -269,10 +276,41 @@ fun LoanItem(
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(loan.title, style = MaterialTheme.typography.titleMedium)
+            // Do wyszukania autor z katalogu (format pola `creator`), a gdy go nie ma (np.
+            // historia,
+            // której nie uzupełniamy z katalogu) — z API wypożyczeń; wyświetlamy zawsze ten drugi.
+            val searchAuthor =
+                (loan.catalogAuthor ?: loan.author?.let(::authorSearchTerm))?.takeIf {
+                    it.isNotBlank() && onSearch != null
+                }
+            val authorClickLabel = stringResource(R.string.cd_search_by_author)
             Text(
                 loan.author ?: stringResource(R.string.unknown_author),
-                style = MaterialTheme.typography.bodyMedium
+                modifier =
+                    if (searchAuthor != null)
+                        Modifier.clickable(onClickLabel = authorClickLabel) {
+                            onSearch?.invoke(searchAuthor, SearchField.AUTHOR)
+                        }
+                    else Modifier,
+                style = MaterialTheme.typography.bodyMedium,
+                color =
+                    if (searchAuthor != null) MaterialTheme.colorScheme.primary
+                    else Color.Unspecified
             )
+            loan.series?.let { series ->
+                val seriesClickLabel = stringResource(R.string.cd_search_by_series)
+                Text(
+                    stringResource(R.string.series_label, series),
+                    modifier =
+                        if (onSearch != null)
+                            Modifier.clickable(onClickLabel = seriesClickLabel) {
+                                onSearch(seriesSearchTerm(series), SearchField.SERIES)
+                            }
+                        else Modifier,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 

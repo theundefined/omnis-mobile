@@ -349,6 +349,72 @@ class OmnisRepository(private val accountManager: AccountManager) {
     }
 
     /**
+     * Uzupełnia wypożyczenia o serię i autora z rekordu katalogu (pub/pnxs/L/alma{mmsid}, ten sam
+     * co w getBranchInfo). Rekord pobieramy tylko dla książek, których nie sprawdziliśmy wcześniej
+     * — reszta przepisuje dane z `previous` (cache) po mmsid. Błąd sieci lub HTTP zostawia
+     * catalogFetched=false (ponowna próba przy następnym odświeżeniu). Rekordu, którego nie ma w
+     * katalogu (np. książka z innej biblioteki sieci), Primo nie zgłasza błędem, tylko HTTP 200 bez
+     * `pnx` — to zapisuje się jako sprawdzone bez serii, żeby nie ponawiać w kółko.
+     */
+    suspend fun withCatalogDetails(
+        account: Account,
+        loans: List<Loan>,
+        previous: List<Loan>
+    ): List<Loan> {
+        val known =
+            previous
+                .filter { it.catalogFetched }
+                .associate { it.mmsid to CatalogDetails(it.series, it.catalogAuthor) }
+        val missing = loans.map { it.mmsid }.filter { it !in known }.distinct()
+        val fetched =
+            if (missing.isEmpty()) emptyMap()
+            else {
+                val api =
+                    createClient(
+                        account.tenant.baseUrl,
+                        account.timeoutSeconds ?: DEFAULT_TIMEOUT_SECONDS
+                    )
+                val limit = Semaphore(4)
+                coroutineScope {
+                    missing
+                        .map { mmsid ->
+                            async {
+                                limit.withPermit {
+                                    try {
+                                        val response =
+                                            api.getRecord("alma$mmsid", account.tenant.view)
+                                        val pnx = response.body()?.pnx
+                                        if (!response.isSuccessful) null
+                                        else
+                                            mmsid to
+                                                CatalogDetails(
+                                                    pnx?.addataFirst("seriestitle"),
+                                                    pnx?.addataFirst("au")
+                                                )
+                                    } catch (e: Exception) {
+                                        null
+                                    }
+                                }
+                            }
+                        }
+                        .awaitAll()
+                        .filterNotNull()
+                        .toMap()
+                }
+            }
+        return loans.map { loan ->
+            val details = known[loan.mmsid] ?: fetched[loan.mmsid] ?: return@map loan
+            loan.copy(
+                series = details.series,
+                catalogAuthor = details.author,
+                catalogFetched = true
+            )
+        }
+    }
+
+    private data class CatalogDetails(val series: String?, val author: String?)
+
+    /**
      * Pobiera JEDNĄ stronę historii wypożyczeń (bez podążania za `showmore`) — pozwala UI
      * doczytywać kolejne strony na żądanie zamiast pobierać całą (potencjalnie wieloletnią)
      * historię naraz. Drugi element pary to informacja, czy istnieje kolejna strona.

@@ -563,6 +563,11 @@ private fun SearchSortControl(section: SearchTenantSection, viewModel: OmnisView
             onClick = { viewModel.setSearchSortMode(section.tenantKey, SearchSortMode.TITLE) },
             label = { Text(stringResource(R.string.search_sort_title)) }
         )
+        FilterChip(
+            selected = section.sortMode == SearchSortMode.SERIES,
+            onClick = { viewModel.setSearchSortMode(section.tenantKey, SearchSortMode.SERIES) },
+            label = { Text(stringResource(R.string.search_sort_series)) }
+        )
     }
 }
 

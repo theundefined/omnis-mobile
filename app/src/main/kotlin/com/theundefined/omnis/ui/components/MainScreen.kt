@@ -86,7 +86,14 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
     }
 
     if (currentScreen == "history") {
-        HistoryScreen(viewModel = viewModel, onBack = { currentScreen = "main" })
+        HistoryScreen(
+            viewModel = viewModel,
+            onBack = { currentScreen = "main" },
+            onSearch = { loan, query, field ->
+                viewModel.searchFromLoan(loan, query, field)
+                currentScreen = "search"
+            }
+        )
         return
     }
 
@@ -183,7 +190,11 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
                             onRenew = { loan -> viewModel.renewLoan(loan) },
                             onRenewAll = { loans -> viewModel.renewAllInGroup(loans) },
                             onBranchClick = { loans -> viewModel.showBranchInfo(loans) },
-                            branchHeaders = uiState.groupingMode == GroupingMode.BRANCH
+                            branchHeaders = uiState.groupingMode == GroupingMode.BRANCH,
+                            onSearch = { loan, query, field ->
+                                viewModel.searchFromLoan(loan, query, field)
+                                currentScreen = "search"
+                            }
                         )
                         BranchInfoDialogHost(viewModel)
                     }

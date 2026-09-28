@@ -12,13 +12,19 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.theundefined.omnis.R
+import com.theundefined.omnis.data.model.Loan
+import com.theundefined.omnis.data.model.SearchField
 import com.theundefined.omnis.ui.GroupingMode
 import com.theundefined.omnis.ui.HistoryUiState
 import com.theundefined.omnis.ui.OmnisViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HistoryScreen(viewModel: OmnisViewModel, onBack: () -> Unit) {
+fun HistoryScreen(
+    viewModel: OmnisViewModel,
+    onBack: () -> Unit,
+    onSearch: (Loan, String, SearchField) -> Unit
+) {
     val state by viewModel.historyUiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -101,6 +107,7 @@ fun HistoryScreen(viewModel: OmnisViewModel, onBack: () -> Unit) {
                                 isHistory = true,
                                 onBranchClick = { loans -> viewModel.showBranchInfo(loans) },
                                 branchHeaders = state.groupingMode == GroupingMode.BRANCH,
+                                onSearch = onSearch,
                                 footer = {
                                     HistoryFooter(
                                         state,

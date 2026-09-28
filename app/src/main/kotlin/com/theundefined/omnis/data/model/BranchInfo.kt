@@ -20,8 +20,11 @@ data class BranchInfo(
     val fetchedAtMillis: Long = 0L
 )
 
-/** Odpowiedź `/pub/pnxs/L/{recordId}` — interesuje nas tylko delivery (pnx pomijamy celowo). */
-data class RecordResponse(val delivery: Delivery? = null)
+/**
+ * Odpowiedź `/pub/pnxs/L/{recordId}` — delivery dla informacji o filii, pnx dla serii i autora
+ * wypożyczenia (OmnisRepository.withCatalogDetails).
+ */
+data class RecordResponse(val delivery: Delivery? = null, val pnx: Pnx? = null)
 
 private val ADDRESS_MARKER =
     Regex("""(?i)(^|[\s,;(\-])(ul|os|al|pl)\.\s*\p{L}|\b(aleje|aleja|plac|rondo)\s+\p{L}""")

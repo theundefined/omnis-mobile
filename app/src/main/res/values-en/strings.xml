@@ -98,7 +98,8 @@
     <string name="cd_search_by_series">Search other books in this series</string>
     <string name="search_sort_relevance">Relevance</string>
     <string name="search_sort_title">Title</string>
-    <string name="search_sort_hint_load_all">Sorting by title will be available once all results are loaded.</string>
+    <string name="search_sort_series">Series</string>
+    <string name="search_sort_hint_load_all">Changing the sort order will be available once all results are loaded.</string>
     <string name="series_label">Series: %1$s</string>
     <string name="language_label">Language: %1$s</string>
     <string name="show_description">Show description</string>

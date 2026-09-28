@@ -18,6 +18,8 @@ import com.theundefined.omnis.data.model.SearchPage
 import com.theundefined.omnis.data.model.SearchResult
 import com.theundefined.omnis.data.model.Tenant
 import com.theundefined.omnis.data.model.searchKey
+import com.theundefined.omnis.data.model.seriesSearchTerm
+import com.theundefined.omnis.data.model.seriesVolume
 import com.theundefined.omnis.data.remote.PlaceGeocoder
 import com.theundefined.omnis.data.repository.OmnisRepository
 import java.text.Collator
@@ -109,7 +111,8 @@ internal fun buildSearchLibrariesState(
 /** Sortowanie wyników wyszukiwania w obrębie jednej biblioteki — czysto klient-side. */
 enum class SearchSortMode {
     RELEVANCE, // kolejność zwrócona przez Primo (parametr sort=rank) — bez zmian
-    TITLE
+    TITLE,
+    SERIES // nazwa serii, potem numer tomu; domyślne przy wyszukiwaniu po serii
 }
 
 /**
@@ -170,7 +173,22 @@ fun SearchTenantSection.filteredResults(): List<SearchResult> {
     return when (sortMode) {
         SearchSortMode.RELEVANCE -> base
         SearchSortMode.TITLE -> base.sortedWith(compareBy(polishCollator) { it.title })
+        SearchSortMode.SERIES -> sortBySeries(base)
     }
+}
+
+/**
+ * Seria (bez tomu i odpowiedzialności, jak w wyszukiwaniu po serii), potem numer tomu, potem tytuł.
+ * Książki bez serii i tomy bez numeru trafiają na koniec swojej grupy.
+ */
+internal fun sortBySeries(results: List<SearchResult>): List<SearchResult> {
+    fun seriesOf(result: SearchResult) = result.versions.firstNotNullOfOrNull { it.series }
+    return results.sortedWith(
+        compareBy<SearchResult> { seriesOf(it) == null }
+            .thenBy(polishCollator) { seriesOf(it)?.let(::seriesSearchTerm).orEmpty() }
+            .thenBy { seriesOf(it)?.let(::seriesVolume) ?: Int.MAX_VALUE }
+            .thenBy(polishCollator) { it.title }
+    )
 }
 
 /**
@@ -307,7 +325,13 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
 
                 repository
                     .getLoansForAccount(account)
-                    .onSuccess { loans ->
+                    .onSuccess { fetched ->
+                        val loans =
+                            repository.withCatalogDetails(
+                                account,
+                                fetched,
+                                repository.getCachedLoans(account.id)
+                            )
                         repository.saveCachedLoans(account.id, loans)
                         loans.forEach { allLoansList.add(account to it) }
                     }
@@ -836,6 +860,9 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
                     seededBranches = seeded,
                     selectedBranches = prefs.selectedBranches,
                     showAllBranches = prefs.showAllBranches,
+                    sortMode =
+                        if (field == SearchField.SERIES) SearchSortMode.SERIES
+                        else SearchSortMode.RELEVANCE,
                     isLoading = true
                 )
             }
@@ -999,6 +1026,20 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
      */
     fun setSearchSortMode(tenantKey: String, mode: SearchSortMode) {
         updateSearchSection(tenantKey) { section -> section.copy(sortMode = mode) }
+    }
+
+    /**
+     * Wyszukanie autora/serii kliknięte na wypożyczeniu — w bibliotece, z której ono jest. Wybór
+     * bibliotek zmienia się na stałe, tak jak przy ręcznej zmianie w wyszukiwarce.
+     */
+    fun searchFromLoan(loan: Loan, query: String, field: SearchField) {
+        val tenant = _uiState.value.accounts.find { it.id == loan.accountId }?.tenant
+        if (tenant != null) {
+            val keys = setOf(tenant.searchKey())
+            _searchTenantOverride.value = keys
+            repository.saveSearchTenantKeys(keys)
+        }
+        runSearch(query, field)
     }
 
     fun setSearchLibrarySelected(tenant: Tenant, selected: Boolean) {
