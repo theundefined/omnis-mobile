@@ -581,6 +581,19 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         onAccountSetChanged()
     }
 
+    /**
+     * Ręczny numer karty bibliotecznej. Pusty albo równy loginowi kasuje nadpisanie — wtedy numer
+     * znów wynika z loginu. Czytamy konto na świeżo z pamięci, żeby nie nadpisać zmian z
+     * równoległego odświeżania profilu (kary, liczba wypożyczeń).
+     */
+    fun setCardNumber(account: Account, number: String) {
+        val current = repository.getAccounts().find { it.id == account.id } ?: return
+        val trimmed = number.trim()
+        val override = trimmed.takeIf { it.isNotEmpty() && it != current.username }
+        repository.updateAccount(current.copy(cardNumber = override))
+        refreshAccounts()
+    }
+
     fun addAccount(username: String, password: String, tenant: Tenant) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }

@@ -17,11 +17,26 @@ data class Account(
     val loansCount: Int = 0,
     val timeoutSeconds: Long? = null,
     val isDemo: Boolean = false,
-    val disabledByDemo: Boolean = false
+    val disabledByDemo: Boolean = false,
+    /** Numer karty ustawiony ręcznie; null = numer wynika z loginu (patrz [libraryCardNumber]). */
+    val cardNumber: String? = null
 ) {
     val finesCurrency: String
         get() = _finesCurrency ?: "PLN"
+
+    /**
+     * Numer do kodu kreskowego karty bibliotecznej: ręcznie ustawiony albo login, jeśli wygląda jak
+     * numer karty (np. "BR123456" w Raczyńskich). E-mail czy PESEL (11 cyfr) numerem karty nie są.
+     */
+    val libraryCardNumber: String?
+        get() = cardNumber ?: username.takeIf { looksLikeCardNumber(it) }
 }
+
+private val CARD_NUMBER_REGEX = Regex("[A-Za-z0-9-]{4,30}")
+private val PESEL_REGEX = Regex("\\d{11}")
+
+fun looksLikeCardNumber(login: String): Boolean =
+    CARD_NUMBER_REGEX.matches(login) && !PESEL_REGEX.matches(login)
 
 private val accountNameCollator: Collator =
     Collator.getInstance(Locale("pl")).apply { strength = Collator.PRIMARY }

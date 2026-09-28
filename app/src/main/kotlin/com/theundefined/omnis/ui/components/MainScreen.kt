@@ -67,7 +67,10 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
 
     BackHandler(
         enabled =
-            currentScreen == "settings" || currentScreen == "history" || currentScreen == "search"
+            currentScreen == "settings" ||
+                currentScreen == "history" ||
+                currentScreen == "search" ||
+                currentScreen == "card"
     ) {
         currentScreen = "main"
     }
@@ -96,6 +99,15 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
                 viewModel.searchFromLoan(loan, query, field)
                 currentScreen = "search"
             }
+        )
+        return
+    }
+
+    if (currentScreen == "card") {
+        LibraryCardScreen(
+            accounts = uiState.accounts,
+            onSetCardNumber = { account, number -> viewModel.setCardNumber(account, number) },
+            onBack = { currentScreen = "main" }
         )
         return
     }
@@ -145,6 +157,13 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
                             expanded = showMoreMenu,
                             onDismissRequest = { showMoreMenu = false }
                         ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.library_card_title)) },
+                                onClick = {
+                                    showMoreMenu = false
+                                    currentScreen = "card"
+                                }
+                            )
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.history_title)) },
                                 onClick = {

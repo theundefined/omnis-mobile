@@ -160,4 +160,14 @@
     <string name="detail_renew_until">Can be renewed until %1$s</string>
     <string name="detail_barcode">Barcode</string>
     <string name="detail_owner">Loaned by</string>
+    <string name="library_card_title">Library card</string>
+    <string name="library_card_hint">Show this code at the desk instead of your plastic card.</string>
+    <string name="library_card_no_accounts">Add a library account first.</string>
+    <string name="library_card_no_number">This account\'s username doesn\'t look like a card number. Set it manually — it\'s printed above the barcode on your card.</string>
+    <string name="library_card_set_number">Set card number</string>
+    <string name="library_card_edit_number">Change card number</string>
+    <string name="library_card_number_label">Card number</string>
+    <string name="library_card_number_hint">Leave empty to use the username.</string>
+    <string name="library_card_number_invalid">Only ASCII characters are allowed.</string>
+    <string name="save">Save</string>
 </resources>
