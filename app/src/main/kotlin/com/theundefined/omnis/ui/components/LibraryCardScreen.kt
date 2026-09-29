@@ -3,12 +3,15 @@ package com.theundefined.omnis.ui.components
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -20,6 +23,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.theundefined.omnis.R
@@ -32,7 +36,8 @@ import kotlin.math.floor
 /**
  * Karta biblioteczna jako kod kreskowy Code 128 — do pokazania przy ladzie zamiast plastikowej
  * karty. Na czas wyświetlania ekran świeci z pełną jasnością (czytniki gorzej czytają ciemny
- * ekran).
+ * ekran). Dotknięcie karty na liście pokazuje tylko ją, z większym kodem — żeby przy ladzie czytnik
+ * nie złapał kodu innego konta.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,6 +49,11 @@ fun LibraryCardScreen(
     FullBrightness()
     var editedAccount by remember { mutableStateOf<Account?>(null) }
     val shown = accounts.filter { it.isEnabled }.ifEmpty { accounts }.sortedForSettings()
+    var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    val selected = shown.find { it.id == selectedId }
+
+    // Pierwszeństwo przed BackHandlerem MainScreen: wstecz z pojedynczej karty wraca do listy.
+    BackHandler(enabled = selected != null) { selectedId = null }
 
     editedAccount?.let { account ->
         CardNumberDialog(
@@ -63,7 +73,7 @@ fun LibraryCardScreen(
                 navigationIcon = {
                     val backDescription = stringResource(R.string.cd_back)
                     IconButton(
-                        onClick = onBack,
+                        onClick = { if (selected != null) selectedId = null else onBack() },
                         modifier = Modifier.semantics { contentDescription = backDescription }
                     ) {
                         Text("←", style = MaterialTheme.typography.headlineSmall)
@@ -78,6 +88,19 @@ fun LibraryCardScreen(
             }
             return@Scaffold
         }
+        if (selected != null) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                verticalArrangement = Arrangement.Center
+            ) {
+                LibraryCardItem(
+                    account = selected,
+                    barcodeHeight = 200.dp,
+                    onEdit = { editedAccount = selected }
+                )
+            }
+            return@Scaffold
+        }
         LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
             item {
                 Text(
@@ -88,15 +111,29 @@ fun LibraryCardScreen(
                 )
             }
             items(shown, key = { it.id }) { account ->
-                LibraryCardItem(account = account, onEdit = { editedAccount = account })
+                LibraryCardItem(
+                    account = account,
+                    onEdit = { editedAccount = account },
+                    onClick = { selectedId = account.id }
+                )
             }
         }
     }
 }
 
 @Composable
-private fun LibraryCardItem(account: Account, onEdit: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+private fun LibraryCardItem(
+    account: Account,
+    onEdit: () -> Unit,
+    barcodeHeight: Dp = 120.dp,
+    onClick: (() -> Unit)? = null
+) {
+    Card(
+        modifier =
+            Modifier.fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+    ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 account.displayName ?: account.username,
@@ -116,7 +153,7 @@ private fun LibraryCardItem(account: Account, onEdit: () -> Unit) {
                     ) {
                         Barcode(
                             modules = modules,
-                            modifier = Modifier.fillMaxWidth().height(120.dp)
+                            modifier = Modifier.fillMaxWidth().height(barcodeHeight)
                         )
                         Text(
                             number,

@@ -167,7 +167,7 @@
     <string name="detail_barcode">Kod kreskowy</string>
     <string name="detail_owner">Wypożyczone przez</string>
     <string name="library_card_title">Karta biblioteczna</string>
-    <string name="library_card_hint">Pokaż ten kod przy ladzie zamiast plastikowej karty.</string>
+    <string name="library_card_hint">Pokaż ten kod przy ladzie zamiast plastikowej karty. Dotknij karty, aby wyświetlić tylko ją.</string>
     <string name="library_card_no_accounts">Najpierw dodaj konto biblioteczne.</string>
     <string name="library_card_no_number">Login tego konta nie wygląda na numer karty. Ustaw numer ręcznie — jest nadrukowany nad kodem kreskowym na karcie.</string>
     <string name="library_card_set_number">Ustaw numer karty</string>
