@@ -26,8 +26,8 @@ android {
         applicationId = "com.theundefined.omnis"
         minSdk = 26
         targetSdk = 36
-        versionCode = 62
-        versionName = "0.6.7"
+        versionCode = 63
+        versionName = "0.6.8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
