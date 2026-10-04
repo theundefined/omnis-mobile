@@ -42,6 +42,7 @@ import com.theundefined.omnis.ui.effectiveMediaTypes
 import com.theundefined.omnis.ui.filteredResults
 import com.theundefined.omnis.ui.hasMappableBranches
 import com.theundefined.omnis.ui.holdAccounts
+import com.theundefined.omnis.ui.searchLibraryPickerOrder
 import java.text.Collator
 import java.util.Locale
 import kotlinx.coroutines.launch
@@ -337,8 +338,8 @@ private fun librariesSummary(libraries: SearchLibrariesState): String {
 
 /**
  * Wybór bibliotek w dolnym arkuszu (a nie rozwijanej liście na ekranie) — lista ma kilkadziesiąt
- * pozycji. Kolejność ustalana raz przy otwarciu (wybrane na górze), żeby wiersze nie skakały pod
- * palcem przy zaznaczaniu.
+ * pozycji. Kolejność ustalana raz przy otwarciu (biblioteki z kontem na górze, w grupie wybrane
+ * najpierw — searchLibraryPickerOrder), żeby wiersze nie skakały pod palcem przy zaznaczaniu.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -350,12 +351,7 @@ private fun SearchLibraryPicker(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var filter by remember { mutableStateOf("") }
-    val order = remember {
-        libraries.available.sortedWith(
-            compareBy<Tenant> { it.searchKey() !in libraries.selectedKeys }
-                .thenBy(polishCollator) { it.name }
-        )
-    }
+    val order = remember { searchLibraryPickerOrder(libraries, accountTenantKeys) }
     val visible =
         order.filter { filter.isBlank() || it.name.contains(filter.trim(), ignoreCase = true) }
 

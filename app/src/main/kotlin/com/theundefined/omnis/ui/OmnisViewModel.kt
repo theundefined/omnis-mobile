@@ -169,17 +169,40 @@ data class SearchLibrariesState(
  * Lista do wyboru: znane biblioteki + biblioteki kont spoza listy (np. demo). Przy tym samym
  * searchKey wygrywa wpis z KNOWN_TENANTS (świeższe baseUrl niż zapisany w starym koncie). Domyślny
  * wybór, dopóki użytkownik go nie zmieni: biblioteki włączonych kont.
+ *
+ * W trybie demo (włączone konto demo) zapisany wybór `override` jest ignorowany — liczy się
+ * `demoOverride` (zmiany zrobione w trybie demo), a bez niego domyślnie biblioteka demo. Po wyjściu
+ * z trybu demo wraca zwykły `override`, nietknięty.
  */
 internal fun buildSearchLibrariesState(
     accounts: List<Account>,
-    override: Set<String>?
+    override: Set<String>?,
+    demoOverride: Set<String>? = null
 ): SearchLibrariesState {
     val available = (KNOWN_TENANTS + accounts.map { it.tenant }).distinctBy { it.searchKey() }
     val keys = available.map { it.searchKey() }.toSet()
+    val effectiveOverride = if (isDemoModeActive(accounts)) demoOverride else override
     val selected =
-        override ?: accounts.filter { it.isEnabled }.map { it.tenant.searchKey() }.toSet()
+        effectiveOverride ?: accounts.filter { it.isEnabled }.map { it.tenant.searchKey() }.toSet()
     return SearchLibrariesState(available, selected intersect keys)
 }
+
+internal fun isDemoModeActive(accounts: List<Account>): Boolean =
+    accounts.any { it.isDemo && it.isEnabled }
+
+/**
+ * Kolejność w pickerze bibliotek: najpierw biblioteki, w których użytkownik ma konto, potem
+ * pozostałe; w obrębie grupy zaznaczone na górze, dalej alfabetycznie.
+ */
+internal fun searchLibraryPickerOrder(
+    libraries: SearchLibrariesState,
+    accountTenantKeys: Set<String>
+): List<Tenant> =
+    libraries.available.sortedWith(
+        compareBy<Tenant> { it.searchKey() !in accountTenantKeys }
+            .thenBy { it.searchKey() !in libraries.selectedKeys }
+            .thenBy(polishCollator) { it.name }
+    )
 
 /** Sortowanie wyników wyszukiwania w obrębie jednej biblioteki — czysto klient-side. */
 enum class SearchSortMode {
@@ -399,15 +422,32 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
     }
 
     private val _searchTenantOverride = MutableStateFlow(repository.getSearchTenantKeys())
+    // Wybór bibliotek zmieniony w trybie demo — tylko w pamięci i czyszczony przy wejściu/wyjściu z
+    // trybu demo, żeby nie nadpisać zwykłego (zapisanego) wyboru.
+    private val _demoSearchTenantOverride = MutableStateFlow<Set<String>?>(null)
     val searchLibraries: StateFlow<SearchLibrariesState> =
-        combine(_uiState, _searchTenantOverride) { ui, override ->
-                buildSearchLibrariesState(ui.accounts, override)
+        combine(_uiState, _searchTenantOverride, _demoSearchTenantOverride) { ui, override, demo ->
+                buildSearchLibrariesState(ui.accounts, override, demo)
             }
-            .stateIn(
-                viewModelScope,
-                SharingStarted.Eagerly,
-                buildSearchLibrariesState(_uiState.value.accounts, _searchTenantOverride.value)
-            )
+            .stateIn(viewModelScope, SharingStarted.Eagerly, currentSearchLibraries())
+
+    // Z bieżących źródeł, nie z searchLibraries.value — stateIn przelicza się asynchronicznie, więc
+    // tuż po zmianie wyboru .value mógłby być nieaktualny.
+    private fun currentSearchLibraries(): SearchLibrariesState =
+        buildSearchLibrariesState(
+            _uiState.value.accounts,
+            _searchTenantOverride.value,
+            _demoSearchTenantOverride.value
+        )
+
+    private fun saveSearchTenantSelection(keys: Set<String>) {
+        if (isDemoModeActive(_uiState.value.accounts)) {
+            _demoSearchTenantOverride.value = keys
+        } else {
+            _searchTenantOverride.value = keys
+            repository.saveSearchTenantKeys(keys)
+        }
+    }
 
     private val _searchHistory = MutableStateFlow(repository.getSearchHistory())
     val searchHistory: StateFlow<List<SearchHistoryEntry>> = _searchHistory.asStateFlow()
@@ -797,6 +837,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
 
     fun enterDemoMode() {
         repository.enterDemoMode()
+        _demoSearchTenantOverride.value = null
         refreshAccounts()
         resetHistoryState()
         resetHoldsState()
@@ -805,6 +846,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
 
     fun exitDemoMode() {
         repository.exitDemoMode()
+        _demoSearchTenantOverride.value = null
         refreshAccounts()
         resetHistoryState()
         resetHoldsState()
@@ -1341,10 +1383,8 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         cancelDueDateJobs()
         val generation = searchGeneration
 
-        // Wybór czytany z tych samych źródeł co searchLibraries, a nie z jego .value — stateIn
-        // przelicza się asynchronicznie, więc tuż po zmianie wyboru .value mógłby być nieaktualny.
-        val targets =
-            buildSearchLibrariesState(_uiState.value.accounts, _searchTenantOverride.value).selected
+        // Wybór czytany z tych samych źródeł co searchLibraries (patrz currentSearchLibraries).
+        val targets = currentSearchLibraries().selected
         searchTargets = targets.associateBy { it.searchKey() }
 
         val existingSections = _searchUiState.value.tenantSections.associateBy { it.tenantKey }
@@ -1562,23 +1602,17 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
     fun searchFromLoan(loan: Loan, query: String, field: SearchField) {
         val tenant = _uiState.value.accounts.find { it.id == loan.accountId }?.tenant
         if (tenant != null) {
-            val keys = setOf(tenant.searchKey())
-            _searchTenantOverride.value = keys
-            repository.saveSearchTenantKeys(keys)
+            saveSearchTenantSelection(setOf(tenant.searchKey()))
         }
         runSearch(query, field)
     }
 
     fun setSearchLibrarySelected(tenant: Tenant, selected: Boolean) {
-        // Z bieżących źródeł, nie z searchLibraries.value (patrz komentarz w runSearch) — szybkie
-        // kolejne kliknięcia nie mogą zgubić poprzedniej zmiany.
-        val current =
-            buildSearchLibrariesState(_uiState.value.accounts, _searchTenantOverride.value)
-                .selectedKeys
+        // Z bieżących źródeł (patrz currentSearchLibraries) — szybkie kolejne kliknięcia nie mogą
+        // zgubić poprzedniej zmiany.
+        val current = currentSearchLibraries().selectedKeys
         val key = tenant.searchKey()
-        val updated = if (selected) current + key else current - key
-        _searchTenantOverride.value = updated
-        repository.saveSearchTenantKeys(updated)
+        saveSearchTenantSelection(if (selected) current + key else current - key)
     }
 
     private companion object {
