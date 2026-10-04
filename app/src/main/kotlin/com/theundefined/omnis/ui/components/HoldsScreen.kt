@@ -1,5 +1,6 @@
 package com.theundefined.omnis.ui.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -109,7 +110,8 @@ fun HoldsScreen(viewModel: OmnisViewModel, onBack: () -> Unit) {
                             HoldList(
                                 groupedHolds = state.holds,
                                 cancellingIds = state.cancellingIds,
-                                onCancel = { confirmCancel = it }
+                                onCancel = { confirmCancel = it },
+                                onBranchClick = { viewModel.showBranchInfo(it) }
                             )
                         }
                     }
@@ -117,6 +119,8 @@ fun HoldsScreen(viewModel: OmnisViewModel, onBack: () -> Unit) {
             }
         }
     }
+
+    BranchInfoDialogHost(viewModel)
 
     confirmCancel?.let { hold ->
         AlertDialog(
@@ -148,7 +152,8 @@ fun HoldsScreen(viewModel: OmnisViewModel, onBack: () -> Unit) {
 private fun HoldList(
     groupedHolds: Map<String, List<Hold>>,
     cancellingIds: Set<String>,
-    onCancel: (Hold) -> Unit
+    onCancel: (Hold) -> Unit,
+    onBranchClick: (Hold) -> Unit
 ) {
     // Nazwę biblioteki pokazujemy tylko, gdy rezerwacje są z kilku — jak w LoanList.
     val withLibrary =
@@ -170,7 +175,8 @@ private fun HoldList(
                     hold,
                     withLibrary = withLibrary,
                     isCancelling = holdKey(hold) in cancellingIds,
-                    onCancel = { onCancel(hold) }
+                    onCancel = { onCancel(hold) },
+                    onBranchClick = { onBranchClick(hold) }
                 )
             }
             item { Spacer(modifier = Modifier.height(16.dp)) }
@@ -183,7 +189,8 @@ private fun HoldItem(
     hold: Hold,
     withLibrary: Boolean,
     isCancelling: Boolean,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    onBranchClick: () -> Unit
 ) {
     val context = LocalContext.current
     Card(
@@ -204,7 +211,7 @@ private fun HoldItem(
 
             if (hold.status.isNotBlank()) {
                 Text(
-                    stringResource(R.string.hold_status_label, hold.status),
+                    stringResource(R.string.hold_status_label, holdStatusText(hold.status)),
                     style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
                     color =
                         if (hold.available) MaterialTheme.colorScheme.primary
@@ -214,12 +221,19 @@ private fun HoldItem(
             hold.pickupLocation
                 ?.takeIf { it.isNotBlank() }
                 ?.let { location ->
+                    // Jak filia przy wypożyczeniu: klik otwiera adres i nawigację.
                     Text(
                         stringResource(
                             R.string.hold_pickup_label,
                             if (withLibrary) "${hold.tenantName} - $location" else location
                         ),
-                        style = MaterialTheme.typography.bodySmall
+                        modifier =
+                            Modifier.clickable(
+                                onClickLabel = stringResource(R.string.cd_branch_info),
+                                onClick = onBranchClick
+                            ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
             hold.requestDate
@@ -236,6 +250,14 @@ private fun HoldItem(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                if (!hold.pickupLocation.isNullOrBlank()) {
+                    IconButton(onClick = onBranchClick) {
+                        Icon(
+                            painterResource(R.drawable.ic_place),
+                            stringResource(R.string.cd_branch_info)
+                        )
+                    }
+                }
                 IconButton(
                     onClick = { openWebSearch(context, displayTitle(hold.title), hold.author) }
                 ) {
@@ -258,4 +280,16 @@ private fun HoldItem(
             }
         }
     }
+}
+
+private val STATUS_DATE = Regex("""\b\d{2}/\d{2}/\d{4}\b""")
+
+/**
+ * Status z Primo z datą w formacie dd/MM/yyyy ("Na półce rezerwacji do 08/10/2026") — podmieniamy
+ * ją na format reszty aplikacji z odliczaniem: "do 2026.10.08 (za 4 dni)".
+ */
+@Composable
+private fun holdStatusText(status: String): String {
+    val match = STATUS_DATE.find(status) ?: return status
+    return status.replaceRange(match.range, formatRelativeDate(match.value))
 }

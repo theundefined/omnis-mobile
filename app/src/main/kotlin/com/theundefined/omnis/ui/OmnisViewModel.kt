@@ -569,22 +569,51 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
      */
     fun showBranchInfo(loans: List<Loan>) {
         val first = loans.firstOrNull() ?: return
-        val branchName = first.locationName
-        val account = _uiState.value.accounts.firstOrNull { it.id == first.accountId }
+        openBranchInfo(
+            branchName = first.locationName,
+            tenantName = first.tenantName,
+            accountId = first.accountId,
+            mmsids = loans.map { it.mmsid }
+        )
+    }
+
+    /**
+     * Okienko filii odbioru rezerwacji. Adres bierzemy z holdingów zarezerwowanego rekordu — gdy
+     * egzemplarz jedzie z innej filii, odbiorczej tam nie będzie i zostaje wyszukanie w mapach (o
+     * ile adresu nie ma już w cache'u z wypożyczeń).
+     */
+    fun showBranchInfo(hold: Hold) {
+        val branchName = hold.pickupLocation?.takeIf { it.isNotBlank() } ?: return
+        openBranchInfo(
+            branchName = branchName,
+            tenantName = hold.tenantName,
+            accountId = hold.accountId,
+            mmsids = listOfNotNull(hold.mmsid?.takeIf { it.isNotBlank() })
+        )
+    }
+
+    private fun openBranchInfo(
+        branchName: String,
+        tenantName: String?,
+        accountId: String?,
+        mmsids: List<String>
+    ) {
+        val account = _uiState.value.accounts.firstOrNull { it.id == accountId }
         // Serwer demo nie ma tego endpointu (i bywa wolny) — od razu pokazujemy wariant bez danych.
-        val fetchAccount = account?.takeIf { !it.isDemo && !it.tenant.isDemo }
+        val fetchAccount =
+            account?.takeIf { !it.isDemo && !it.tenant.isDemo && mmsids.isNotEmpty() }
         branchDialogJob?.cancel()
         _branchDialog.value =
             BranchDialogState(
                 branchName = branchName,
-                tenantName = first.tenantName ?: account?.tenant?.name,
+                tenantName = tenantName ?: account?.tenant?.name,
                 isLoading = fetchAccount != null
             )
         if (fetchAccount == null) return
         branchDialogJob =
             viewModelScope.launch {
                 var info: BranchInfo? = null
-                for (mmsid in loans.map { it.mmsid }.distinct().take(3)) {
+                for (mmsid in mmsids.distinct().take(3)) {
                     info =
                         repository
                             .getBranchInfo(
