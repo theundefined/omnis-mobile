@@ -1,17 +1,22 @@
 name: UI tests (demo account)
 
 # Testy instrumentacyjne (app/src/androidTest) na emulatorze, przeciw publicznemu omnis-mock
-# (konto demo). Osobno od build.yml: zależą od zewnętrznego serwera, więc nie blokują wydań.
-# Push na dowolny branch (nie pull_request — dublowałby przebieg dla tych samych commitów).
+# (konto demo). Na branchach odpalane bezpośrednio pushem; na main wywołuje je build.yml
+# (workflow_call) jako bramkę przed publikacją w Google Play. Bez pull_request — dublowałby
+# przebieg dla tych samych commitów.
 on:
   push:
+    branches-ignore: [ main ]
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
+# Na branchach nowy push anuluje poprzedni przebieg. Na main każdy przebieg ma własną grupę, żeby
+# kolejny push nie anulował testów commitu release (i tym samym publikacji w Play).
 concurrency:
-  group: ui-tests-${{ github.ref }}
+  group: ui-tests-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
   cancel-in-progress: true
 
 jobs:
