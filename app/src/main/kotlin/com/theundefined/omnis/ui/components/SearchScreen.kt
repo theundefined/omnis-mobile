@@ -426,13 +426,15 @@ private fun MediaTypeFilter(
             label = { Text(stringResource(R.string.search_all_media)) }
         )
         // Książka zawsze pierwsza, reszta w kolejności z wyników.
-        available.sortedBy { it != MEDIA_TYPE_BOOK }.forEach { type ->
-            FilterChip(
-                selected = type in selected,
-                onClick = { onToggle(type, type !in selected) },
-                label = { Text(mediaTypeLabel(context, type)) }
-            )
-        }
+        available
+            .sortedBy { it != MEDIA_TYPE_BOOK }
+            .forEach { type ->
+                FilterChip(
+                    selected = type in selected,
+                    onClick = { onToggle(type, type !in selected) },
+                    label = { Text(mediaTypeLabel(context, type)) }
+                )
+            }
     }
 }
 

@@ -60,14 +60,21 @@ class MediaFilterTest {
 
     @Test
     fun `book filter drops results without any printed version`() {
-        val s = section(result("Audio", version("a", "Audiobook")), result("Book", version("b", "Book")))
+        val s =
+            section(
+                result("Audio", version("a", "Audiobook")),
+                result("Book", version("b", "Book"))
+            )
         assertEquals(listOf("Book"), s.filteredResults(setOf("book")).map { it.title })
     }
 
     @Test
     fun `audiobook filter keeps only audiobooks`() {
         val s = section(result("Artemis", version("a", "Audiobook"), version("b", "book")))
-        assertEquals(listOf("a"), s.filteredResults(setOf("audiobook")).single().versions.map { it.mmsid })
+        assertEquals(
+            listOf("a"),
+            s.filteredResults(setOf("audiobook")).single().versions.map { it.mmsid }
+        )
     }
 
     @Test

@@ -3,9 +3,10 @@ package com.theundefined.omnis.data.local
 import android.content.Context
 
 /**
- * Zapamiętany wybór grupowania/sortowania list wypożyczeń i filtra typów w wyszukiwarce. Zwykłe (nieszyfrowane) SharedPreferences
- * — to czyste preferencje UI, bez danych osobowych, w przeciwieństwie do `AccountManager`. Wartości
- * to nazwy enumów; nieznana/usunięta nazwa daje wartość domyślną.
+ * Zapamiętany wybór grupowania/sortowania list wypożyczeń i filtra typów w wyszukiwarce. Zwykłe
+ * (nieszyfrowane) SharedPreferences — to czyste preferencje UI, bez danych osobowych, w
+ * przeciwieństwie do `AccountManager`. Wartości to nazwy enumów; nieznana/usunięta nazwa daje
+ * wartość domyślną.
  */
 class ViewPrefs(context: Context) {
     private val prefs = context.getSharedPreferences("omnis_view_prefs", Context.MODE_PRIVATE)
@@ -19,7 +20,8 @@ class ViewPrefs(context: Context) {
         prefs.edit().putString(key, value.name).apply()
     }
 
-    fun getStringSet(key: String): Set<String> = prefs.getStringSet(key, null)?.toSet() ?: emptySet()
+    fun getStringSet(key: String): Set<String> =
+        prefs.getStringSet(key, null)?.toSet() ?: emptySet()
 
     fun putStringSet(key: String, value: Set<String>) {
         prefs.edit().putStringSet(key, value).apply()
