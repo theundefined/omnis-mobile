@@ -63,6 +63,13 @@
     <string name="no_history">Brak historii wypożyczeń.</string>
     <string name="history_partial_error">Nie udało się pobrać historii dla: %1$s</string>
     <string name="holds_title">Rezerwacje</string>
+    <plurals name="holds_ready">
+        <item quantity="one">%d rezerwacja do odbioru</item>
+        <item quantity="few">%d rezerwacje do odbioru</item>
+        <item quantity="many">%d rezerwacji do odbioru</item>
+        <item quantity="other">%d rezerwacji do odbioru</item>
+    </plurals>
+    <string name="holds_ready_deadline">Najbliższy termin: %1$s</string>
     <string name="no_holds">Brak rezerwacji.</string>
     <string name="holds_partial_error">Nie udało się pobrać rezerwacji dla: %1$s</string>
     <string name="hold_status_label">Status: %1$s</string>

@@ -21,7 +21,10 @@ import com.theundefined.omnis.R
 import com.theundefined.omnis.data.model.Hold
 import com.theundefined.omnis.data.model.displayTitle
 import com.theundefined.omnis.ui.OmnisViewModel
+import com.theundefined.omnis.ui.holdDeadline
 import com.theundefined.omnis.ui.holdKey
+import com.theundefined.omnis.ui.holdStatusDateMatch
+import com.theundefined.omnis.ui.isHoldDeadlineUrgent
 import kotlinx.coroutines.flow.collectLatest
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -214,8 +217,15 @@ private fun HoldItem(
                     stringResource(R.string.hold_status_label, holdStatusText(hold.status)),
                     style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
                     color =
-                        if (hold.available) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurface
+                        when {
+                            // Ostatnie dni na odbiór. colorScheme.error, nie czerwień z wypożyczeń
+                            // — ta ginie na
+                            // fioletowym tle karty gotowej rezerwacji w ciemnym motywie.
+                            holdDeadline(hold)?.let { isHoldDeadlineUrgent(it) } == true ->
+                                MaterialTheme.colorScheme.error
+                            hold.available -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.onSurface
+                        }
                 )
             }
             hold.pickupLocation
@@ -282,14 +292,12 @@ private fun HoldItem(
     }
 }
 
-private val STATUS_DATE = Regex("""\b\d{2}/\d{2}/\d{4}\b""")
-
 /**
  * Status z Primo z datą w formacie dd/MM/yyyy ("Na półce rezerwacji do 08/10/2026") — podmieniamy
  * ją na format reszty aplikacji z odliczaniem: "do 2026.10.08 (za 4 dni)".
  */
 @Composable
 private fun holdStatusText(status: String): String {
-    val match = STATUS_DATE.find(status) ?: return status
+    val match = holdStatusDateMatch(status) ?: return status
     return status.replaceRange(match.range, formatRelativeDate(match.value))
 }

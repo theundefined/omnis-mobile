@@ -57,6 +57,11 @@
     <string name="no_history">No loan history.</string>
     <string name="history_partial_error">Failed to load history for: %1$s</string>
     <string name="holds_title">Holds</string>
+    <plurals name="holds_ready">
+        <item quantity="one">%d hold ready for pickup</item>
+        <item quantity="other">%d holds ready for pickup</item>
+    </plurals>
+    <string name="holds_ready_deadline">Earliest deadline: %1$s</string>
     <string name="no_holds">No holds.</string>
     <string name="holds_partial_error">Failed to load holds for: %1$s</string>
     <string name="hold_status_label">Status: %1$s</string>

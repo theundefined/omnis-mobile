@@ -14,15 +14,20 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.theundefined.omnis.R
+import com.theundefined.omnis.data.model.Hold
 import com.theundefined.omnis.ui.GroupingMode
 import com.theundefined.omnis.ui.OmnisViewModel
 import com.theundefined.omnis.ui.RefreshProgress
+import com.theundefined.omnis.ui.holdDeadline
+import com.theundefined.omnis.ui.isHoldDeadlineUrgent
+import com.theundefined.omnis.ui.readyHolds
 import kotlinx.coroutines.flow.collectLatest
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val holdsState by viewModel.holdsUiState.collectAsStateWithLifecycle()
     var currentScreen by remember { mutableStateOf("main") }
     // Skan zlecony skrótem aplikacji, konsumowany jednorazowo przez SearchScreen — dzięki temu
     // powrót do wyszukiwarki z listy nie odpala skanera ponownie.
@@ -38,6 +43,11 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
             snackbarHostState.showSnackbar(error)
         }
     }
+
+    // Rezerwacje w tle, żeby ekran główny mógł pokazać te do odbioru. Po wczytaniu w tej sesji
+    // loadHolds() bez forceRefresh nic nie robi, więc zmiany listy kont (np. odświeżone kary) nie
+    // powodują ponownych logowań; zmiana zestawu kont i tak kasuje stan rezerwacji.
+    LaunchedEffect(uiState.accounts) { if (uiState.accounts.isNotEmpty()) viewModel.loadHolds() }
 
     LaunchedEffect(scanRequests) {
         if (scanRequests > 0) {
@@ -144,7 +154,10 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
 
                     val refreshDescription = stringResource(R.string.cd_refresh)
                     IconButton(
-                        onClick = { viewModel.refreshAllLoans(isManual = true) },
+                        onClick = {
+                            viewModel.refreshAllLoans(isManual = true)
+                            viewModel.loadHolds(forceRefresh = true)
+                        },
                         modifier = Modifier.semantics { contentDescription = refreshDescription }
                     ) {
                         Icon(painterResource(R.drawable.ic_refresh), contentDescription = null)
@@ -210,6 +223,10 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
             } else {
                 Column {
                     uiState.refreshProgress?.let { RefreshProgressBar(it) }
+                    val ready = remember(holdsState.holds) { readyHolds(holdsState.holds) }
+                    if (ready.isNotEmpty()) {
+                        ReadyHoldsBanner(ready, onClick = { currentScreen = "holds" })
+                    }
                     LoanViewBar(
                         groupingMode = uiState.groupingMode,
                         sortMode = uiState.sortMode,
@@ -218,7 +235,10 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
                     )
                     PullToRefreshBox(
                         isRefreshing = uiState.isLoading,
-                        onRefresh = { viewModel.refreshAllLoans(isManual = true) },
+                        onRefresh = {
+                            viewModel.refreshAllLoans(isManual = true)
+                            viewModel.loadHolds(forceRefresh = true)
+                        },
                         modifier = Modifier.fillMaxSize()
                     ) {
                         LoanList(
@@ -236,6 +256,49 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
                     }
                 }
             }
+        }
+    }
+}
+
+/** Rezerwacje czekające na odbiór — z najbliższym terminem; czerwony, gdy zostały ostatnie dni. */
+@Composable
+private fun ReadyHoldsBanner(holds: List<Hold>, onClick: () -> Unit) {
+    val deadline = holds.firstNotNullOfOrNull { holdDeadline(it) }
+    val urgent = deadline?.let { isHoldDeadlineUrgent(it) } == true
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    if (urgent) MaterialTheme.colorScheme.errorContainer
+                    else MaterialTheme.colorScheme.primaryContainer
+            )
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    LocalContext.current.resources.getQuantityString(
+                        R.plurals.holds_ready,
+                        holds.size,
+                        holds.size
+                    ),
+                    style = MaterialTheme.typography.titleSmall
+                )
+                deadline?.let {
+                    Text(
+                        stringResource(
+                            R.string.holds_ready_deadline,
+                            formatRelativeDate(it.toString())
+                        ),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+            Text("›", style = MaterialTheme.typography.headlineSmall)
         }
     }
 }
