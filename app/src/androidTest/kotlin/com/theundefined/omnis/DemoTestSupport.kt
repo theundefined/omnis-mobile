@@ -101,14 +101,18 @@ fun ComposeTestRule.waitForText(
  * Czeka, aż (pierwsza) leniwa lista na ekranie zawiera element z tekstem, i przewija do niego —
  * działa też dla elementów jeszcze niewyrenderowanych poza ekranem.
  */
-fun ComposeTestRule.waitAndScrollToText(text: String, timeoutMs: Long = NETWORK_TIMEOUT_MS) {
+fun ComposeTestRule.waitAndScrollToText(
+    text: String,
+    substring: Boolean = true,
+    timeoutMs: Long = NETWORK_TIMEOUT_MS
+) {
     waitUntil(timeoutMs) {
         runCatching {
                 onAllNodes(hasScrollToNodeAction())
                     .onFirst()
-                    .performScrollToNode(hasText(text, substring = true, ignoreCase = true))
+                    .performScrollToNode(hasText(text, substring = substring, ignoreCase = true))
             }
             .isSuccess
     }
-    waitForText(text, timeoutMs = 5_000)
+    waitForText(text, substring = substring, timeoutMs = 5_000)
 }

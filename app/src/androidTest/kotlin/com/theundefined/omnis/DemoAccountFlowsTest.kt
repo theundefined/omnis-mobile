@@ -50,7 +50,9 @@ class DemoAccountFlowsTest {
         composeRule.onNodeWithText(str(R.string.group_by_account), substring = true).performClick()
         composeRule.onNodeWithText(str(R.string.group_none)).performClick()
 
-        composeRule.waitForText(
+        // Lista zachowuje przewinięcie po przegrupowaniu, więc nagłówek może być poza ekranem.
+        // Dokładne dopasowanie — "wszystkie" występuje też w serii "Dzieła wszystkie".
+        composeRule.waitAndScrollToText(
             str(R.string.group_all_header),
             substring = false,
             timeoutMs = 5_000
