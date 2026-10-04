@@ -67,4 +67,23 @@ class HoldDeadlineTest {
             )
         assertEquals(listOf("4", "1", "3"), readyHolds(holds).map { it.id })
     }
+
+    @Test
+    fun dismissedBannerReturnsForNewHoldOrUrgentDeadline() {
+        val today = LocalDate.of(2026, 10, 4)
+        val a = hold("1", "Na półce rezerwacji do 10/10/2026")
+        val b = hold("2", "Na półce rezerwacji do 12/10/2026")
+        val dismissed = listOf(a, b).map { readyHoldBannerToken(it, today) }.toSet()
+
+        assertTrue(isReadyHoldsBannerVisible(listOf(a, b), emptySet(), today))
+        assertFalse(isReadyHoldsBannerVisible(listOf(a, b), dismissed, today))
+        // Odebrana rezerwacja znika z listy — reszta nadal zamknięta.
+        assertFalse(isReadyHoldsBannerVisible(listOf(b), dismissed, today))
+        // Nowa rezerwacja na półce.
+        val c = hold("3", "Na półce rezerwacji do 14/10/2026")
+        assertTrue(isReadyHoldsBannerVisible(listOf(a, b, c), dismissed, today))
+        // Termin a robi się pilny (zostało <= 1 dzień).
+        assertTrue(isReadyHoldsBannerVisible(listOf(a, b), dismissed, LocalDate.of(2026, 10, 9)))
+        assertFalse(isReadyHoldsBannerVisible(emptyList(), emptySet(), today))
+    }
 }

@@ -33,3 +33,22 @@ fun readyHolds(holds: Map<String, List<Hold>>): List<Hold> =
         .flatten()
         .filter { it.available }
         .sortedWith(compareBy(nullsLast()) { holdDeadline(it) })
+
+/** requestid jest nadawane per instytucja — przy wielu kontach unikalna jest dopiero para. */
+fun holdKey(hold: Hold): String = "${hold.accountId}:${hold.id}"
+
+/**
+ * Token zamknięcia banera "do odbioru" dla jednej rezerwacji. Zmienia się, gdy termin odbioru robi
+ * się pilny, więc baner zamknięty wcześniej wraca na ostatnie dni.
+ */
+fun readyHoldBannerToken(hold: Hold, today: LocalDate = LocalDate.now()): String {
+    val urgent = holdDeadline(hold)?.let { isHoldDeadlineUrgent(it, today) } == true
+    return if (urgent) "${holdKey(hold)}:urgent" else holdKey(hold)
+}
+
+/** Baner widać, dopóki choć jednej z gotowych rezerwacji (w bieżącym stanie) nie zamknięto. */
+fun isReadyHoldsBannerVisible(
+    ready: List<Hold>,
+    dismissed: Set<String>,
+    today: LocalDate = LocalDate.now()
+): Boolean = ready.any { readyHoldBannerToken(it, today) !in dismissed }

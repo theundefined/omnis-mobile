@@ -20,6 +20,7 @@ import com.theundefined.omnis.ui.OmnisViewModel
 import com.theundefined.omnis.ui.RefreshProgress
 import com.theundefined.omnis.ui.holdDeadline
 import com.theundefined.omnis.ui.isHoldDeadlineUrgent
+import com.theundefined.omnis.ui.isReadyHoldsBannerVisible
 import com.theundefined.omnis.ui.readyHolds
 import kotlinx.coroutines.flow.collectLatest
 
@@ -28,6 +29,7 @@ import kotlinx.coroutines.flow.collectLatest
 fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val holdsState by viewModel.holdsUiState.collectAsStateWithLifecycle()
+    val dismissedReadyHolds by viewModel.dismissedReadyHolds.collectAsStateWithLifecycle()
     var currentScreen by remember { mutableStateOf("main") }
     // Skan zlecony skrótem aplikacji, konsumowany jednorazowo przez SearchScreen — dzięki temu
     // powrót do wyszukiwarki z listy nie odpala skanera ponownie.
@@ -224,8 +226,12 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
                 Column {
                     uiState.refreshProgress?.let { RefreshProgressBar(it) }
                     val ready = remember(holdsState.holds) { readyHolds(holdsState.holds) }
-                    if (ready.isNotEmpty()) {
-                        ReadyHoldsBanner(ready, onClick = { currentScreen = "holds" })
+                    if (isReadyHoldsBannerVisible(ready, dismissedReadyHolds)) {
+                        ReadyHoldsBanner(
+                            ready,
+                            onClick = { currentScreen = "holds" },
+                            onDismiss = { viewModel.dismissReadyHolds(ready) }
+                        )
                     }
                     LoanViewBar(
                         groupingMode = uiState.groupingMode,
@@ -262,7 +268,7 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
 
 /** Rezerwacje czekające na odbiór — z najbliższym terminem; czerwony, gdy zostały ostatnie dni. */
 @Composable
-private fun ReadyHoldsBanner(holds: List<Hold>, onClick: () -> Unit) {
+private fun ReadyHoldsBanner(holds: List<Hold>, onClick: () -> Unit, onDismiss: () -> Unit) {
     val deadline = holds.firstNotNullOfOrNull { holdDeadline(it) }
     val urgent = deadline?.let { isHoldDeadlineUrgent(it) } == true
     Card(
@@ -299,6 +305,13 @@ private fun ReadyHoldsBanner(holds: List<Hold>, onClick: () -> Unit) {
                 }
             }
             Text("›", style = MaterialTheme.typography.headlineSmall)
+            val dismissDescription = stringResource(R.string.cd_dismiss_ready_holds)
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.semantics { contentDescription = dismissDescription }
+            ) {
+                Icon(painterResource(R.drawable.ic_close), contentDescription = null)
+            }
         }
     }
 }

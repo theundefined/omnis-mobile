@@ -112,9 +112,6 @@ data class HoldsUiState(
     val error: String? = null
 )
 
-/** requestid jest nadawane per instytucja — przy wielu kontach unikalna jest dopiero para. */
-fun holdKey(hold: Hold): String = "${hold.accountId}:${hold.id}"
-
 /**
  * Grupuje rezerwacje po właścicielu; w grupie najpierw te gotowe do odbioru, potem od najnowszej
  * (requestDate to yyyyMMdd, więc porównanie tekstowe = chronologiczne).
@@ -355,6 +352,12 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
     private var holdsFlat: List<Hold> = emptyList()
     // Jak historyGeneration — porzuca wyniki policzone dla starego zestawu kont.
     private var holdsGeneration = 0
+
+    // Rezerwacje do odbioru, dla których użytkownik zamknął baner na ekranie głównym — patrz
+    // readyHoldBannerToken: nowa rezerwacja na półce albo zbliżający się termin pokazują go znowu.
+    private val _dismissedReadyHolds =
+        MutableStateFlow(viewPrefs.getStringSet(PREF_READY_HOLDS_DISMISSED))
+    val dismissedReadyHolds: StateFlow<Set<String>> = _dismissedReadyHolds.asStateFlow()
 
     private val _searchUiState =
         MutableStateFlow(
@@ -1264,6 +1267,15 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         _holdPlacement.value = null
     }
 
+    /**
+     * Zapamiętuje tylko bieżące rezerwacje — stare tokeny same wypadają przy kolejnym zamknięciu.
+     */
+    fun dismissReadyHolds(ready: List<Hold>) {
+        val tokens = ready.map { readyHoldBannerToken(it) }.toSet()
+        viewPrefs.putStringSet(PREF_READY_HOLDS_DISMISSED, tokens)
+        _dismissedReadyHolds.value = tokens
+    }
+
     fun setHistoryGroupingMode(mode: GroupingMode) {
         viewPrefs.put(PREF_HISTORY_GROUPING, mode)
         _historyUiState.update { it.copy(groupingMode = mode) }
@@ -1575,6 +1587,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         const val PREF_HISTORY_GROUPING = "history_grouping"
         const val PREF_HISTORY_SORT = "history_sort"
         const val PREF_SEARCH_MEDIA_TYPES = "search_media_types"
+        const val PREF_READY_HOLDS_DISMISSED = "ready_holds_dismissed"
         const val SEARCH_HISTORY_LIMIT = 20
     }
 

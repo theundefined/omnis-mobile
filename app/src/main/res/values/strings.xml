@@ -70,6 +70,7 @@
         <item quantity="other">%d rezerwacji do odbioru</item>
     </plurals>
     <string name="holds_ready_deadline">Najbliższy termin: %1$s</string>
+    <string name="cd_dismiss_ready_holds">Ukryj powiadomienie o rezerwacjach do odbioru</string>
     <string name="no_holds">Brak rezerwacji.</string>
     <string name="holds_partial_error">Nie udało się pobrać rezerwacji dla: %1$s</string>
     <string name="hold_status_label">Status: %1$s</string>
