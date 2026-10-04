@@ -609,6 +609,78 @@ class OmnisRepository(private val accountManager: AccountManager) {
     }
 
     /**
+     * Rezerwacje (holds) konta — port `client.py::get_requests` (omnis-py), tylko kategoria hold.
+     */
+    suspend fun getHoldsForAccount(account: Account): Result<List<Hold>> {
+        return try {
+            val api =
+                createClient(
+                    account.tenant.baseUrl,
+                    account.timeoutSeconds ?: DEFAULT_TIMEOUT_SECONDS
+                )
+            val token =
+                loginForToken(api, account).getOrElse {
+                    return Result.failure(it)
+                }
+            val response = api.getRequests("Bearer $token")
+            if (!response.isSuccessful) {
+                val errorMsg =
+                    if (response.code() == 401) "Sesja wygasła lub błędne hasło."
+                    else "Błąd pobierania rezerwacji: ${response.code()}"
+                return Result.failure(Exception(errorMsg))
+            }
+            val items = response.body()?.holdItems(createPrimoGson()) ?: emptyList()
+            Result.success(items.mapNotNull { it.toHold(account) })
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Port `client.py::cancel_hold` (omnis-py), plus ponowny odczyt rezerwacji tym samym tokenem —
+     * kształt odpowiedzi sukcesu cancel_requests nie był nigdy zweryfikowany, więc sam kod 2xx nie
+     * dowodzi, że rezerwacja zniknęła. Sukces niesie świeżą listę rezerwacji konta albo null, gdy
+     * anulowanie przeszło, ale odczytu nie udało się zrobić.
+     */
+    suspend fun cancelHold(account: Account, requestId: String): Result<List<Hold>?> {
+        return try {
+            val api =
+                createClient(
+                    account.tenant.baseUrl,
+                    account.timeoutSeconds ?: DEFAULT_TIMEOUT_SECONDS
+                )
+            val token =
+                loginForToken(api, account).getOrElse {
+                    return Result.failure(it)
+                }
+            val response =
+                api.cancelRequest(
+                    "Bearer $token",
+                    body = mapOf("request_id" to requestId, "request_type" to "holds")
+                )
+            if (!response.isSuccessful) {
+                return Result.failure(
+                    Exception("Anulowanie rezerwacji nieudane: ${response.code()}")
+                )
+            }
+            val refreshed =
+                try {
+                    api.getRequests("Bearer $token")
+                        .takeIf { it.isSuccessful }
+                        ?.body()
+                        ?.holdItems(createPrimoGson())
+                        ?.mapNotNull { it.toHold(account) }
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    null
+                }
+            Result.success(refreshed)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Wyszukiwanie katalogu — port `client.py::search_books` (omnis-py). Zawsze zwraca WSZYSTKIE
      * filie dla wszystkich wydań (bez branch_filter po stronie serwera) — filtrowanie po
      * zaznaczonych filiach dzieje się po stronie klienta w ViewModelu (patrz

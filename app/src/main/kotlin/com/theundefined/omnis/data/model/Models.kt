@@ -129,6 +129,84 @@ fun renewStatusMessages(element: JsonElement?): List<String> {
     return items.filter { it.isJsonPrimitive }.map { it.asString.trim() }.filter { it.isNotEmpty() }
 }
 
+// --- Rezerwacje (myaccount/requests) ---
+// Kształt pozycji `hold` zweryfikowany na żywo w omnis-py (Hold w client.py, test
+// test_get_requests_parses_hold). Pozostałe kategorie (photocopies, bookings, cdls, ills, acqs)
+// nigdy nie były widziane z danymi, więc ich nie modelujemy.
+
+data class RequestsResponse(val data: RequestsData?)
+
+// `hold` jako surowy JsonElement: kontrolnie widziana była tablica, ale Primo potrafi zamienić
+// jednoelementową tablicę na goły obiekt (patrz pnxDeserializer) — rozpakowuje holdItems.
+data class RequestsData(val holds: HoldsWrapper?)
+
+data class HoldsWrapper(val hold: JsonElement?)
+
+// Wszystkie pola nullable — Gson omija konstruktor, brak klucza daje null mimo typu Kotlinowego.
+data class HoldResponseItem(
+    val requestid: String?,
+    val title: String?,
+    val author: String?,
+    val holdstatus: String?,
+    val available: String?,
+    val cancel: String?,
+    val pickuplocationname: String?,
+    val requestdate: String?,
+    val mmsid: String?
+)
+
+fun RequestsResponse.holdItems(gson: Gson): List<HoldResponseItem> {
+    val element = data?.holds?.hold ?: return emptyList()
+    val items =
+        when {
+            element.isJsonArray -> element.asJsonArray.toList()
+            element.isJsonObject -> listOf(element)
+            else -> emptyList()
+        }
+    return items.filter { it.isJsonObject }.map { gson.fromJson(it, HoldResponseItem::class.java) }
+}
+
+/** Rezerwacja (hold) jednego konta — model wewnętrzny, mapowany z [HoldResponseItem]. */
+data class Hold(
+    val id: String,
+    val title: String,
+    val author: String?,
+    // Już przetłumaczony przez Primo (lang=pl), np. "W realizacji" — pokazujemy dosłownie.
+    val status: String,
+    // available == "Y". Znaczenie wywnioskowane (egzemplarz czeka na półce odbiorów), nie
+    // potwierdzone na żywo — w jedynej zweryfikowanej rezerwacji było "N".
+    val available: Boolean,
+    val cancellable: Boolean,
+    val pickupLocation: String?,
+    // yyyyMMdd
+    val requestDate: String?,
+    val mmsid: String?,
+    val accountId: String,
+    val ownerName: String,
+    // Nazwa z KNOWN_TENANTS — `ilsinstitutionname` dla rezerwacji z sieci OMNIS to etykieta UI
+    // Primo ("Sprawdź dostępność w innych bibliotekach"), nie nazwa biblioteki (jak w Loan).
+    val tenantName: String
+)
+
+/** null, gdy pozycja nie ma ID — bez niego nie da się jej anulować ani jednoznacznie pokazać. */
+fun HoldResponseItem.toHold(account: Account): Hold? {
+    val id = requestid?.takeIf { it.isNotBlank() } ?: return null
+    return Hold(
+        id = id,
+        title = title ?: "",
+        author = author,
+        status = holdstatus ?: "",
+        available = available == "Y",
+        cancellable = cancel == "Y",
+        pickupLocation = pickuplocationname,
+        requestDate = requestdate,
+        mmsid = mmsid,
+        accountId = account.id,
+        ownerName = account.displayName ?: account.username,
+        tenantName = account.tenant.name
+    )
+}
+
 @Serializable
 data class HistoryCacheEntry(
     val loans: List<Loan> = emptyList(),

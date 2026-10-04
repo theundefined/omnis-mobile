@@ -11,6 +11,7 @@ import com.theundefined.omnis.data.model.BranchInfo
 import com.theundefined.omnis.data.model.DueDate
 import com.theundefined.omnis.data.model.DueDateLookup
 import com.theundefined.omnis.data.model.HistoryCacheEntry
+import com.theundefined.omnis.data.model.Hold
 import com.theundefined.omnis.data.model.KNOWN_TENANTS
 import com.theundefined.omnis.data.model.Loan
 import com.theundefined.omnis.data.model.SearchBranchPrefs
@@ -92,6 +93,37 @@ data class BranchDialogState(
     val isLoading: Boolean = false,
     val info: BranchInfo? = null
 )
+
+/**
+ * Rezerwacje wszystkich włączonych kont. Trzymane tylko w pamięci (bez trwałego cache'u jak przy
+ * wypożyczeniach): status rezerwacji zmienia się bez udziału użytkownika (np. "do odbioru"), więc
+ * nieaktualna lista z dysku wprowadzałaby w błąd. `cancellingIds` to klucze [holdKey] pozycji, dla
+ * których trwa anulowanie.
+ */
+data class HoldsUiState(
+    val holds: Map<String, List<Hold>> = emptyMap(), // ownerName -> holds
+    val isLoading: Boolean = false,
+    val hasLoadedOnce: Boolean = false,
+    val cancellingIds: Set<String> = emptySet(),
+    val error: String? = null
+)
+
+/** requestid jest nadawane per instytucja — przy wielu kontach unikalna jest dopiero para. */
+fun holdKey(hold: Hold): String = "${hold.accountId}:${hold.id}"
+
+/**
+ * Grupuje rezerwacje po właścicielu; w grupie najpierw te gotowe do odbioru, potem od najnowszej
+ * (requestDate to yyyyMMdd, więc porównanie tekstowe = chronologiczne).
+ */
+fun groupHolds(holds: List<Hold>): Map<String, List<Hold>> =
+    holds
+        .groupBy { it.ownerName }
+        .toSortedMap(compareBy(Collator.getInstance(Locale("pl"))) { it })
+        .mapValues { (_, group) ->
+            group.sortedWith(
+                compareByDescending<Hold> { it.available }.thenByDescending { it.requestDate ?: "" }
+            )
+        }
 
 /** Kursor paginacji historii pojedynczego konta — dokąd doszliśmy i czy jest więcej stron. */
 private data class HistoryCursor(val nextOffset: Int, val hasMore: Boolean)
@@ -312,6 +344,12 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
     // zestawu kont mogłyby wylądować w świeżo wyczyszczonym stanie.
     private var historyGeneration = 0
 
+    private val _holdsUiState = MutableStateFlow(HoldsUiState())
+    val holdsUiState: StateFlow<HoldsUiState> = _holdsUiState.asStateFlow()
+    private var holdsFlat: List<Hold> = emptyList()
+    // Jak historyGeneration — porzuca wyniki policzone dla starego zestawu kont.
+    private var holdsGeneration = 0
+
     private val _searchUiState =
         MutableStateFlow(
             SearchUiState(selectedMediaTypes = viewPrefs.getStringSet(PREF_SEARCH_MEDIA_TYPES))
@@ -380,6 +418,9 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
 
     sealed class UiEvent {
         object AccountAdded : UiEvent()
+
+        /** `error == null` = rezerwacja anulowana. */
+        data class HoldCancelFinished(val title: String, val error: String?) : UiEvent()
 
         data class BulkRenewFinished(val succeeded: Int, val failedTitles: List<String>) :
             UiEvent()
@@ -603,6 +644,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         repository.updateAccount(updated)
         refreshAccounts()
         resetHistoryState()
+        resetHoldsState()
         onAccountSetChanged()
     }
 
@@ -627,6 +669,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
                 .onSuccess {
                     refreshAccounts()
                     resetHistoryState()
+                    resetHoldsState()
                     onAccountSetChanged()
                     _events.emit(UiEvent.AccountAdded)
                 }
@@ -701,6 +744,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         repository.removeAccount(account)
         refreshAccounts()
         resetHistoryState()
+        resetHoldsState()
         onAccountSetChanged()
     }
 
@@ -708,6 +752,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         repository.enterDemoMode()
         refreshAccounts()
         resetHistoryState()
+        resetHoldsState()
         onAccountSetChanged()
     }
 
@@ -715,6 +760,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         repository.exitDemoMode()
         refreshAccounts()
         resetHistoryState()
+        resetHoldsState()
         onAccountSetChanged()
     }
 
@@ -892,6 +938,101 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
                                 .getString(R.string.history_partial_error, names.joinToString(", "))
                         }
             )
+        }
+    }
+
+    private fun resetHoldsState() {
+        holdsGeneration++
+        holdsFlat = emptyList()
+        _holdsUiState.value = HoldsUiState()
+    }
+
+    /**
+     * Ładuje rezerwacje włączonych kont — po kolei, jedno logowanie na konto. Jak w loadHistory():
+     * bez `forceRefresh` no-op, jeśli w tej sesji już się udało (bez re-logowania przy każdym
+     * wejściu na ekran).
+     */
+    fun loadHolds(forceRefresh: Boolean = false) {
+        if (_holdsUiState.value.isLoading) return
+        if (_holdsUiState.value.hasLoadedOnce && !forceRefresh) return
+        val generation = holdsGeneration
+        viewModelScope.launch {
+            _holdsUiState.update { it.copy(isLoading = true, error = null) }
+            val collected = mutableListOf<Hold>()
+            val failedAccounts = mutableListOf<Account>()
+            var successCount = 0
+            _uiState.value.accounts
+                .filter { it.isEnabled }
+                .forEach { account ->
+                    repository
+                        .getHoldsForAccount(account)
+                        .onSuccess {
+                            collected.addAll(it)
+                            successCount++
+                        }
+                        .onFailure { failedAccounts.add(account) }
+                }
+            if (generation != holdsGeneration) return@launch
+            // Konto, którego nie udało się pobrać, zachowuje poprzednio pokazane rezerwacje.
+            val failedIds = failedAccounts.map { it.id }.toSet()
+            holdsFlat = holdsFlat.filter { it.accountId in failedIds } + collected
+            _holdsUiState.update {
+                it.copy(
+                    holds = groupHolds(holdsFlat),
+                    isLoading = false,
+                    hasLoadedOnce = it.hasLoadedOnce || successCount > 0,
+                    error =
+                        failedAccounts
+                            .takeIf { failed -> failed.isNotEmpty() }
+                            ?.let { failed ->
+                                getApplication<Application>()
+                                    .getString(
+                                        R.string.holds_partial_error,
+                                        failed.joinToString(", ") { a ->
+                                            a.displayName ?: a.username
+                                        }
+                                    )
+                            }
+                )
+            }
+        }
+    }
+
+    /**
+     * Anuluje rezerwację. O wyniku przesądza lista odczytana zaraz po anulowaniu (patrz
+     * OmnisRepository.cancelHold): jeśli rezerwacja wciąż na niej jest, zgłaszamy błąd mimo HTTP
+     * 2xx. Gdy samego odczytu nie było, usuwamy pozycję lokalnie.
+     */
+    fun cancelHold(hold: Hold) {
+        val account = _uiState.value.accounts.find { it.id == hold.accountId } ?: return
+        val key = holdKey(hold)
+        if (key in _holdsUiState.value.cancellingIds) return
+        val generation = holdsGeneration
+        viewModelScope.launch {
+            _holdsUiState.update { it.copy(cancellingIds = it.cancellingIds + key) }
+            val result = repository.cancelHold(account, hold.id)
+            if (generation != holdsGeneration) return@launch
+            val refreshed = result.getOrNull()
+            val error =
+                when {
+                    result.isFailure -> result.exceptionOrNull()?.message ?: ""
+                    refreshed != null && refreshed.any { it.id == hold.id } ->
+                        getApplication<Application>().getString(R.string.hold_cancel_unconfirmed)
+                    else -> null
+                }
+            if (result.isSuccess) {
+                val others = holdsFlat.filter { it.accountId != account.id }
+                holdsFlat =
+                    others +
+                        (refreshed
+                            ?: holdsFlat.filter {
+                                it.accountId == account.id && holdKey(it) != key
+                            })
+            }
+            _holdsUiState.update {
+                it.copy(holds = groupHolds(holdsFlat), cancellingIds = it.cancellingIds - key)
+            }
+            _events.emit(UiEvent.HoldCancelFinished(hold.title, error))
         }
     }
 

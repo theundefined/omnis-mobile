@@ -54,6 +54,22 @@ interface OmnisApi {
         @Body body: Map<String, String>
     ): Response<Any>
 
+    @GET("/primaws/rest/priv/myaccount/requests")
+    suspend fun getRequests(
+        @Header("Authorization") token: String,
+        @Query("lang") lang: String = "pl"
+    ): Response<RequestsResponse>
+
+    // Ścieżka i body przechwycone z akcji anulowania w oficjalnym UI (omnis-py, cancel_hold):
+    // request_type to "holds" (liczba mnoga, jak klucz kategorii), nie "hold". Kształt odpowiedzi
+    // sukcesu nie był zweryfikowany — liczy się tylko kod HTTP.
+    @POST("/primaws/rest/priv/myaccount/cancel_requests")
+    suspend fun cancelRequest(
+        @Header("Authorization") token: String,
+        @Query("lang") lang: String = "pl",
+        @Body body: Map<String, String>
+    ): Response<ResponseBody>
+
     @GET("/primaws/rest/pub/pnxs")
     suspend fun searchPnxs(
         @QueryMap params: Map<String, String>,
