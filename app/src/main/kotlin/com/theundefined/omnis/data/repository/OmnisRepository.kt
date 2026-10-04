@@ -622,18 +622,26 @@ class OmnisRepository(private val accountManager: AccountManager) {
                 loginForToken(api, account).getOrElse {
                     return Result.failure(it)
                 }
-            val response = api.getRequests("Bearer $token")
-            if (!response.isSuccessful) {
-                val errorMsg =
-                    if (response.code() == 401) "Sesja wygasła lub błędne hasło."
-                    else "Błąd pobierania rezerwacji: ${response.code()}"
-                return Result.failure(Exception(errorMsg))
-            }
-            val items = response.body()?.holdItems(createPrimoGson()) ?: emptyList()
-            Result.success(items.mapNotNull { it.toHold(account) })
+            fetchHolds(api, token, account)
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    private suspend fun fetchHolds(
+        api: OmnisApi,
+        token: String,
+        account: Account
+    ): Result<List<Hold>> {
+        val response = api.getRequests("Bearer $token")
+        if (!response.isSuccessful) {
+            val errorMsg =
+                if (response.code() == 401) "Sesja wygasła lub błędne hasło."
+                else "Błąd pobierania rezerwacji: ${response.code()}"
+            return Result.failure(Exception(errorMsg))
+        }
+        val items = response.body()?.holdItems(createPrimoGson()) ?: emptyList()
+        return Result.success(items.mapNotNull { it.toHold(account) })
     }
 
     /**
@@ -663,6 +671,9 @@ class OmnisRepository(private val accountManager: AccountManager) {
                     Exception("Anulowanie rezerwacji nieudane: ${response.code()}")
                 )
             }
+            primoFailureMessage(response.body()?.string())?.let {
+                return Result.failure(Exception(it))
+            }
             val refreshed =
                 try {
                     api.getRequests("Bearer $token")
@@ -675,6 +686,152 @@ class OmnisRepository(private val accountManager: AccountManager) {
                     null
                 }
             Result.success(refreshed)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Sesja jednego składania rezerwacji: jeden klient (z ciasteczkami) i jeden token na cały
+     * przepływ — `link-to-service` egzemplarza niesie `physicalServiceId`, który zmienia się między
+     * logowaniami, więc formularz i złożenie muszą iść w tej samej sesji, w której pobrano
+     * egzemplarze. Trzymana tylko w pamięci, na czas jednego okna; po błędzie zaczynamy od nowa.
+     */
+    class HoldSession
+    internal constructor(
+        val account: Account,
+        internal val api: OmnisApi,
+        internal val token: String
+    )
+
+    suspend fun openHoldSession(account: Account): Result<HoldSession> {
+        return try {
+            val api =
+                createClient(
+                    account.tenant.baseUrl,
+                    account.timeoutSeconds ?: DEFAULT_TIMEOUT_SECONDS
+                )
+            loginForToken(api, account).map { HoldSession(account, api, it) }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Egzemplarze wydania [mmsid] w filii [holding], które da się zarezerwować — port
+     * `client.py::get_holdable_items` (omnis-py), ale dla jednej, już wybranej filii: holding z
+     * holKey mamy z wyników wyszukiwania, więc bez ponownego szukania rekordu i bez pytania o
+     * wszystkie filie naraz. getPhysicalService zawsze świeży (zależy od sesji).
+     */
+    suspend fun getHoldableItems(
+        session: HoldSession,
+        mmsid: String,
+        holding: Holding
+    ): Result<List<HoldableItem>> {
+        return try {
+            val tenant = session.account.tenant
+            val bearer = "Bearer ${session.token}"
+            val serviceId =
+                session.api
+                    .getPhysicalServiceId(mmsid, physicalServiceParams(tenant, mmsid), bearer)
+                    .body()
+                    ?.physicalServiceId
+                    ?: return Result.failure(
+                        Exception("Biblioteka nie udostępnia egzemplarzy tego wydania.")
+                    )
+            val response =
+                session.api.getHoldingsStatus(
+                    serviceId,
+                    mapOf("record-institution" to tenant.institution, "lang" to "pl"),
+                    bearer,
+                    holdingsRequest(tenant, mmsid, holding)
+                )
+            if (!response.isSuccessful) {
+                return Result.failure(Exception("Błąd pobierania egzemplarzy: ${response.code()}"))
+            }
+            Result.success(response.body()?.holdableItems(createPrimoGson(), mmsid) ?: emptyList())
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /** Formularz rezerwacji egzemplarza (tylko odczyt) — port `client.py::get_hold_options`. */
+    suspend fun getHoldOptions(
+        session: HoldSession,
+        item: HoldableItem
+    ): Result<HoldRequestOptions> {
+        return try {
+            // Te same dodatkowe parametry, które wysyła UI Primo przy otwieraniu formularza.
+            val params =
+                mapOf(
+                    "lang" to "pl",
+                    "itemcategoryname" to (item.category ?: ""),
+                    "itemid" to item.itemId,
+                    "itemstatusname" to (item.statusName ?: ""),
+                    "mainlocationname" to (item.mainLocation ?: ""),
+                    "secondarylocationname" to (item.subLocation ?: ""),
+                    "vid" to session.account.tenant.view
+                )
+            val response =
+                session.api.getHoldForm(item.requestPath, params, "Bearer ${session.token}")
+            if (!response.isSuccessful) {
+                return Result.failure(
+                    Exception("Błąd pobierania formularza rezerwacji: ${response.code()}")
+                )
+            }
+            response.body()?.toOptions(item)?.let { Result.success(it) }
+                ?: Result.failure(Exception("Ten egzemplarz nie oferuje rezerwacji."))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getHolds(session: HoldSession): Result<List<Hold>> {
+        return try {
+            fetchHolds(session.api, session.token, session.account)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Złożenie rezerwacji — port `client.py::place_hold`; body jak w oficjalnym UI. Odpowiedź
+     * sukcesu nie niesie ID, a nowa rezerwacja pojawia się w myaccount/requests z kilkusekundowym
+     * opóźnieniem — potwierdzenie to zadanie wołającego (getHolds w tej samej sesji).
+     */
+    suspend fun placeHold(
+        session: HoldSession,
+        options: HoldRequestOptions,
+        pickup: PickupLocation
+    ): Result<Unit> {
+        return try {
+            val body =
+                mapOf(
+                    "requestType" to options.requestType,
+                    "pickupLocation" to pickup.id,
+                    "materialType" to options.materialType,
+                    "itemId" to options.item.itemId,
+                    "group_id" to options.item.mmsid,
+                    "pickupLibraryId" to pickup.id,
+                    "pickupType" to pickup.type
+                )
+            val response =
+                session.api.placeHold(
+                    options.item.requestPath,
+                    mapOf("lang" to "pl"),
+                    "Bearer ${session.token}",
+                    body
+                )
+            if (!response.isSuccessful) {
+                val errorMsg =
+                    if (response.code() == 401) "Sesja wygasła — spróbuj ponownie."
+                    else "Rezerwacja nieudana: ${response.code()}"
+                return Result.failure(Exception(errorMsg))
+            }
+            primoFailureMessage(response.body()?.string())?.let {
+                return Result.failure(Exception(it))
+            }
+            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -849,7 +1006,8 @@ class OmnisRepository(private val accountManager: AccountManager) {
                                         // Primo bywa, że daje "" zamiast null (np. UWr) —
                                         // pusty link otwierany jako VIEW wywalał aplikację.
                                         mapsUrl = h.stackMapUrl?.trim()?.takeIf { it.isNotEmpty() },
-                                        dueDatePending = unavailable
+                                        dueDatePending = unavailable,
+                                        holding = h
                                     )
                                 }
                             BookVersion(
@@ -868,7 +1026,8 @@ class OmnisRepository(private val accountManager: AccountManager) {
                                 subjects = v.pnx.display["subject"] ?: emptyList(),
                                 language = v.pnx.displayFirst("language"),
                                 physicalDescription = v.pnx.displayFirst("format"),
-                                description = v.pnx.addataFirst("abstract")
+                                description = v.pnx.addataFirst("abstract"),
+                                networkMmsid = v.pnx.control["originalsourceid"]?.firstOrNull()
                             )
                         }
                     SearchResult(frbrgroupid, title, author, versions)
@@ -905,14 +1064,7 @@ class OmnisRepository(private val accountManager: AccountManager) {
                             try {
                                 api.getPhysicalServiceId(
                                         mmsid,
-                                        mapOf(
-                                            "vid" to tenant.view,
-                                            "lang" to "pl",
-                                            "recordOwner" to "48OMNIS_NETWORK",
-                                            "sourceRecordId" to mmsid,
-                                            "resource_type" to "book",
-                                            "isRapido" to "false"
-                                        ),
+                                        physicalServiceParams(tenant, mmsid),
                                         bearer
                                     )
                                     .body()
@@ -949,24 +1101,12 @@ class OmnisRepository(private val accountManager: AccountManager) {
         serviceId: String,
         lookup: DueDateLookup
     ): DueDate? {
-        val body =
-            HoldingsStatusRequest(
-                filters =
-                    HoldingsFilters(
-                        sublibrary = lookup.holding.mainLocation,
-                        holid = lookup.holding.holdId ?: "",
-                        sublibs = lookup.holding.mainLocation,
-                        ilsRecordList = listOf(IlsRecordRef(tenant.institution, lookup.bareMmsid)),
-                        vid = tenant.view
-                    ),
-                locations = listOf(lookup.holding)
-            )
         val status =
             api.getHoldingsStatus(
                     serviceId,
                     mapOf("record-institution" to tenant.institution, "lang" to "pl"),
                     bearer,
-                    body
+                    holdingsRequest(tenant, lookup.bareMmsid, lookup.holding)
                 )
                 .body()
         return status
@@ -980,6 +1120,31 @@ class OmnisRepository(private val accountManager: AccountManager) {
                 }
             }
     }
+
+    private fun physicalServiceParams(tenant: Tenant, bareMmsid: String): Map<String, String> =
+        mapOf(
+            "vid" to tenant.view,
+            "lang" to "pl",
+            "recordOwner" to "48OMNIS_NETWORK",
+            "sourceRecordId" to bareMmsid,
+            "resource_type" to "book",
+            "isRapido" to "false"
+        )
+
+    // `locations` zawiera WYŁĄCZNIE tę jedną filię (z holKey) — z pełną listą holdingów Primo
+    // zwraca pustą listę egzemplarzy (patrz CLAUDE.md omnis-py).
+    private fun holdingsRequest(tenant: Tenant, bareMmsid: String, holding: Holding) =
+        HoldingsStatusRequest(
+            filters =
+                HoldingsFilters(
+                    sublibrary = holding.mainLocation,
+                    holid = holding.holdId ?: "",
+                    sublibs = holding.mainLocation,
+                    ilsRecordList = listOf(IlsRecordRef(tenant.institution, bareMmsid)),
+                    vid = tenant.view
+                ),
+            locations = listOf(holding)
+        )
 
     fun getAccounts() = accountManager.getAccounts()
 

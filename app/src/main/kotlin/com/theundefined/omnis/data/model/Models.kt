@@ -300,7 +300,10 @@ data class BranchAvailability(
     val overdue: Boolean = false,
     // Google Maps — fizyczna lokalizacja na regale. holding.stackMapUrl, patrz Holding.
     val mapsUrl: String? = null,
-    val dueDatePending: Boolean = false
+    val dueDatePending: Boolean = false,
+    // Surowy holding z /pub/delivery (z holKey) — składanie rezerwacji pyta ILSServices/holdings
+    // o egzemplarze dokładnie tej filii, bez ponownego wyszukiwania rekordu.
+    val holding: Holding? = null
 )
 
 data class BookVersion(
@@ -328,7 +331,10 @@ data class BookVersion(
     // pnx.addata["abstract"] (MARC 520) — bywa wielojęzyczne (kolejne elementy listy), bierzemy
     // pierwszy wpis bez próby rozpoznawania języka (Primo nie taguje tu jednoznacznie języka per
     // element, w odróżnieniu np. od "contributorfull").
-    val description: String? = null
+    val description: String? = null,
+    // Id rekordu w strefie sieciowej (pnx.control.originalsourceid) — pod nim myaccount/requests
+    // potrafi zgłaszać rezerwacje, więc potrzebne do wykrycia, że konto już ma ten tytuł.
+    val networkMmsid: String? = null
 ) {
     /**
      * Znormalizowany typ nośnika (małe litery) — klucz filtra typów w wyszukiwarce. Brak typu to
@@ -527,6 +533,19 @@ data class HoldingsStatusData(val itemInfo: ItemInfo = ItemInfo())
 
 data class ItemInfo(val locations: List<StatusLocation>? = null)
 
-data class StatusLocation(val items: List<StatusItem>? = null)
+data class StatusLocation(
+    val items: List<StatusItem>? = null,
+    @SerializedName("main-location") val mainLocation: String? = null,
+    @SerializedName("sub-location") val subLocation: String? = null
+)
 
-data class StatusItem(val itemstatusname: String = "")
+// Pola poza itemstatusname czyta tylko składanie rezerwacji (HoldPlacement.kt, holdableItems).
+data class StatusItem(
+    val itemstatusname: String = "",
+    val itemid: String? = null,
+    val mmsid: String? = null,
+    val itemcategoryname: String? = null,
+    val mainlocationname: String? = null,
+    val secondarylocationname: String? = null,
+    val listofservices: ServiceList? = null
+)

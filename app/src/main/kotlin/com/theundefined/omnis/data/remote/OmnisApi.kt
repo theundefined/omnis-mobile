@@ -61,8 +61,9 @@ interface OmnisApi {
     ): Response<RequestsResponse>
 
     // Ścieżka i body przechwycone z akcji anulowania w oficjalnym UI (omnis-py, cancel_hold):
-    // request_type to "holds" (liczba mnoga, jak klucz kategorii), nie "hold". Kształt odpowiedzi
-    // sukcesu nie był zweryfikowany — liczy się tylko kod HTTP.
+    // request_type to "holds" (liczba mnoga, jak klucz kategorii), nie "hold". Odpowiedź sukcesu
+    // (zweryfikowana w omnis-py 2026-10-04) to koperta "status": "ok", "reply-code": "0000";
+    // błąd bywa HTTP 200 z "status": "failed" — patrz primoFailureMessage.
     @POST("/primaws/rest/priv/myaccount/cancel_requests")
     suspend fun cancelRequest(
         @Header("Authorization") token: String,
@@ -105,4 +106,23 @@ interface OmnisApi {
         @Header("Authorization") token: String,
         @Body body: HoldingsStatusRequest
     ): Response<HoldingsStatusResponse>
+
+    // Formularz rezerwacji jednego egzemplarza. [requestPath] to `link-to-service` z
+    // ILSServices/holdings, użyty dosłownie (już niesie institution/hasHold/hasBooking w query).
+    @GET
+    suspend fun getHoldForm(
+        @Url requestPath: String,
+        @QueryMap params: Map<String, String>,
+        @Header("Authorization") token: String
+    ): Response<HoldFormResponse>
+
+    // Złożenie rezerwacji — ten sam URL co formularz. Sukces to tylko koperta
+    // {"status": "ok", "reply-text": "ok"}, bez ID rezerwacji (omnis-py, zweryfikowane na żywo).
+    @POST
+    suspend fun placeHold(
+        @Url requestPath: String,
+        @QueryMap params: Map<String, String>,
+        @Header("Authorization") token: String,
+        @Body body: Map<String, String>
+    ): Response<ResponseBody>
 }

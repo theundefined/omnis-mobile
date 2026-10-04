@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.theundefined.omnis.R
 import com.theundefined.omnis.data.local.ViewPrefs
 import com.theundefined.omnis.data.model.Account
+import com.theundefined.omnis.data.model.BookVersion
 import com.theundefined.omnis.data.model.BranchInfo
 import com.theundefined.omnis.data.model.DueDate
 import com.theundefined.omnis.data.model.DueDateLookup
@@ -14,12 +15,14 @@ import com.theundefined.omnis.data.model.HistoryCacheEntry
 import com.theundefined.omnis.data.model.Hold
 import com.theundefined.omnis.data.model.KNOWN_TENANTS
 import com.theundefined.omnis.data.model.Loan
+import com.theundefined.omnis.data.model.PickupLocation
 import com.theundefined.omnis.data.model.SearchBranchPrefs
 import com.theundefined.omnis.data.model.SearchField
 import com.theundefined.omnis.data.model.SearchHistoryEntry
 import com.theundefined.omnis.data.model.SearchPage
 import com.theundefined.omnis.data.model.SearchResult
 import com.theundefined.omnis.data.model.Tenant
+import com.theundefined.omnis.data.model.pickHoldableItem
 import com.theundefined.omnis.data.model.searchKey
 import com.theundefined.omnis.data.model.seriesSearchTerm
 import com.theundefined.omnis.data.model.seriesVolume
@@ -31,6 +34,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -124,6 +128,8 @@ fun groupHolds(holds: List<Hold>): Map<String, List<Hold>> =
                 compareByDescending<Hold> { it.available }.thenByDescending { it.requestDate ?: "" }
             )
         }
+
+private val HOLD_CONFIRM_DELAYS_MS = listOf(1000L, 2000L, 3000L, 5000L)
 
 /** Kursor paginacji historii pojedynczego konta — dokąd doszliśmy i czy jest więcej stron. */
 private data class HistoryCursor(val nextOffset: Int, val hasMore: Boolean)
@@ -412,6 +418,15 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
     val branchMap: StateFlow<BranchMapState?> = _branchMap.asStateFlow()
     private var branchMapJob: Job? = null
     private val placeGeocoder by lazy { PlaceGeocoder(getApplication<Application>()) }
+
+    private val _holdPlacement = MutableStateFlow<HoldPlacementState?>(null)
+    val holdPlacement: StateFlow<HoldPlacementState?> = _holdPlacement.asStateFlow()
+    private var holdSession: OmnisRepository.HoldSession? = null
+    private var holdPrepareJob: Job? = null
+    // Id rezerwacji konta sprzed złożenia — po nich poznajemy nową (odpowiedź Primo nie niesie ID).
+    private var holdBaseline: Set<String> = emptySet()
+    // Jak searchGeneration — wynik spóźnionego kroku nie trafi do okna innej rezerwacji.
+    private var holdPlacementGeneration = 0
 
     private val _events = MutableSharedFlow<UiEvent>()
     val events: SharedFlow<UiEvent> = _events.asSharedFlow()
@@ -1063,6 +1078,190 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
             }
             _events.emit(UiEvent.HoldCancelFinished(hold.title, error))
         }
+    }
+
+    fun startHoldPlacement(tenantKey: String, result: SearchResult, version: BookVersion) {
+        val accounts = holdAccounts(_uiState.value.accounts, tenantKey)
+        val branches = holdBranches(version)
+        if (accounts.isEmpty() || branches.isEmpty()) return
+        resetHoldPlacement()
+        _holdPlacement.value =
+            HoldPlacementState(
+                title = result.title,
+                version = version,
+                accounts = accounts,
+                branches = branches
+            )
+    }
+
+    fun selectHoldAccount(accountId: String) = updateHoldSelection {
+        it.copy(accountId = accountId)
+    }
+
+    fun selectHoldBranch(index: Int) = updateHoldSelection { it.copy(branchIndex = index) }
+
+    fun selectHoldPickup(pickup: PickupLocation) {
+        _holdPlacement.update {
+            if (it?.phase == HoldPlacementPhase.CONFIRM) it.copy(pickup = pickup) else it
+        }
+    }
+
+    private fun updateHoldSelection(change: (HoldPlacementState) -> HoldPlacementState) {
+        _holdPlacement.update {
+            if (it?.phase == HoldPlacementPhase.SELECT) change(it).copy(error = null) else it
+        }
+    }
+
+    /** Z podsumowania z powrotem do wyboru konta/filii — sesja do wyrzucenia (inne konto?). */
+    fun backToHoldSelection() {
+        if (_holdPlacement.value?.phase != HoldPlacementPhase.CONFIRM) return
+        holdSession = null
+        _holdPlacement.update {
+            it?.copy(
+                phase = HoldPlacementPhase.SELECT,
+                options = null,
+                pickup = null,
+                existingHold = null
+            )
+        }
+    }
+
+    /**
+     * Wybrane konto+filia -> jedna sesja: logowanie, egzemplarze tej jednej filii, formularz
+     * wybranego egzemplarza i bieżące rezerwacje konta (ostrzeżenie o duplikacie + punkt
+     * odniesienia do potwierdzenia po złożeniu). Każdy błąd wraca do wyboru, a ponowna próba loguje
+     * od nowa.
+     */
+    fun prepareHold() {
+        val state = _holdPlacement.value ?: return
+        if (state.phase != HoldPlacementPhase.SELECT) return
+        val account = state.account ?: return
+        val branch = state.branch ?: return
+        val holding = branch.holding ?: return
+        val generation = holdPlacementGeneration
+        val app = getApplication<Application>()
+        _holdPlacement.update { it?.copy(phase = HoldPlacementPhase.LOADING, error = null) }
+        holdPrepareJob =
+            viewModelScope.launch {
+                fun fail(message: String) {
+                    if (generation != holdPlacementGeneration) return
+                    holdSession = null
+                    _holdPlacement.update {
+                        it?.copy(phase = HoldPlacementPhase.SELECT, error = message)
+                    }
+                }
+                val session =
+                    repository.openHoldSession(account).getOrElse {
+                        return@launch fail(it.message ?: "")
+                    }
+                val items =
+                    repository.getHoldableItems(session, state.version.mmsid, holding).getOrElse {
+                        return@launch fail(it.message ?: "")
+                    }
+                val item =
+                    pickHoldableItem(items)
+                        ?: return@launch fail(
+                            app.getString(R.string.hold_place_no_items, branch.libraryName)
+                        )
+                val options =
+                    repository.getHoldOptions(session, item).getOrElse {
+                        return@launch fail(it.message ?: "")
+                    }
+                if (options.pickupLocations.isEmpty()) {
+                    return@launch fail(app.getString(R.string.hold_place_no_pickup))
+                }
+                val holds =
+                    repository.getHolds(session).getOrElse {
+                        return@launch fail(it.message ?: "")
+                    }
+                if (generation != holdPlacementGeneration) return@launch
+                holdSession = session
+                holdBaseline = holds.map { it.id }.toSet()
+                val recordIds = holdRecordIds(state.version, item.mmsid)
+                _holdPlacement.update {
+                    it?.copy(
+                        phase = HoldPlacementPhase.CONFIRM,
+                        options = options,
+                        pickup = options.pickupLocations.singleOrNull(),
+                        existingHold = holds.firstOrNull { h -> h.mmsid in recordIds }
+                    )
+                }
+            }
+    }
+
+    /**
+     * Składa rezerwację w sesji z prepareHold(), potem w tej samej sesji czeka, aż nowa rezerwacja
+     * pojawi się na liście konta (odstępy jak HOLD_CONFIRM_DELAYS w omnis-py). Potwierdzanie nie
+     * jest przerywane zamknięciem okna — jego wynik i tak trafia na ekran rezerwacji.
+     */
+    fun confirmHold() {
+        val state = _holdPlacement.value ?: return
+        if (state.phase != HoldPlacementPhase.CONFIRM) return
+        val options = state.options ?: return
+        val pickup = state.pickup ?: return
+        val session = holdSession ?: return
+        val generation = holdPlacementGeneration
+        val baseline = holdBaseline
+        val recordIds = holdRecordIds(state.version, options.item.mmsid)
+        val holdsGen = holdsGeneration
+        _holdPlacement.update { it?.copy(phase = HoldPlacementPhase.PLACING, error = null) }
+        viewModelScope.launch {
+            val placed = repository.placeHold(session, options, pickup)
+            if (placed.isFailure) {
+                holdSession = null
+                if (generation == holdPlacementGeneration) {
+                    _holdPlacement.update {
+                        it?.copy(
+                            phase = HoldPlacementPhase.SELECT,
+                            options = null,
+                            pickup = null,
+                            existingHold = null,
+                            error = placed.exceptionOrNull()?.message ?: ""
+                        )
+                    }
+                }
+                return@launch
+            }
+            if (generation == holdPlacementGeneration) {
+                _holdPlacement.update {
+                    it?.copy(phase = HoldPlacementPhase.DONE, confirming = true)
+                }
+            }
+            var latest: List<Hold>? = null
+            var newHold: Hold? = null
+            for (delayMs in HOLD_CONFIRM_DELAYS_MS) {
+                delay(delayMs)
+                latest = repository.getHolds(session).getOrNull() ?: latest
+                newHold = latest?.let { findNewHold(baseline, it, recordIds) }
+                if (newHold != null) break
+            }
+            if (generation == holdPlacementGeneration) {
+                holdSession = null
+                _holdPlacement.update { it?.copy(confirming = false, placedHold = newHold) }
+            }
+            if (holdsGen == holdsGeneration)
+                latest?.let { replaceAccountHolds(session.account, it) }
+        }
+    }
+
+    private fun replaceAccountHolds(account: Account, holds: List<Hold>) {
+        holdsFlat = holdsFlat.filter { it.accountId != account.id } + holds
+        _holdsUiState.update { it.copy(holds = groupHolds(holdsFlat)) }
+    }
+
+    /** W trakcie wysyłania zamówienia okna nie zamykamy — wynik musi do kogoś trafić. */
+    fun dismissHoldPlacement() {
+        if (_holdPlacement.value?.phase == HoldPlacementPhase.PLACING) return
+        resetHoldPlacement()
+    }
+
+    private fun resetHoldPlacement() {
+        holdPlacementGeneration++
+        holdPrepareJob?.cancel()
+        holdPrepareJob = null
+        holdSession = null
+        holdBaseline = emptySet()
+        _holdPlacement.value = null
     }
 
     fun setHistoryGroupingMode(mode: GroupingMode) {

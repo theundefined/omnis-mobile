@@ -41,6 +41,7 @@ import com.theundefined.omnis.ui.checkboxBranches
 import com.theundefined.omnis.ui.effectiveMediaTypes
 import com.theundefined.omnis.ui.filteredResults
 import com.theundefined.omnis.ui.hasMappableBranches
+import com.theundefined.omnis.ui.holdAccounts
 import java.text.Collator
 import java.util.Locale
 import kotlinx.coroutines.launch
@@ -304,6 +305,7 @@ fun SearchScreen(
                 }
                 else -> {
                     BranchMapDialogHost(viewModel)
+                    HoldPlacementDialogHost(viewModel)
                     LazyColumn(modifier = Modifier.fillMaxSize()) {
                         state.tenantSections.forEach { section ->
                             item(key = section.tenantKey) {
@@ -576,9 +578,20 @@ private fun SearchTenantSectionView(
             )
         }
 
+        val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+        val canPlaceHold =
+            remember(uiState.accounts, section.tenantKey) {
+                holdAccounts(uiState.accounts, section.tenantKey).isNotEmpty()
+            }
         section.filteredResults(mediaTypes).forEach { result ->
             SearchResultCard(
                 result,
+                onPlaceHold =
+                    if (canPlaceHold)
+                        { version ->
+                            viewModel.startHoldPlacement(section.tenantKey, result, version)
+                        }
+                    else null,
                 onShowMap = { viewModel.showBranchMap(result, section.tenantLabel) },
                 onAuthorClick = onAuthorClick,
                 onSeriesClick = onSeriesClick
@@ -651,6 +664,8 @@ private fun SearchSortControl(section: SearchTenantSection, viewModel: OmnisView
 @Composable
 private fun SearchResultCard(
     result: SearchResult,
+    // null = w tej bibliotece nie ma włączonego konta, więc nie ma czym zarezerwować.
+    onPlaceHold: ((BookVersion) -> Unit)?,
     onShowMap: () -> Unit,
     onAuthorClick: (String) -> Unit,
     onSeriesClick: (String) -> Unit
@@ -793,6 +808,17 @@ private fun SearchResultCard(
                                 }
                             }
                         }
+                        if (onPlaceHold != null && version.branches.any { it.holding != null }) {
+                            TextButton(
+                                onClick = { onPlaceHold(version) },
+                                contentPadding = PaddingValues(vertical = 4.dp)
+                            ) {
+                                Text(
+                                    stringResource(R.string.hold_place),
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -829,7 +855,7 @@ internal fun editionLabel(context: Context, version: BookVersion): String {
     else base
 }
 
-private fun branchLabel(branch: BranchAvailability): String =
+internal fun branchLabel(branch: BranchAvailability): String =
     branch.subLocation?.let { "${branch.libraryName} – $it" } ?: branch.libraryName
 
 // Wersja nie-@Composable (Context.getString zamiast stringResource) — potrzebna, by
