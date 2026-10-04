@@ -222,7 +222,7 @@ private fun PinDetailsCard(pin: MapPin, onClose: () -> Unit, modifier: Modifier 
                     ) {
                         Text(
                             listOfNotNull(
-                                    editionLabel(holding.version).takeIf { it != "-" },
+                                    editionLabel(context, holding.version).takeIf { it != "-" },
                                     holding.version.publicationDate
                                 )
                                 .joinToString(", ")

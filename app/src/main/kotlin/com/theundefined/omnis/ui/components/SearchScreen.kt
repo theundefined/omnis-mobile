@@ -24,6 +24,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.theundefined.omnis.R
 import com.theundefined.omnis.data.model.BookVersion
 import com.theundefined.omnis.data.model.BranchAvailability
+import com.theundefined.omnis.data.model.MEDIA_TYPE_BOOK
 import com.theundefined.omnis.data.model.SearchField
 import com.theundefined.omnis.data.model.SearchHistoryEntry
 import com.theundefined.omnis.data.model.SearchResult
@@ -34,8 +35,10 @@ import com.theundefined.omnis.ui.OmnisViewModel
 import com.theundefined.omnis.ui.SearchLibrariesState
 import com.theundefined.omnis.ui.SearchSortMode
 import com.theundefined.omnis.ui.SearchTenantSection
+import com.theundefined.omnis.ui.availableMediaTypes
 import com.theundefined.omnis.ui.branchChipLabel
 import com.theundefined.omnis.ui.checkboxBranches
+import com.theundefined.omnis.ui.effectiveMediaTypes
 import com.theundefined.omnis.ui.filteredResults
 import com.theundefined.omnis.ui.hasMappableBranches
 import java.text.Collator
@@ -196,11 +199,25 @@ fun SearchScreen(
                 }
             }
 
+            val mediaTypes = state.effectiveMediaTypes()
+            val availableMediaTypes = state.availableMediaTypes()
+            // Chipy typów dopiero, gdy jest z czego wybierać — przy samych książkach to szum.
+            if (!noLibraries && state.hasSearched && availableMediaTypes.size > 1) {
+                MediaTypeFilter(
+                    available = availableMediaTypes,
+                    selected = mediaTypes,
+                    onToggle = { type, selected -> viewModel.setMediaTypeSelected(type, selected) },
+                    onClear = { viewModel.clearMediaTypeSelection() }
+                )
+            }
+
             val hasAnyRawResults = state.tenantSections.any { it.results.isNotEmpty() }
             val errorSections = state.tenantSections.filter { it.error != null }
             val allFilteredEmpty =
                 state.tenantSections.isNotEmpty() &&
-                    state.tenantSections.all { it.filteredResults().isEmpty() && !it.isLoading }
+                    state.tenantSections.all {
+                        it.filteredResults(mediaTypes).isEmpty() && !it.isLoading
+                    }
 
             when {
                 noLibraries -> {
@@ -254,10 +271,19 @@ fun SearchScreen(
                             }
                             if (hasAnyRawResults) {
                                 Text(
-                                    stringResource(R.string.no_search_results_filtered),
+                                    stringResource(
+                                        if (mediaTypes.isNotEmpty())
+                                            R.string.no_search_results_filtered_media
+                                        else R.string.no_search_results_filtered
+                                    ),
                                     style = MaterialTheme.typography.bodyMedium
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
+                                if (mediaTypes.isNotEmpty()) {
+                                    TextButton(onClick = { viewModel.clearMediaTypeSelection() }) {
+                                        Text(stringResource(R.string.search_all_media))
+                                    }
+                                }
                                 TextButton(
                                     onClick = {
                                         state.tenantSections.forEach {
@@ -283,6 +309,7 @@ fun SearchScreen(
                             item(key = section.tenantKey) {
                                 SearchTenantSectionView(
                                     section = section,
+                                    mediaTypes = mediaTypes,
                                     viewModel = viewModel,
                                     onAuthorClick = { searchFor(it, SearchField.AUTHOR) },
                                     onSeriesClick = { searchFor(it, SearchField.SERIES) }
@@ -380,6 +407,53 @@ private fun SearchLibraryPicker(
     }
 }
 
+/** Filtr typu nośnika — wspólny dla wszystkich bibliotek; brak zaznaczenia = wszystkie typy. */
+@Composable
+private fun MediaTypeFilter(
+    available: List<String>,
+    selected: Set<String>,
+    onToggle: (String, Boolean) -> Unit,
+    onClear: () -> Unit
+) {
+    val context = LocalContext.current
+    FlowRow(
+        modifier = Modifier.padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        FilterChip(
+            selected = selected.isEmpty(),
+            onClick = onClear,
+            label = { Text(stringResource(R.string.search_all_media)) }
+        )
+        // Książka zawsze pierwsza, reszta w kolejności z wyników.
+        available.sortedBy { it != MEDIA_TYPE_BOOK }.forEach { type ->
+            FilterChip(
+                selected = type in selected,
+                onClick = { onToggle(type, type !in selected) },
+                label = { Text(mediaTypeLabel(context, type)) }
+            )
+        }
+    }
+}
+
+// Nie-@Composable (Context.getString) — używane też przez editionLabel w tekście do udostępnienia.
+internal fun mediaTypeLabel(context: Context, type: String): String {
+    val res =
+        when (type) {
+            MEDIA_TYPE_BOOK -> R.string.media_type_book
+            "audiobook" -> R.string.media_type_audiobook
+            "video" -> R.string.media_type_video
+            "audio" -> R.string.media_type_audio
+            "music" -> R.string.media_type_music
+            "journal" -> R.string.media_type_journal
+            "map" -> R.string.media_type_map
+            "score" -> R.string.media_type_score
+            // Nieznany typ z Primo — surowa nazwa.
+            else -> return type.replaceFirstChar { it.titlecase(Locale.getDefault()) }
+        }
+    return context.getString(res)
+}
+
 @Composable
 private fun SearchHistoryList(
     history: List<SearchHistoryEntry>,
@@ -439,6 +513,7 @@ private fun SearchHistoryList(
 @Composable
 private fun SearchTenantSectionView(
     section: SearchTenantSection,
+    mediaTypes: Set<String>,
     viewModel: OmnisViewModel,
     onAuthorClick: (String) -> Unit,
     onSeriesClick: (String) -> Unit
@@ -499,7 +574,7 @@ private fun SearchTenantSectionView(
             )
         }
 
-        section.filteredResults().forEach { result ->
+        section.filteredResults(mediaTypes).forEach { result ->
             SearchResultCard(
                 result,
                 onShowMap = { viewModel.showBranchMap(result, section.tenantLabel) },
@@ -622,7 +697,7 @@ private fun SearchResultCard(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                editionLabel(version),
+                                editionLabel(LocalContext.current, version),
                                 modifier = Modifier.weight(1f),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -746,12 +821,9 @@ private fun SearchResultCard(
 
 // Port omnis-py cli.py:339-340 — dopisek typu nośnika, gdy inny niż zwykła książka drukowana
 // (np. "Audiobook"). Współdzielone przez widok karty i tekst do udostępnienia.
-internal fun editionLabel(version: BookVersion): String {
+internal fun editionLabel(context: Context, version: BookVersion): String {
     val base = version.edition ?: "-"
-    return if (
-        version.resourceType != null && !version.resourceType.equals("book", ignoreCase = true)
-    )
-        "$base [${version.resourceType}]"
+    return if (!version.isPrintBook) "$base [${mediaTypeLabel(context, version.mediaType)}]"
     else base
 }
 
@@ -804,7 +876,7 @@ private fun buildSearchResultShareText(context: Context, result: SearchResult): 
             lines.add(
                 context.getString(
                     R.string.share_search_version_header,
-                    editionLabel(version),
+                    editionLabel(context, version),
                     version.publicationDate ?: "-"
                 )
             )

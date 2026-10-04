@@ -84,6 +84,16 @@
     <string name="all_branches">Wszystkie filie</string>
     <string name="no_search_results">Brak wyników wyszukiwania.</string>
     <string name="no_search_results_filtered">Brak wyników w wybranych filiach.</string>
+    <string name="no_search_results_filtered_media">Brak wyników dla wybranych filii i typów.</string>
+    <string name="search_all_media">Wszystkie typy</string>
+    <string name="media_type_book">Książka</string>
+    <string name="media_type_audiobook">Audiobook</string>
+    <string name="media_type_video">Film</string>
+    <string name="media_type_audio">Nagranie dźwiękowe</string>
+    <string name="media_type_music">Muzyka</string>
+    <string name="media_type_journal">Czasopismo</string>
+    <string name="media_type_map">Mapa</string>
+    <string name="media_type_score">Nuty</string>
     <string name="search_before_hint">Wpisz tytuł lub frazę albo zeskanuj kod kreskowy ISBN z okładki.</string>
     <string name="cd_scan_isbn">Skanuj kod ISBN</string>
     <string name="scan_not_isbn">Zeskanowany kod nie jest numerem ISBN książki.</string>

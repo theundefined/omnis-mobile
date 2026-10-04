@@ -101,8 +101,25 @@ data class SearchUiState(
     val field: SearchField = SearchField.ANY,
     val isLoading: Boolean = false,
     val hasSearched: Boolean = false,
-    val tenantSections: List<SearchTenantSection> = emptyList()
+    val tenantSections: List<SearchTenantSection> = emptyList(),
+    // Zaznaczone typy nośnika (BookVersion.mediaType), wspólne dla wszystkich bibliotek i
+    // zapamiętywane między wyszukiwaniami. Puste = wszystkie typy.
+    val selectedMediaTypes: Set<String> = emptySet()
 )
+
+/** Typy nośnika obecne w wynikach — chipy filtra typów; kolejność pierwszego wystąpienia. */
+fun SearchUiState.availableMediaTypes(): List<String> =
+    tenantSections
+        .flatMap { section -> section.results.flatMap { r -> r.versions.map { it.mediaType } } }
+        .distinct()
+
+/**
+ * Zaznaczone typy, które faktycznie są w wynikach — jak przy filiach (patrz SearchTenantSection):
+ * zapamiętany typ, którego w bieżących wynikach nie ma, nie może wyzerować listy, więc wtedy
+ * efektywnie nie filtrujemy.
+ */
+fun SearchUiState.effectiveMediaTypes(): Set<String> =
+    selectedMediaTypes.intersect(availableMediaTypes().toSet())
 
 /** Biblioteki do wyboru na ekranie wyszukiwania + te, w których faktycznie szukamy. */
 data class SearchLibrariesState(
@@ -178,14 +195,19 @@ fun SearchTenantSection.branchChipLabel(branch: String): String =
 private val polishCollator: Collator =
     Collator.getInstance(Locale("pl")).apply { strength = Collator.PRIMARY }
 
-fun SearchTenantSection.filteredResults(): List<SearchResult> {
+/** `mediaTypes` — SearchUiState.effectiveMediaTypes(); puste = bez filtra typów. */
+fun SearchTenantSection.filteredResults(mediaTypes: Set<String> = emptySet()): List<SearchResult> {
     val effectiveSelection = selectedBranches.intersect(confirmedBranches.toSet())
+    val filterBranches = !showAllBranches && effectiveSelection.isNotEmpty()
+    val filterTypes = mediaTypes.isNotEmpty()
     val base =
-        if (showAllBranches || effectiveSelection.isEmpty()) results
+        if (!filterBranches && !filterTypes) results
         else
             results.mapNotNull { result ->
                 val versions =
                     result.versions.mapNotNull { v ->
+                        if (filterTypes && v.mediaType !in mediaTypes) return@mapNotNull null
+                        if (!filterBranches) return@mapNotNull v
                         val branches = v.branches.filter { it.libraryName in effectiveSelection }
                         if (branches.isEmpty()) null else v.copy(branches = branches)
                     }
@@ -290,7 +312,10 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
     // zestawu kont mogłyby wylądować w świeżo wyczyszczonym stanie.
     private var historyGeneration = 0
 
-    private val _searchUiState = MutableStateFlow(SearchUiState())
+    private val _searchUiState =
+        MutableStateFlow(
+            SearchUiState(selectedMediaTypes = viewPrefs.getStringSet(PREF_SEARCH_MEDIA_TYPES))
+        )
     val searchUiState: StateFlow<SearchUiState> = _searchUiState.asStateFlow()
 
     // Biblioteki OSTATNIEGO wyszukania — loadMoreResults() doładowuje kolejne strony z tej samej
@@ -1125,6 +1150,21 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         }
     }
 
+    /** Wyłącznie klient-side (patrz filteredResults()) — nie odpytuje API ponownie. */
+    fun setMediaTypeSelected(type: String, selected: Boolean) {
+        // Z efektywnego wyboru, nie zapisanego — inaczej typ zapamiętany z innego wyszukiwania
+        // (niewidoczny teraz jako chip) dalej by filtrował po odznaczeniu wszystkich widocznych.
+        val current = _searchUiState.value.effectiveMediaTypes()
+        setSelectedMediaTypes(if (selected) current + type else current - type)
+    }
+
+    fun clearMediaTypeSelection() = setSelectedMediaTypes(emptySet())
+
+    private fun setSelectedMediaTypes(types: Set<String>) {
+        _searchUiState.update { it.copy(selectedMediaTypes = types) }
+        viewPrefs.putStringSet(PREF_SEARCH_MEDIA_TYPES, types)
+    }
+
     /**
      * Wyłącznie klient-side (patrz filteredResults()) — nie odpytuje API ponownie. UI ogranicza
      * wywołanie do sytuacji, gdy wszystkie strony wyników danej biblioteki są już załadowane
@@ -1165,6 +1205,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         const val PREF_LOANS_SORT = "loans_sort"
         const val PREF_HISTORY_GROUPING = "history_grouping"
         const val PREF_HISTORY_SORT = "history_sort"
+        const val PREF_SEARCH_MEDIA_TYPES = "search_media_types"
         const val SEARCH_HISTORY_LIMIT = 20
     }
 

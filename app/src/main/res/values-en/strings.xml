@@ -78,6 +78,16 @@
     <string name="all_branches">All branches</string>
     <string name="no_search_results">No search results.</string>
     <string name="no_search_results_filtered">No results in selected branches.</string>
+    <string name="no_search_results_filtered_media">No results for the selected branches and types.</string>
+    <string name="search_all_media">All types</string>
+    <string name="media_type_book">Book</string>
+    <string name="media_type_audiobook">Audiobook</string>
+    <string name="media_type_video">Video</string>
+    <string name="media_type_audio">Audio recording</string>
+    <string name="media_type_music">Music</string>
+    <string name="media_type_journal">Journal</string>
+    <string name="media_type_map">Map</string>
+    <string name="media_type_score">Score</string>
     <string name="search_before_hint">Enter a title or keyword, or scan the ISBN barcode on the cover.</string>
     <string name="cd_scan_isbn">Scan ISBN barcode</string>
     <string name="scan_not_isbn">The scanned code is not a book ISBN.</string>

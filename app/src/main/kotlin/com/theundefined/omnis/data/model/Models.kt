@@ -251,7 +251,19 @@ data class BookVersion(
     // pierwszy wpis bez próby rozpoznawania języka (Primo nie taguje tu jednoznacznie języka per
     // element, w odróżnieniu np. od "contributorfull").
     val description: String? = null
-)
+) {
+    /**
+     * Znormalizowany typ nośnika (małe litery) — klucz filtra typów w wyszukiwarce. Brak typu to
+     * zwykła książka drukowana, patrz komentarz przy resourceType.
+     */
+    val mediaType: String
+        get() = resourceType?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: MEDIA_TYPE_BOOK
+
+    val isPrintBook: Boolean
+        get() = mediaType == MEDIA_TYPE_BOOK
+}
+
+const val MEDIA_TYPE_BOOK = "book"
 
 data class SearchResult(
     val frbrgroupid: String?,
