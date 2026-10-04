@@ -114,18 +114,29 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # Emulator UI tests on the demo account (ui-tests.yml). Push only: on branches ui-tests.yml
+  # runs on its own push trigger, so a PR would just duplicate it. Gates publish-play below.
+  ui-tests:
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ui-tests.yml
+
   # Publishes to the Play internal track. GCP identifiers live in google-play
   # environment secrets (masked in public logs). Authenticates via Workload Identity
   # Federation (keyless): GCP only trusts OIDC tokens from this repo, branch main,
   # environment google-play. The service account can only release to testing tracks.
+  # Automatic publishing also requires green UI tests; a manual workflow_dispatch re-publish
+  # skips them (ui-tests is skipped there) and stays the override for a flaky demo server.
   publish-play:
-    needs: check-and-build
+    needs: [check-and-build, ui-tests]
     if: >-
       !cancelled() && (
         github.event_name == 'workflow_dispatch' ||
         (github.event_name == 'push' &&
          needs.check-and-build.result == 'success' &&
-         needs.check-and-build.outputs.is_release == 'true')
+         needs.check-and-build.outputs.is_release == 'true' &&
+         needs.ui-tests.result == 'success')
       )
     runs-on: ubuntu-latest
     environment: google-play
