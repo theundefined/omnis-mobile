@@ -170,9 +170,9 @@ data class SearchLibrariesState(
  * searchKey wygrywa wpis z KNOWN_TENANTS (świeższe baseUrl niż zapisany w starym koncie). Domyślny
  * wybór, dopóki użytkownik go nie zmieni: biblioteki włączonych kont.
  *
- * W trybie demo (włączone konto demo) zapisany wybór `override` jest ignorowany — liczy się
- * `demoOverride` (zmiany zrobione w trybie demo), a bez niego domyślnie biblioteka demo. Po wyjściu
- * z trybu demo wraca zwykły `override`, nietknięty.
+ * W trybie demo ([isDemoModeActive]) zapisany wybór `override` jest ignorowany — liczy się
+ * `demoOverride` (zmiany zrobione w trybie demo), a bez niego biblioteki włączonych kont, czyli
+ * sama biblioteka demo. Po wyjściu z trybu demo wraca zwykły `override`, nietknięty.
  */
 internal fun buildSearchLibrariesState(
     accounts: List<Account>,
@@ -187,8 +187,12 @@ internal fun buildSearchLibrariesState(
     return SearchLibrariesState(available, selected intersect keys)
 }
 
+/**
+ * Tryb demo = włączone konto demo i żadne inne (stan po applyDemoMode). Konto demo dodane ręcznie
+ * obok włączonych prawdziwych kont to nie tryb demo — wtedy wybór bibliotek zapisuje się normalnie.
+ */
 internal fun isDemoModeActive(accounts: List<Account>): Boolean =
-    accounts.any { it.isDemo && it.isEnabled }
+    accounts.any { it.isDemo && it.isEnabled } && accounts.none { !it.isDemo && it.isEnabled }
 
 /**
  * Kolejność w pickerze bibliotek: najpierw biblioteki, w których użytkownik ma konto, potem
@@ -422,8 +426,9 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
     }
 
     private val _searchTenantOverride = MutableStateFlow(repository.getSearchTenantKeys())
-    // Wybór bibliotek zmieniony w trybie demo — tylko w pamięci i czyszczony przy wejściu/wyjściu z
-    // trybu demo, żeby nie nadpisać zwykłego (zapisanego) wyboru.
+    // Wybór bibliotek zmieniony w trybie demo — tylko w pamięci, żeby nie nadpisać zwykłego
+    // (zapisanego) wyboru. Czyszczony przy wejściu do trybu demo i przy każdym jego opuszczeniu
+    // (refreshAccounts), także przez ręczne wyłączenie konta demo.
     private val _demoSearchTenantOverride = MutableStateFlow<Set<String>?>(null)
     val searchLibraries: StateFlow<SearchLibrariesState> =
         combine(_uiState, _searchTenantOverride, _demoSearchTenantOverride) { ui, override, demo ->
@@ -492,6 +497,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
 
     fun refreshAccounts() {
         val accounts = repository.getAccounts()
+        if (!isDemoModeActive(accounts)) _demoSearchTenantOverride.value = null
         _uiState.update { it.copy(accounts = accounts) }
     }
 
@@ -846,7 +852,6 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
 
     fun exitDemoMode() {
         repository.exitDemoMode()
-        _demoSearchTenantOverride.value = null
         refreshAccounts()
         resetHistoryState()
         resetHoldsState()

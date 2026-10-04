@@ -8,6 +8,8 @@ import com.theundefined.omnis.data.model.applyDemoMode
 import com.theundefined.omnis.data.model.exitDemoMode
 import com.theundefined.omnis.data.model.searchKey
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SearchLibrariesTest {
@@ -78,6 +80,31 @@ class SearchLibrariesTest {
         val state = buildSearchLibrariesState(accounts, override = null)
 
         assertEquals(setOf(realTenant.searchKey()), state.selectedKeys)
+    }
+
+    @Test
+    fun `manually added demo account next to real accounts keeps the saved override`() {
+        val demo = applyDemoMode(emptyList()).single()
+        val accounts = listOf(account("1"), demo)
+        val saved = setOf(otherTenant.searchKey())
+
+        val state =
+            buildSearchLibrariesState(
+                accounts,
+                override = saved,
+                demoOverride = setOf(MOCK_TENANT.searchKey())
+            )
+
+        assertEquals(saved, state.selectedKeys)
+    }
+
+    @Test
+    fun `demo mode is active only when the demo account is the only enabled one`() {
+        val demo = applyDemoMode(emptyList()).single()
+
+        assertTrue(isDemoModeActive(listOf(demo, account("1", isEnabled = false))))
+        assertFalse(isDemoModeActive(listOf(demo, account("1"))))
+        assertFalse(isDemoModeActive(listOf(demo.copy(isEnabled = false), account("1"))))
     }
 
     @Test
