@@ -13,9 +13,9 @@ private const val TAG = "TestScreenshots"
 /**
  * Katalog na zrzuty ekranu. AGP przekazuje runnerowi `additionalTestOutputDir` i po
  * `connectedAndroidTest` ściąga jego zawartość do
- * `app/build/outputs/connected_android_test_additional_output/` — stamtąd CI wrzuca je jako artefakt.
- * Bez tego argumentu (np. uruchomienie z IDE innym runnerem) zapisujemy w zewnętrznym katalogu
- * aplikacji, skąd można je ściągnąć `adb pull`.
+ * `app/build/outputs/connected_android_test_additional_output/` — stamtąd CI wrzuca je jako
+ * artefakt. Bez tego argumentu (np. uruchomienie z IDE innym runnerem) zapisujemy w zewnętrznym
+ * katalogu aplikacji, skąd można je ściągnąć `adb pull`.
  */
 private val screenshotDir: File by lazy {
     val base =
@@ -26,8 +26,8 @@ private val screenshotDir: File by lazy {
 }
 
 /**
- * Zrzut całego ekranu urządzenia (przez [android.app.UiAutomation], więc obejmuje też menu, dialogi i
- * pasek systemowy — w odróżnieniu od `captureToImage()` z Compose). Błąd zapisu tylko logujemy:
+ * Zrzut całego ekranu urządzenia (przez [android.app.UiAutomation], więc obejmuje też menu, dialogi
+ * i pasek systemowy — w odróżnieniu od `captureToImage()` z Compose). Błąd zapisu tylko logujemy:
  * zrzut jest diagnostyką i nie może wywrócić testu.
  */
 fun takeScreenshot(name: String) {
