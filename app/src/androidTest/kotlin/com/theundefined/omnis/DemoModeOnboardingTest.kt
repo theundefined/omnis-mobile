@@ -22,17 +22,22 @@ class DemoModeOnboardingTest {
 
     @get:Rule
     val rules: RuleChain =
-        RuleChain.outerRule(AppStateRule(seedDemoAccount = false)).around(composeRule)
+        RuleChain.outerRule(AppStateRule(seedDemoAccount = false))
+            .around(composeRule)
+            .around(ScreenshotRule(composeRule))
 
     @Test
     fun enableDemoModeFromEmptyApp_showsDemoLoans() {
+        composeRule.screenshot("empty_app")
         composeRule.onNodeWithText(str(R.string.add_first_account)).performClick()
+        composeRule.screenshot("settings_demo_off")
         composeRule.onNodeWithText(str(R.string.demo_mode_enable)).performClick()
         composeRule.waitForText(
             str(R.string.demo_mode_disable),
             substring = false,
             timeoutMs = 5_000
         )
+        composeRule.screenshot("settings_demo_on")
 
         composeRule.onNodeWithContentDescription(str(R.string.cd_back)).performClick()
 

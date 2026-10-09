@@ -59,3 +59,13 @@ jobs:
         name: ui-test-reports
         path: app/build/reports/androidTests/
         if-no-files-found: ignore
+
+    # Zrzuty ekranu z testów (ScreenshotRule + screenshot("krok")) — AGP ściąga je z urządzenia
+    # (additionalTestOutputDir) do connected_android_test_additional_output.
+    - name: Upload test screenshots
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: ui-test-screenshots
+        path: app/build/outputs/connected_android_test_additional_output/
+        if-no-files-found: warn
