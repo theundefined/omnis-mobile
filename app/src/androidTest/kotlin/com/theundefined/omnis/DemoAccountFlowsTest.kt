@@ -27,10 +27,14 @@ class DemoAccountFlowsTest {
 
     @get:Rule
     val rules: RuleChain =
-        RuleChain.outerRule(AppStateRule(seedDemoAccount = true)).around(composeRule)
+        RuleChain.outerRule(AppStateRule(seedDemoAccount = true))
+            .around(composeRule)
+            .around(ScreenshotRule(composeRule))
 
     @Test
     fun mainScreen_showsAllDemoLoans() {
+        composeRule.waitForText(DEMO_LOAN_TITLES.first())
+        composeRule.screenshot("loans_top")
         DEMO_LOAN_TITLES.forEach { composeRule.waitAndScrollToText(it) }
     }
 
@@ -48,6 +52,7 @@ class DemoAccountFlowsTest {
         composeRule.waitAndScrollToText(DEMO_LOAN_TITLES.first())
 
         composeRule.onNodeWithText(str(R.string.group_by_account), substring = true).performClick()
+        composeRule.screenshot("grouping_menu")
         composeRule.onNodeWithText(str(R.string.group_none)).performClick()
 
         // Lista zachowuje przewinięcie po przegrupowaniu, więc nagłówek może być poza ekranem.
@@ -64,6 +69,7 @@ class DemoAccountFlowsTest {
     fun searchCatalog_findsDemoTitle() {
         composeRule.onNodeWithContentDescription(str(R.string.cd_search)).performClick()
         composeRule.waitForText(str(R.string.search_title), substring = false, timeoutMs = 5_000)
+        composeRule.screenshot("search_empty")
 
         composeRule.onNode(hasSetTextAction()).performTextInput("Nibylandii")
         composeRule.onNode(hasSetTextAction()).performImeAction()
@@ -101,6 +107,7 @@ class DemoAccountFlowsTest {
             substring = false,
             timeoutMs = 5_000
         )
+        composeRule.screenshot("settings")
 
         composeRule.onNodeWithContentDescription(str(R.string.cd_back)).performClick()
 
