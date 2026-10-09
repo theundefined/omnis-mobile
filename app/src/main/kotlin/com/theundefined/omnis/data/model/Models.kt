@@ -391,7 +391,7 @@ data class CounterAction(val type: String, val value: String)
 // Map<String, List<String>> zamiast klas z polami na sztywno. Pola poniższych DTO
 // (Delivery/Holding/HoldingsStatus*) są wywnioskowane z dostępu przez .get("klucz") w
 // omnis-py (client.py), NIE z przechwyconej realnej odpowiedzi HTTP — patrz zastrzeżenie w
-// docs/plans/book-search.md §6. Błąd w nazwie pola nie wywali się w runtime (Gson zostawia
+// internaldocs/plans/book-search.md §6. Błąd w nazwie pola nie wywali się w runtime (Gson zostawia
 // null/wartość domyślną), tylko cicho da puste wyniki — zweryfikować przez
 // HttpLoggingInterceptor przed uznaniem za ostateczne.
 
@@ -487,7 +487,7 @@ data class Holding(
     val subLocation: String? = null,
     val availabilityStatus: String = "unknown",
     val holdId: String? = null,
-    // Zweryfikowane empirycznie (docs/api-verification-response.md, przez bisekcję pól na
+    // Zweryfikowane empirycznie (internaldocs/api-verification-response.md, przez bisekcję pól na
     // żywym koncie): bez tego pola ILSServices/holdings/{id} zwraca 200 OK, ale z pustym
     // wynikiem (brak due_date) — reszta pól surowego holding (21 kluczy z API) nie ma na to
     // żadnego wpływu. Format wartości (np. "HoldingResultKey [mid=..., libraryId=...,

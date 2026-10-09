@@ -3,9 +3,9 @@ package com.theundefined.omnis.ui
 /**
  * Normalizuje zeskanowany (EAN-13) lub ręcznie wpisany kod do postaci ISBN nadającej się jako
  * zapytanie wyszukiwania. Primo samo dopasowuje ISBN-10 <-> ISBN-13 i ignoruje myślniki
- * (zweryfikowane na żywym katalogu, patrz docs/plans/isbn-scanner.md), więc nie konwertujemy między
- * formami — tylko odrzucamy kody, które na pewno nie są ISBN (EAN produktów, ISSN 977…, błędna suma
- * kontrolna), żeby nie odpalać wyszukiwania na śmieciowym zapytaniu.
+ * (zweryfikowane na żywym katalogu, patrz internaldocs/plans/isbn-scanner.md), więc nie
+ * konwertujemy między formami — tylko odrzucamy kody, które na pewno nie są ISBN (EAN produktów,
+ * ISSN 977…, błędna suma kontrolna), żeby nie odpalać wyszukiwania na śmieciowym zapytaniu.
  *
  * @return ISBN-13 lub ISBN-10 (bez separatorów, X wielką literą) albo null.
  */

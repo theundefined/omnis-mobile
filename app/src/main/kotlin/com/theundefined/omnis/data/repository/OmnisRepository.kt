@@ -841,8 +841,8 @@ class OmnisRepository(private val accountManager: AccountManager) {
      * Wyszukiwanie katalogu — port `client.py::search_books` (omnis-py). Zawsze zwraca WSZYSTKIE
      * filie dla wszystkich wydań (bez branch_filter po stronie serwera) — filtrowanie po
      * zaznaczonych filiach dzieje się po stronie klienta w ViewModelu (patrz
-     * docs/plans/book-search.md §7), żeby zaznaczanie/odznaczanie checkboxów było natychmiastowe i
-     * nie wymagało ponownego wyszukiwania za każdym kliknięciem.
+     * internaldocs/plans/book-search.md §7), żeby zaznaczanie/odznaczanie checkboxów było
+     * natychmiastowe i nie wymagało ponownego wyszukiwania za każdym kliknięciem.
      *
      * Token gościa pozyskany raz na początku i reużywany przez CAŁY pipeline (top search +
      * per-dzieło wyszukanie wydań + delivery, a potem fetchDueDates przez SearchPage.guestToken) —
@@ -925,7 +925,7 @@ class OmnisRepository(private val accountManager: AccountManager) {
             }
             val topResponse = topHttpResponse.body()
             val topDocs = topResponse?.docs ?: emptyList()
-            // info.total — pole do zweryfikowania (patrz docs/plans/book-search.md §6/§7).
+            // info.total — pole do zweryfikowania (patrz internaldocs/plans/book-search.md §6/§7).
             // Fallback bez niego: strona wróciła pełna (limit elementów) -> zakładamy, że może
             // być więcej; nadmiarowo ostrożne (jeden zbędny "Załaduj więcej" na końcu), ale
             // nigdy nie ucina wyników przedwcześnie.

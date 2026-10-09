@@ -595,7 +595,8 @@ private fun SearchTenantSectionView(
         }
 
         // Paginacja per biblioteka — ten sam wzorzec co HistoryScreen.HistoryFooter, bez
-        // trwałego cache'u (wyniki wyszukiwania są efemeryczne, patrz docs/plans/book-search.md
+        // trwałego cache'u (wyniki wyszukiwania są efemeryczne, patrz
+        // internaldocs/plans/book-search.md
         // §7).
         Box(
             modifier = Modifier.fillMaxWidth().padding(16.dp),

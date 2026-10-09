@@ -217,12 +217,12 @@ enum class SearchSortMode {
 
 /**
  * Wyniki + stan filtra filii dla JEDNEJ unikalnej biblioteki (Tenant.searchKey()) — patrz
- * docs/plans/book-search.md §8. `confirmedBranches` (realne holding.mainLocation z odpowiedzi
- * wyszukiwania) i `seededBranches` (podpowiedź z Loan.locationName w cache'u wypożyczeń) są celowo
- * rozdzielone: filtrowanie (filteredResults()) liczy się TYLKO po przecięciu selectedBranches z
- * confirmedBranches, więc niepotwierdzona (jeszcze) nazwa z seedu nigdy nie potrafi wyzerować
- * wyników — jeśli żadna zaznaczona filia nie została jeszcze potwierdzona przez realne
- * wyszukiwanie, efektywnie nie filtrujemy, zamiast pokazać pustą listę.
+ * internaldocs/plans/book-search.md §8. `confirmedBranches` (realne holding.mainLocation z
+ * odpowiedzi wyszukiwania) i `seededBranches` (podpowiedź z Loan.locationName w cache'u wypożyczeń)
+ * są celowo rozdzielone: filtrowanie (filteredResults()) liczy się TYLKO po przecięciu
+ * selectedBranches z confirmedBranches, więc niepotwierdzona (jeszcze) nazwa z seedu nigdy nie
+ * potrafi wyzerować wyników — jeśli żadna zaznaczona filia nie została jeszcze potwierdzona przez
+ * realne wyszukiwanie, efektywnie nie filtrujemy, zamiast pokazać pustą listę.
  */
 data class SearchTenantSection(
     val tenantKey: String,
