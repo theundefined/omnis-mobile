@@ -8,6 +8,7 @@ import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -17,9 +18,9 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
-import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SdkSuppress
 import androidx.test.platform.app.InstrumentationRegistry
@@ -91,7 +92,9 @@ class StoreScreenshotsTest {
     @Test
     fun libraryCard() {
         openFromMoreMenu(R.string.library_card_title)
-        composeRule.waitForText(str(R.string.library_card_title), timeoutMs = 5_000)
+        // Tytuł jest też pozycją menu — czekamy na przycisk wstecz, który ma tylko ekran karty.
+        composeRule.waitForNode(hasContentDescription(str(R.string.cd_back)), timeoutMs = 5_000)
+        settle(1_000)
         shot("05_library_card")
     }
 
@@ -156,13 +159,12 @@ class StoreScreenshotsTest {
         settle(8_000) // terminy zwrotu wypożyczonych egzemplarzy dochodzą po wynikach
         shot("09_search_results")
 
-        composeRule
-            .onAllNodes(hasContentDescription(str(R.string.cd_show_on_map)))
-            .onFirst()
-            .performClick()
+        // Przycisk mapy pierwszego wyniku bywa pod krawędzią ekranu — najpierw przewijamy.
+        val mapButton = hasContentDescription(str(R.string.cd_show_on_map))
+        composeRule.onAllNodes(hasScrollToNodeAction()).onFirst().performScrollToNode(mapButton)
+        composeRule.onAllNodes(mapButton).onFirst().performClick()
         settle(15_000) // geolokalizacja filii i kafelki OpenStreetMap
         shot("10_branch_map")
-        Espresso.pressBack()
     }
 
     private fun openSearch() {
@@ -194,7 +196,7 @@ class StoreScreenshotsTest {
 
     companion object {
         private const val REAL_LIBRARY = "Biblioteka Raczyńskich (Poznań)"
-        private const val REAL_QUERY = "Sapkowski Wiedźmin"
+        private const val REAL_QUERY = "Ostatnie życzenie Sapkowski"
 
         private val arguments
             get() = InstrumentationRegistry.getArguments()
@@ -254,10 +256,16 @@ class StoreScreenshotsTest {
             error("Język pl / motyw night=$night nie dotarł do aplikacji w 10 s")
         }
 
-        /** Tryb demo paska stanu: stała godzina, pełna bateria i zasięg, bez powiadomień. */
+        /**
+         * Czysty ekran: bez systemowych okien błędów, pasek stanu w trybie demo (stała godzina,
+         * pełna bateria i zasięg, bez powiadomień).
+         */
         private fun cleanStatusBar() {
             val demo = "am broadcast -a com.android.systemui.demo -e command"
             listOf(
+                    // ANR-y systemu (np. launchera na świeżym emulatorze) zasłaniałyby zrzuty.
+                    "settings put global hide_error_dialogs 1",
+                    "am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS",
                     "settings put global sysui_demo_allowed 1",
                     "$demo enter",
                     "$demo clock -e hhmm 1000",

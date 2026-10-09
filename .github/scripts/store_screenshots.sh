@@ -11,6 +11,11 @@ out=store-screenshots
 mkdir -p "$out"
 status=0
 
+# Świeżo uruchomiony emulator bywa jeszcze zajęty (ANR launchera na pierwszych zrzutach) —
+# wyłączamy okna błędów i dajemy systemowi chwilę.
+adb shell settings put global hide_error_dialogs 1
+sleep 30
+
 for theme in light dark; do
   night=false
   [ "$theme" = dark ] && night=true
