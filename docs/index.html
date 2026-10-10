@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Omnis — biblioteki w telefonie</title>
+<meta name="description" content="Nieoficjalna aplikacja na Androida do kont w bibliotekach sieci OMNIS i innych korzystających z Ex Libris Primo: wypożyczenia, przedłużanie, rezerwacje, wyszukiwarka z mapą filii.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📚</text></svg>">
+<style>
+  :root {
+    --bg: #fbf8f3;
+    --surface: #ffffff;
+    --text: #1d1b18;
+    --muted: #5f5a52;
+    --accent: #8a3b12;
+    --accent-soft: #f4e6dc;
+    --border: #e6dfd4;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161412;
+      --surface: #201d1a;
+      --text: #f1ece5;
+      --muted: #b3aba0;
+      --accent: #f0a274;
+      --accent-soft: #3a2a20;
+      --border: #34302b;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 17px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main, header, footer { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+  a { color: var(--accent); }
+  h1, h2, h3 { line-height: 1.2; }
+  h1 { font-size: clamp(2rem, 5vw, 3rem); margin: 0 0 12px; }
+  h2 { font-size: 1.6rem; margin: 56px 0 16px; }
+  h3 { font-size: 1.05rem; margin: 0 0 6px; }
+  .hero { display: grid; gap: 32px; align-items: center; padding: 48px 0 8px; }
+  @media (min-width: 820px) { .hero { grid-template-columns: 1.2fr 1fr; } }
+  .lead { font-size: 1.2rem; color: var(--muted); margin: 0 0 24px; }
+  .note { font-size: .9rem; color: var(--muted); }
+  .buttons { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+  .button {
+    display: inline-block; padding: 12px 20px; border-radius: 999px;
+    text-decoration: none; font-weight: 600; border: 2px solid var(--accent);
+  }
+  .button.primary { background: var(--accent); color: var(--bg); }
+  .hero-shot { justify-self: center; }
+  .phone {
+    display: block; width: 100%; max-width: 280px; height: auto;
+    border-radius: 24px; border: 1px solid var(--border);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, .18);
+  }
+  .gallery {
+    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(200px, 240px);
+    gap: 20px; overflow-x: auto; padding: 8px 4px 20px; scroll-snap-type: x mandatory;
+  }
+  .gallery figure { margin: 0; scroll-snap-align: start; }
+  .gallery figcaption { font-size: .9rem; color: var(--muted); margin-top: 8px; }
+  .features { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 20px;
+  }
+  .card ul { margin: 0; padding-left: 20px; }
+  .card li { margin: 4px 0; }
+  .callout {
+    background: var(--accent-soft); border-radius: 16px; padding: 24px;
+  }
+  .callout ol { padding-left: 20px; }
+  footer { padding: 48px 16px; color: var(--muted); font-size: .9rem; }
+</style>
+</head>
+<body>
+<header>
+  <section class="hero">
+    <div>
+      <h1>📚 Omnis</h1>
+      <p class="lead">Wszystkie Twoje konta biblioteczne w jednym miejscu. Terminy zwrotu, przedłużanie,
+        rezerwacje i wyszukiwanie książek z dostępnością w filiach — w bibliotekach sieci OMNIS
+        i innych korzystających z systemu Ex Libris Primo.</p>
+      <div class="buttons">
+        <a class="button primary" href="#testy">Dołącz do testów</a>
+        <a class="button" href="https://github.com/theundefined/omnis-mobile">Kod na GitHubie</a>
+      </div>
+      <p class="note">Aplikacja nieoficjalna, niezwiązana z Ex Libris, siecią OMNIS ani żadną biblioteką.
+        Darmowa, bez reklam, z otwartym kodem.</p>
+    </div>
+    <div class="hero-shot">
+      <picture>
+        <source srcset="img/dark/01_loans.webp" media="(prefers-color-scheme: dark)">
+        <img class="phone" src="img/light/01_loans.webp" alt="Lista wypożyczeń z terminami zwrotu" width="540" height="1200">
+      </picture>
+    </div>
+  </section>
+</header>
+
+<main>
+  <h2>Jak to wygląda</h2>
+  <p class="note">Zrzuty z konta demonstracyjnego; mapa filii — na żywo z katalogu Biblioteki Raczyńskich w Poznaniu.</p>
+  <div class="gallery">
+    <figure>
+      <picture>
+        <source srcset="img/dark/10_branch_map.webp" media="(prefers-color-scheme: dark)">
+        <img class="phone" src="img/light/10_branch_map.webp" alt="Mapa filii, w których jest książka" loading="lazy" width="540" height="1200">
+      </picture>
+      <figcaption>Mapa filii z dostępnością egzemplarzy — tu „Ostatnie życzenie” w Poznaniu</figcaption>
+    </figure>
+    <figure>
+      <picture>
+        <source srcset="img/dark/07_place_hold.webp" media="(prefers-color-scheme: dark)">
+        <img class="phone" src="img/light/07_place_hold.webp" alt="Zakładanie rezerwacji" loading="lazy" width="540" height="1200">
+      </picture>
+      <figcaption>Rezerwacja prosto z wyników wyszukiwania</figcaption>
+    </figure>
+    <figure>
+      <picture>
+        <source srcset="img/dark/04_holds.webp" media="(prefers-color-scheme: dark)">
+        <img class="phone" src="img/light/04_holds.webp" alt="Lista rezerwacji" loading="lazy" width="540" height="1200">
+      </picture>
+      <figcaption>Rezerwacje wszystkich kont, gotowe do odbioru na górze</figcaption>
+    </figure>
+    <figure>
+      <picture>
+        <source srcset="img/dark/02_loans_by_branch.webp" media="(prefers-color-scheme: dark)">
+        <img class="phone" src="img/light/02_loans_by_branch.webp" alt="Wypożyczenia pogrupowane według filii" loading="lazy" width="540" height="1200">
+      </picture>
+      <figcaption>Wypożyczenia według filii — wiesz, co oddać przy okazji</figcaption>
+    </figure>
+    <figure>
+      <picture>
+        <source srcset="img/dark/03_loan_details.webp" media="(prefers-color-scheme: dark)">
+        <img class="phone" src="img/light/03_loan_details.webp" alt="Szczegóły wypożyczenia" loading="lazy" width="540" height="1200">
+      </picture>
+      <figcaption>Szczegóły wypożyczenia: sygnatura, termin, do kiedy można przedłużać</figcaption>
+    </figure>
+    <figure>
+      <picture>
+        <source srcset="img/dark/05_library_card.webp" media="(prefers-color-scheme: dark)">
+        <img class="phone" src="img/light/05_library_card.webp" alt="Karta biblioteczna z kodem kreskowym" loading="lazy" width="540" height="1200">
+      </picture>
+      <figcaption>Karta biblioteczna z kodem kreskowym</figcaption>
+    </figure>
+    <figure>
+      <picture>
+        <source srcset="img/dark/06_history.webp" media="(prefers-color-scheme: dark)">
+        <img class="phone" src="img/light/06_history.webp" alt="Historia wypożyczeń" loading="lazy" width="540" height="1200">
+      </picture>
+      <figcaption>Historia wypożyczeń</figcaption>
+    </figure>
+  </div>
+
+  <h2>Co potrafi</h2>
+  <div class="features">
+    <div class="card">
+      <h3>Wypożyczenia</h3>
+      <ul>
+        <li>Wiele kont w wielu bibliotekach naraz — np. całej rodziny</li>
+        <li>Kolorowe terminy zwrotu: zaległe, kończące się, spokojne</li>
+        <li>Przedłużanie jednej książki albo całej grupy jednym dotknięciem</li>
+        <li>Grupowanie według osoby lub filii, kilka sposobów sortowania</li>
+        <li>Adres filii z nawigacją, historia wypożyczeń</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Wyszukiwarka</h3>
+      <ul>
+        <li>Działa bez konta, w dowolnej z 55 bibliotek, także w kilku naraz</li>
+        <li>Wszystkie wydania tytułu i dostępność w każdej filii</li>
+        <li>Termin zwrotu wypożyczonych egzemplarzy</li>
+        <li>Filtr typu (książka, audiobook, film…), wyszukiwanie po autorze i serii</li>
+        <li>Mapa filii i skaner kodu ISBN z aparatu</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Rezerwacje i karta</h3>
+      <ul>
+        <li>Rezerwacja z wyników wyszukiwania, z wyborem miejsca odbioru</li>
+        <li>Lista rezerwacji wszystkich kont i ich anulowanie</li>
+        <li>Baner na ekranie głównym, gdy książka czeka na odbiór, z terminem odbioru</li>
+        <li>Karta biblioteczna z kodem kreskowym — do pokazania przy ladzie</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Prywatność</h3>
+      <ul>
+        <li>Hasła tylko na Twoim telefonie, zaszyfrowane</li>
+        <li>Aplikacja łączy się z serwerem Twojej biblioteki — autor nie ma żadnego serwera</li>
+        <li>Bez reklam i śledzenia, kod otwarty</li>
+        <li><a href="privacy.html">Polityka prywatności</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Obsługiwane biblioteki</h2>
+  <p>55 bibliotek: Biblioteka Raczyńskich, Biblioteka Narodowa, biblioteki uniwersyteckie (m.in. UAM, UJ,
+    UW, UWr, PW, UMCS) oraz wiele bibliotek publicznych i powiatowych w sieci OMNIS.
+    <a href="https://github.com/theundefined/omnis-mobile/blob/main/app/src/main/kotlin/com/theundefined/omnis/data/model/Tenants.kt">Pełna lista</a>.
+    Brakuje Twojej? Jeśli ma katalog Primo z logowaniem loginem i hasłem, dodasz ją sam — wklejając link
+    do jej katalogu. Możesz też <a href="https://github.com/theundefined/omnis-mobile/issues">dać znać</a>,
+    a trafi na listę.</p>
+
+  <h2 id="testy">Dołącz do testów</h2>
+  <div class="callout">
+    <p>Aplikacja jest w fazie testów w Google Play. Żeby trafiła do wszystkich, Google wymaga grupy
+      testerów korzystających z niej przez co najmniej dwa tygodnie — każda osoba się liczy.</p>
+    <ol>
+      <!-- TODO(testy): link do zapisu (grupa Google / link do testu zamkniętego w Google Play) -->
+      <li><a href="#TODO-JOIN-LINK">Zapisz się do testów</a> tym samym kontem Google, którego używasz w telefonie.</li>
+      <li>Zainstaluj aplikację z Google Play i dodaj swoje konto biblioteczne — albo włącz tryb demo
+        w ustawieniach, żeby rozejrzeć się bez konta.</li>
+      <li>Nie odinstalowuj jej przez najbliższe 14 dni. Uwagi i błędy zgłaszaj
+        <a href="https://github.com/theundefined/omnis-mobile/issues">na GitHubie</a>.</li>
+    </ol>
+  </div>
+</main>
+
+<footer>
+  <p>Omnis jest projektem hobbystycznym. Nazwy bibliotek należą do ich właścicieli; aplikacja korzysta
+    z tych samych usług, co strony katalogów bibliotecznych, i nie jest z nimi powiązana.</p>
+  <p><a href="privacy.html">Polityka prywatności</a> ·
+    <a href="https://github.com/theundefined/omnis-mobile">GitHub</a> ·
+    <a href="https://github.com/theundefined/omnis-py">omnis-py</a> (wersja dla wiersza poleceń)</p>
+</footer>
+</body>
+</html>

@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Omnis — polityka prywatności</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📚</text></svg>">
+<style>
+  :root { --bg: #fbf8f3; --text: #1d1b18; --muted: #5f5a52; --accent: #8a3b12; color-scheme: light; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161412; --text: #f1ece5; --muted: #b3aba0; --accent: #f0a274; color-scheme: dark; }
+  }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 17px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
+  a { color: var(--accent); }
+  h1 { font-size: 2rem; line-height: 1.2; }
+  h2 { font-size: 1.3rem; margin-top: 40px; }
+  .muted { color: var(--muted); }
+  li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<main>
+  <p><a href="./">← Omnis</a></p>
+  <h1>Polityka prywatności aplikacji Omnis</h1>
+  <p class="muted">Obowiązuje od 9 października 2026 r.</p>
+
+  <p>Omnis to nieoficjalna, bezpłatna aplikacja na Androida do obsługi kont w bibliotekach korzystających
+    z systemu Ex Libris Primo. Autor aplikacji (<a href="https://github.com/theundefined">TheUndefined</a>)
+    <strong>nie prowadzi żadnego serwera</strong>, przez który przechodziłyby Twoje dane — aplikacja łączy
+    się bezpośrednio z serwerami wybranej biblioteki. Kod źródłowy jest
+    <a href="https://github.com/theundefined/omnis-mobile">publicznie dostępny</a>, więc każdy może
+    sprawdzić opisane niżej zachowanie.</p>
+
+  <h2>Dane przechowywane na telefonie</h2>
+  <ul>
+    <li><strong>Dane logowania</strong> do kont bibliotecznych (login, hasło, wybrana biblioteka) — zaszyfrowane
+      (AES-256, klucz w systemowym magazynie kluczy Android Keystore). Hasło jest przechowywane, a nie
+      tylko jego skrót, bo aplikacja loguje się nim do biblioteki przy każdym odświeżeniu.</li>
+    <li><strong>Pobrane dane kont</strong>: wypożyczenia i historia wypożyczeń, nazwa użytkownika z biblioteki,
+      opcjonalny numer karty — żeby aplikacja działała szybko i bez internetu. Rezerwacje są trzymane
+      tylko w pamięci, do zamknięcia aplikacji. Również zaszyfrowane.</li>
+    <li><strong>Historia wyszukiwań, wybrane biblioteki i filie, adresy i położenie filii</strong> — zaszyfrowane.</li>
+    <li><strong>Ustawienia widoku</strong> (grupowanie, sortowanie, filtr typu) i techniczne identyfikatory
+      rezerwacji, dla których ukryto baner „do odbioru” — bez szyfrowania; nie zawierają loginów, haseł
+      ani tytułów.</li>
+  </ul>
+  <p>Jeśli masz włączoną kopię zapasową Androida, system może dołączyć dane aplikacji do kopii na Twoim
+    koncie Google. Zaszyfrowanych danych nie da się z niej odczytać bez klucza, który nie opuszcza
+    telefonu.</p>
+
+  <h2>Komu i co aplikacja wysyła</h2>
+  <ul>
+    <li><strong>Serwer Twojej biblioteki</strong> (system Primo, hostowany przez Ex Libris): login i hasło przy
+      logowaniu, a potem zapytania o wypożyczenia, rezerwacje i historię; przedłużenie, założenie
+      lub anulowanie rezerwacji — tylko gdy to zlecisz. Wyszukiwanie w katalogu jest anonimowe (bez
+      logowania), tak jak na stronie katalogu biblioteki. Dane przetwarza biblioteka na swoich zasadach.</li>
+    <li><strong>OpenStreetMap</strong> — po otwarciu mapy filii pobierane są fragmenty mapy z serwerów
+      OpenStreetMap (widzą one adres IP i obszar mapy).</li>
+    <li><strong>Usługi lokalizacyjne Androida</strong> (zwykle Google) — gdy biblioteka nie podaje
+      współrzędnych filii, jej adres jest zamieniany na położenie przez systemowy geokoder. Wysyłany jest
+      adres filii, nie Twoja lokalizacja. Skrócone linki do map filii (goo.gl) są rozwijane zapytaniem do
+      Google.</li>
+    <li><strong>Skaner ISBN</strong> korzysta ze skanera kodów z usług Google Play. Obraz z aparatu jest
+      analizowany na telefonie; sama aplikacja nie ma uprawnienia do aparatu.</li>
+    <li><strong>Raporty błędów (Sentry)</strong> — przy awarii lub błędzie aplikacja wysyła do usługi
+      Sentry (serwery w UE) raport techniczny: model telefonu, wersję Androida i aplikacji, przebieg
+      błędu oraz informacje o wydajności, w tym adresy zapytań do bibliotek (mogą zawierać wpisaną
+      frazę wyszukiwania). Raporty nie zawierają haseł ani treści odpowiedzi biblioteki.</li>
+  </ul>
+  <p>Linki „szukaj w internecie” i nawigacja do filii otwierają przeglądarkę lub aplikację map — od tej
+    chwili obowiązują zasady tamtych usług.</p>
+
+  <h2>Czego aplikacja nie robi</h2>
+  <ul>
+    <li>Nie wyświetla reklam i nie używa narzędzi analitycznych ani śledzących.</li>
+    <li>Nie sprzedaje ani nie udostępnia danych nikomu poza wymienionymi wyżej usługami.</li>
+    <li>Nie pobiera Twojej lokalizacji, kontaktów ani plików.</li>
+  </ul>
+
+  <h2>Usuwanie danych</h2>
+  <p>Usunięcie konta w ustawieniach aplikacji kasuje z telefonu jego dane logowania, zapisane wypożyczenia
+    i historię. Historię wyszukiwań można wyczyścić w wyszukiwarce. Odinstalowanie aplikacji usuwa
+    wszystkie jej dane z telefonu. Raporty błędów są przechowywane w Sentry
+    przez ograniczony czas i usuwane automatycznie; o wcześniejsze usunięcie możesz poprosić autora.
+    Danych przechowywanych przez bibliotekę (np. historii wypożyczeń) aplikacja nie usuwa — to sprawa
+    między Tobą a biblioteką.</p>
+
+  <h2>Dzieci</h2>
+  <p>Aplikacja nie jest kierowana do dzieci i nie zbiera świadomie ich danych ponad to, co biblioteka
+    udostępnia na koncie czytelnika.</p>
+
+  <h2>Kontakt i zmiany</h2>
+  <p>Pytania i prośby dotyczące prywatności:
+    <a href="https://github.com/theundefined/omnis-mobile/issues">zgłoszenie na GitHubie</a>.
+    Zmiany tej polityki będą publikowane na tej stronie, a ich historia jest widoczna w repozytorium.</p>
+</main>
+</body>
+</html>
