@@ -89,7 +89,9 @@ fun AddAccountForm(
                 Text(
                     stringResource(R.string.custom_library_example, EXAMPLE_CATALOG_LINK),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    // Wyrównanie z supportingText pola powyżej.
+                    modifier = Modifier.padding(horizontal = 16.dp)
                 )
                 Row {
                     TextButton(onClick = { catalogLinkText = EXAMPLE_CATALOG_LINK }) {
