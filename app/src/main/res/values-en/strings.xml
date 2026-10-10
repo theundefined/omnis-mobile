@@ -223,4 +223,41 @@
     <string name="library_card_number_hint">Leave empty to use the username.</string>
     <string name="library_card_number_invalid">Only ASCII characters are allowed.</string>
     <string name="save">Save</string>
+    <!-- Statistics -->
+    <string name="stats_title">Statistics</string>
+    <string name="stats_note">Counts loans (including current ones) by loan date — the app can\'t tell whether a book was actually read.</string>
+    <string name="stats_loading_progress">Loading history: account %1$d/%2$d (%3$s)</string>
+    <string name="stats_empty">No loans to count.</string>
+    <string name="stats_all_years">All years</string>
+    <string name="stats_tile_year">Borrowed in %1$d</string>
+    <string name="stats_tile_total">Borrowed in total</string>
+    <string name="stats_tile_all_time">All time</string>
+    <string name="stats_tile_this_year">This year</string>
+    <string name="stats_vs_previous">%1$s vs %2$d</string>
+    <string name="stats_tile_average">Average per month</string>
+    <string name="stats_tile_best_month">Best month</string>
+    <string name="stats_chart_months">Loans by month, %1$d</string>
+    <string name="stats_chart_years">Loans by year</string>
+    <string name="stats_chart_hint">Tap a bar to see details.</string>
+    <string name="stats_years_table">Year by year</string>
+    <string name="stats_col_year">Year</string>
+    <string name="stats_col_total">Total</string>
+    <string name="stats_col_change">Change</string>
+    <string name="stats_top_authors">Most borrowed authors</string>
+    <string name="stats_categories">Material types</string>
+    <string name="stats_unknown_category">Unspecified</string>
+    <string name="stats_libraries">Libraries and branches</string>
+    <string name="stats_duration">Loan duration</string>
+    <string name="stats_duration_average">Average</string>
+    <string name="stats_duration_median">Median</string>
+    <string name="stats_duration_longest">Longest</string>
+    <string name="stats_days_decimal">%1$s days</string>
+    <plurals name="stats_days">
+        <item quantity="one">%d day</item>
+        <item quantity="other">%d days</item>
+    </plurals>
+    <plurals name="stats_duration_basis">
+        <item quantity="one">Based on %d returned item.</item>
+        <item quantity="other">Based on %d returned items.</item>
+    </plurals>
 </resources>

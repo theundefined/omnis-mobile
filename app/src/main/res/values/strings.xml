@@ -231,4 +231,45 @@
     <string name="library_card_number_hint">Zostaw puste, aby użyć loginu.</string>
     <string name="library_card_number_invalid">Numer może zawierać tylko znaki ASCII (bez polskich liter).</string>
     <string name="save">Zapisz</string>
+    <!-- Statystyki -->
+    <string name="stats_title">Statystyki</string>
+    <string name="stats_note">Liczone są wypożyczenia (także bieżące) według daty wypożyczenia — aplikacja nie wie, czy książka została przeczytana.</string>
+    <string name="stats_loading_progress">Pobieranie historii: konto %1$d/%2$d (%3$s)</string>
+    <string name="stats_empty">Brak wypożyczeń do policzenia.</string>
+    <string name="stats_all_years">Wszystkie lata</string>
+    <string name="stats_tile_year">Wypożyczone w %1$d</string>
+    <string name="stats_tile_total">Wypożyczone łącznie</string>
+    <string name="stats_tile_all_time">Od początku</string>
+    <string name="stats_tile_this_year">W tym roku</string>
+    <string name="stats_vs_previous">%1$s względem %2$d</string>
+    <string name="stats_tile_average">Średnio na miesiąc</string>
+    <string name="stats_tile_best_month">Najlepszy miesiąc</string>
+    <string name="stats_chart_months">Wypożyczenia w miesiącach %1$d</string>
+    <string name="stats_chart_years">Wypożyczenia w latach</string>
+    <string name="stats_chart_hint">Dotknij słupka, aby zobaczyć szczegóły.</string>
+    <string name="stats_years_table">Rok po roku</string>
+    <string name="stats_col_year">Rok</string>
+    <string name="stats_col_total">Razem</string>
+    <string name="stats_col_change">Zmiana</string>
+    <string name="stats_top_authors">Najczęściej wypożyczani autorzy</string>
+    <string name="stats_categories">Rodzaje materiałów</string>
+    <string name="stats_unknown_category">Nieokreślony</string>
+    <string name="stats_libraries">Biblioteki i filie</string>
+    <string name="stats_duration">Czas wypożyczenia</string>
+    <string name="stats_duration_average">Średnio</string>
+    <string name="stats_duration_median">Mediana</string>
+    <string name="stats_duration_longest">Najdłużej</string>
+    <string name="stats_days_decimal">%1$s dnia</string>
+    <plurals name="stats_days">
+        <item quantity="one">%d dzień</item>
+        <item quantity="few">%d dni</item>
+        <item quantity="many">%d dni</item>
+        <item quantity="other">%d dnia</item>
+    </plurals>
+    <plurals name="stats_duration_basis">
+        <item quantity="one">Na podstawie %d zwróconej pozycji.</item>
+        <item quantity="few">Na podstawie %d zwróconych pozycji.</item>
+        <item quantity="many">Na podstawie %d zwróconych pozycji.</item>
+        <item quantity="other">Na podstawie %d zwróconych pozycji.</item>
+    </plurals>
 </resources>

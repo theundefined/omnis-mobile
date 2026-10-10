@@ -89,6 +89,18 @@ data class HistoryUiState(
 )
 
 /**
+ * Dane ekranu statystyk: cała historia (zwrócone) + bieżące wypożyczenia włączonych kont. Same
+ * statystyki liczy UI (`computeReadingStats`) — zależą od filtrów roku i kont wybranych na ekranie.
+ */
+data class StatsUiState(
+    val loans: List<Loan> = emptyList(),
+    val isLoading: Boolean = false,
+    val hasLoadedOnce: Boolean = false,
+    val progress: RefreshProgress? = null,
+    val error: String? = null
+)
+
+/**
  * Okienko z informacją o filii (po kliknięciu jej nazwy). `info == null` po zakończeniu ładowania =
  * Primo nic nie podało — UI i tak oferuje wyszukanie filii w mapach po nazwie.
  */
@@ -374,6 +386,11 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
     // wciąż trwał w tle) zmieniła się ona pod nogami — inaczej wyniki policzone dla starego
     // zestawu kont mogłyby wylądować w świeżo wyczyszczonym stanie.
     private var historyGeneration = 0
+
+    private val _statsUiState = MutableStateFlow(StatsUiState())
+    val statsUiState: StateFlow<StatsUiState> = _statsUiState.asStateFlow()
+    // Jak historyGeneration — porzuca wyniki policzone dla starego zestawu kont.
+    private var statsGeneration = 0
 
     private val _holdsUiState = MutableStateFlow(HoldsUiState())
     val holdsUiState: StateFlow<HoldsUiState> = _holdsUiState.asStateFlow()
@@ -880,6 +897,16 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
      * ręcznego odświeżenia.
      */
     private fun resetHistoryState() {
+        clearHistoryView()
+        resetStatsState()
+    }
+
+    private fun resetStatsState() {
+        statsGeneration++
+        _statsUiState.value = StatsUiState()
+    }
+
+    private fun clearHistoryView() {
         historyGeneration++
         historyFlatLoans = emptyList()
         historyCursors = emptyMap()
@@ -969,6 +996,91 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
             // zatrzasnąłby się na stałe (guard w loadHistory() blokowałby kolejne próby, mimo że
             // np. użytkownik dopiero co dodał pierwsze konto albo odzyskał internet).
             finishHistoryUpdate(failedAccountNames, hasSuccess = successCount > 0)
+        }
+    }
+
+    /**
+     * Ładuje CAŁĄ historię włączonych kont (statystyki potrzebują wszystkiego, nie pierwszej
+     * strony). Kompletną historię zapisuje do tego samego cache'u co ekran historii — po tym ekran
+     * historii ma od razu wszystko, bez doładowywania. Cache kompletny i młodszy niż
+     * [STATS_CACHE_TTL_MILLIS] nie jest pobierany ponownie (nowe zwroty dojdą przy następnym
+     * pobraniu); `forceRefresh` pobiera wszystko od nowa. Konto, którego nie udało się pobrać,
+     * wchodzi do statystyk z tym, co jest w cache'u.
+     */
+    fun loadStats(forceRefresh: Boolean = false) {
+        if (_statsUiState.value.isLoading) return
+        if (_statsUiState.value.hasLoadedOnce && !forceRefresh) return
+        val generation = statsGeneration
+        viewModelScope.launch {
+            _statsUiState.update { it.copy(isLoading = true, error = null) }
+            val currentAccounts = _uiState.value.accounts.filter { it.isEnabled }
+            val collected = mutableListOf<Loan>()
+            val failedAccountNames = mutableListOf<String>()
+            var historyCacheChanged = false
+            var successCount = 0
+            val now = System.currentTimeMillis()
+
+            currentAccounts.forEachIndexed { index, account ->
+                val name = account.displayName ?: account.username
+                if (generation != statsGeneration) return@launch
+                _statsUiState.update {
+                    it.copy(progress = RefreshProgress(index + 1, currentAccounts.size, name))
+                }
+                val cached = repository.getCachedHistory(account.id)
+                val fresh =
+                    !forceRefresh &&
+                        !cached.hasMore &&
+                        cached.fullFetchedAtMillis?.let { now - it < STATS_CACHE_TTL_MILLIS } ==
+                            true
+                val history =
+                    if (fresh) {
+                        successCount++
+                        cached.loans
+                    } else {
+                        repository
+                            .getLoansForAccount(account, type = "history")
+                            .onSuccess { loans ->
+                                repository.saveCachedHistory(
+                                    account.id,
+                                    HistoryCacheEntry(
+                                        loans = loans,
+                                        nextOffset = 1 + loans.size,
+                                        hasMore = false,
+                                        fullFetchedAtMillis = now
+                                    )
+                                )
+                                historyCacheChanged = true
+                                successCount++
+                            }
+                            .onFailure { failedAccountNames.add(name) }
+                            .getOrElse { cached.loans }
+                    }
+                collected += mergeStatsLoans(history, repository.getCachedLoans(account.id))
+            }
+
+            if (generation != statsGeneration) return@launch
+            // Ekran historii trzyma w pamięci tylko to, co sam doładował — niech przy następnym
+            // wejściu wczyta kompletną historię z cache'u.
+            if (historyCacheChanged) clearHistoryView()
+
+            _statsUiState.update {
+                it.copy(
+                    loans = collected,
+                    isLoading = false,
+                    progress = null,
+                    hasLoadedOnce = it.hasLoadedOnce || successCount > 0,
+                    error =
+                        failedAccountNames
+                            .takeIf { names -> names.isNotEmpty() }
+                            ?.let { names ->
+                                getApplication<Application>()
+                                    .getString(
+                                        R.string.history_partial_error,
+                                        names.joinToString(", ")
+                                    )
+                            }
+                )
+            }
         }
     }
 
@@ -1642,6 +1754,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         const val PREF_SEARCH_MEDIA_TYPES = "search_media_types"
         const val PREF_READY_HOLDS_DISMISSED = "ready_holds_dismissed"
         const val SEARCH_HISTORY_LIMIT = 20
+        const val STATS_CACHE_TTL_MILLIS = 12 * 60 * 60 * 1000L
     }
 
     class Factory(private val application: Application, private val repository: OmnisRepository) :

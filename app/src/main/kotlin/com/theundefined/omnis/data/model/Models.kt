@@ -216,7 +216,10 @@ fun HoldResponseItem.toHold(account: Account): Hold? {
 data class HistoryCacheEntry(
     val loans: List<Loan> = emptyList(),
     val nextOffset: Int = 1,
-    val hasMore: Boolean = true
+    val hasMore: Boolean = true,
+    // Ustawiane tylko przy pobraniu CAŁEJ historii naraz (ekran statystyk) — po tym poznajemy, że
+    // cache jest kompletny i na tyle świeży, żeby nie pobierać go ponownie.
+    val fullFetchedAtMillis: Long? = null
 )
 
 @Serializable

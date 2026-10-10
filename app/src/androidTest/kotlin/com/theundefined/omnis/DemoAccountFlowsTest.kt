@@ -99,6 +99,24 @@ class DemoAccountFlowsTest {
     }
 
     @Test
+    fun statsScreen_showsDemoStats() {
+        openFromMoreMenu(R.string.stats_title)
+
+        val year = java.time.LocalDate.now().year
+        composeRule.waitForText(str(R.string.stats_chart_months, year), substring = false)
+        composeRule.screenshot("stats_year")
+
+        composeRule.onNodeWithText(str(R.string.stats_all_years), substring = false).performClick()
+        composeRule.waitForText(str(R.string.stats_chart_years), substring = false)
+        composeRule.screenshot("stats_all_years")
+        // Autor z `_HISTORY_TEMPLATES` w omnis-mock, a karta czasu wypożyczenia pojawia się tylko,
+        // jeśli daty wypożyczenia i zwrotu z historii dały się sparsować.
+        composeRule.waitAndScrollToText("Karolina Nibylska")
+        composeRule.screenshot("stats_rankings")
+        composeRule.waitAndScrollToText(str(R.string.stats_duration), substring = false)
+    }
+
+    @Test
     fun backFromSecondaryScreen_returnsToLoans() {
         composeRule.waitAndScrollToText(DEMO_LOAN_TITLES.first())
         openFromMoreMenu(R.string.cd_settings)
