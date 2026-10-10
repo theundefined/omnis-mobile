@@ -21,6 +21,7 @@ import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
+import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SdkSuppress
 import androidx.test.platform.app.InstrumentationRegistry
@@ -128,7 +129,9 @@ class StoreScreenshotsTest {
                 .onNodeWithText(str(R.string.hold_place_next))
                 .assertIsEnabled()
                 .performClick()
-            composeRule.waitForText(str(R.string.hold_place_back), substring = false)
+            // "Miejsce odbioru" jest tylko na ekranie potwierdzenia ("Wstecz" bywa też gdzie
+            // indziej).
+            composeRule.waitForText(str(R.string.hold_place_pickup), substring = false)
         }
         shot("07_place_hold")
         if (next.isSuccess) {
@@ -147,6 +150,7 @@ class StoreScreenshotsTest {
         val filter = composeRule.onAllNodes(hasSetTextAction()).onLast()
         filter.performTextInput("Pozna")
         composeRule.onNodeWithText(REAL_LIBRARY, substring = false).performClick()
+        Espresso.closeSoftKeyboard()
         shot("08_library_picker")
         filter.performTextClearance()
         filter.performTextInput("Demo")
@@ -163,7 +167,7 @@ class StoreScreenshotsTest {
         val mapButton = hasContentDescription(str(R.string.cd_show_on_map))
         composeRule.onAllNodes(hasScrollToNodeAction()).onFirst().performScrollToNode(mapButton)
         composeRule.onAllNodes(mapButton).onFirst().performClick()
-        settle(15_000) // geolokalizacja filii i kafelki OpenStreetMap
+        settle(30_000) // geolokalizacja filii i kafelki OpenStreetMap
         shot("10_branch_map")
     }
 
@@ -176,6 +180,8 @@ class StoreScreenshotsTest {
         val field = composeRule.onAllNodes(hasSetTextAction()).onFirst()
         field.performTextInput(query)
         field.performImeAction()
+        // Klawiatura zasłaniałaby wyniki na zrzucie.
+        Espresso.closeSoftKeyboard()
     }
 
     private fun openFromMoreMenu(itemRes: Int) {
