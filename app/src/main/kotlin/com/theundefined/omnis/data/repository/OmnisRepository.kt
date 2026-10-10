@@ -103,6 +103,7 @@ class OmnisRepository(private val accountManager: AccountManager) {
 
             val response =
                 api.login(
+                    authProfile = tenant.authProfile ?: DEFAULT_AUTH_PROFILE,
                     username = username,
                     password = password,
                     institution = tenant.institution,
@@ -184,6 +185,24 @@ class OmnisRepository(private val accountManager: AccountManager) {
         }
     }
 
+    /**
+     * Sprawdza bibliotekę spoza listy (link wklejony przez użytkownika) przed logowaniem: czy pod
+     * adresem jest Primo VE z tym widokiem i czy da się do niej zalogować hasłem (profil ALMA).
+     */
+    suspend fun fetchCustomTenant(link: CatalogLink): Result<Tenant> {
+        return try {
+            val response = createClient(link.baseUrl).getViewConfiguration(link.view)
+            val config =
+                if (response.isSuccessful) response.body()?.string()?.let(::parsePrimoViewConfig)
+                else null
+            resolveCustomTenant(link, config)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(Exception("Błąd połączenia: ${e.localizedMessage}"))
+        }
+    }
+
     suspend fun fetchAccountProfile(account: Account): Result<Account> {
         return try {
             val api =
@@ -195,6 +214,7 @@ class OmnisRepository(private val accountManager: AccountManager) {
 
             val loginResponse =
                 api.login(
+                    authProfile = account.tenant.authProfile ?: DEFAULT_AUTH_PROFILE,
                     username = account.username,
                     password = account.password,
                     institution = account.tenant.institution,
@@ -275,6 +295,7 @@ class OmnisRepository(private val accountManager: AccountManager) {
         api.getInitialCookies(account.tenant.view)
         val loginResponse =
             api.login(
+                authProfile = account.tenant.authProfile ?: DEFAULT_AUTH_PROFILE,
                 username = account.username,
                 password = account.password,
                 institution = account.tenant.institution,
@@ -586,6 +607,7 @@ class OmnisRepository(private val accountManager: AccountManager) {
                 )
             val loginResponse =
                 api.login(
+                    authProfile = account.tenant.authProfile ?: DEFAULT_AUTH_PROFILE,
                     username = account.username,
                     password = account.password,
                     institution = account.tenant.institution,

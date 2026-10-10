@@ -17,6 +17,13 @@
     <string name="password">Hasło</string>
     <string name="cancel">Anuluj</string>
     <string name="login_and_add">Zaloguj i dodaj</string>
+    <string name="custom_library_not_listed">Mojej biblioteki nie ma na liście</string>
+    <string name="custom_library_back_to_list">Wybierz z listy</string>
+    <string name="custom_library_link">Link do katalogu biblioteki</string>
+    <string name="custom_library_link_hint">Otwórz katalog swojej biblioteki w przeglądarce i skopiuj adres strony — musi zawierać „vid=”. Działają katalogi Primo VE z logowaniem loginem i hasłem.</string>
+    <string name="custom_library_link_invalid">To nie wygląda na link do katalogu Primo — brakuje „vid=INSTYTUCJA:WIDOK” albo adres nie zaczyna się od https://.</string>
+    <string name="custom_library_example">Przykład (Biblioteka Raczyńskich): %1$s</string>
+    <string name="custom_library_use_example">Wstaw przykład</string>
     <string name="no_loans">Brak wypożyczeń.</string>
     <plurals name="days_overdue">
         <item quantity="one">%d dzień po terminie</item>

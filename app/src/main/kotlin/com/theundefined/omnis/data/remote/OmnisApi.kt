@@ -21,6 +21,14 @@ interface OmnisApi {
         @Field("targetUrl") targetUrl: String
     ): Response<LoginResponse>
 
+    // Publiczna konfiguracja widoku (nazwa instytucji, profile logowania) — do weryfikacji
+    // własnej biblioteki. encoded = true, bo Primo odpowiada 400 na dwukropek zakodowany jako %3A;
+    // view jest wcześniej walidowany (parseCatalogLink) do [A-Za-z0-9_-]+:[A-Za-z0-9_-]+.
+    @GET("/primaws/rest/pub/configuration/vid/{view}")
+    suspend fun getViewConfiguration(
+        @Path("view", encoded = true) view: String
+    ): Response<ResponseBody>
+
     // Token gościa — ten sam, którym oficjalny interfejs WWW Primo przegląda katalog bez logowania.
     // Body to literał stringu JSON (token w cudzysłowach), stąd ResponseBody zamiast modelu.
     @GET("/primaws/rest/pub/institution/{institution}/guestJwt")

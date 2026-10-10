@@ -17,6 +17,13 @@
     <string name="password">Password</string>
     <string name="cancel">Cancel</string>
     <string name="login_and_add">Login and add</string>
+    <string name="custom_library_not_listed">My library isn\'t listed</string>
+    <string name="custom_library_back_to_list">Choose from the list</string>
+    <string name="custom_library_link">Library catalog link</string>
+    <string name="custom_library_link_hint">Open your library\'s catalog in a browser and copy the page address — it must contain “vid=”. Works with Primo VE catalogs that use a username and password.</string>
+    <string name="custom_library_link_invalid">This doesn\'t look like a Primo catalog link — “vid=INSTITUTION:VIEW” is missing or the address doesn\'t start with https://.</string>
+    <string name="custom_library_example">Example (Raczyński Library): %1$s</string>
+    <string name="custom_library_use_example">Use example</string>
     <string name="no_loans">No loans.</string>
     <plurals name="days_overdue">
         <item quantity="one">%d day overdue</item>

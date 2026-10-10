@@ -9,6 +9,7 @@ import com.theundefined.omnis.data.local.ViewPrefs
 import com.theundefined.omnis.data.model.Account
 import com.theundefined.omnis.data.model.BookVersion
 import com.theundefined.omnis.data.model.BranchInfo
+import com.theundefined.omnis.data.model.CatalogLink
 import com.theundefined.omnis.data.model.DueDate
 import com.theundefined.omnis.data.model.DueDateLookup
 import com.theundefined.omnis.data.model.HistoryCacheEntry
@@ -766,6 +767,19 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
                     onAccountSetChanged()
                     _events.emit(UiEvent.AccountAdded)
                 }
+                .onFailure { e ->
+                    _uiState.update { it.copy(isLoading = false, error = e.message) }
+                }
+        }
+    }
+
+    /** Biblioteka spoza listy: najpierw weryfikacja linku w Primo, potem zwykłe dodanie konta. */
+    fun addCustomAccount(username: String, password: String, link: CatalogLink) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null) }
+            repository
+                .fetchCustomTenant(link)
+                .onSuccess { tenant -> addAccount(username, password, tenant) }
                 .onFailure { e ->
                     _uiState.update { it.copy(isLoading = false, error = e.message) }
                 }

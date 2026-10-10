@@ -15,7 +15,12 @@ data class Tenant(
     val institution: String,
     val view: String,
     val isDemo: Boolean = false,
-    val defaultTimeoutSeconds: Long? = null
+    val defaultTimeoutSeconds: Long? = null,
+    /**
+     * Nazwa profilu logowania Primo dla loginu i hasła; null = [DEFAULT_AUTH_PROFILE]. Ustawiane
+     * tylko dla własnych bibliotek (resolveCustomTenant), których profil ALMA nazywa się inaczej.
+     */
+    val authProfile: String? = null
 )
 
 /**
