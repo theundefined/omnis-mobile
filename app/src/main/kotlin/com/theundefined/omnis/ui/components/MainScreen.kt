@@ -81,6 +81,7 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
         enabled =
             currentScreen == "settings" ||
                 currentScreen == "history" ||
+                currentScreen == "stats" ||
                 currentScreen == "holds" ||
                 currentScreen == "search" ||
                 currentScreen == "card"
@@ -116,6 +117,11 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
                 currentScreen = "search"
             }
         )
+        return
+    }
+
+    if (currentScreen == "stats") {
+        StatsScreen(viewModel = viewModel, onBack = { currentScreen = "main" })
         return
     }
 
@@ -200,6 +206,13 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
                                 onClick = {
                                     showMoreMenu = false
                                     currentScreen = "history"
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.stats_title)) },
+                                onClick = {
+                                    showMoreMenu = false
+                                    currentScreen = "stats"
                                 }
                             )
                             DropdownMenuItem(
