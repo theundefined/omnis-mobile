@@ -18,6 +18,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.theundefined.omnis.R
 import com.theundefined.omnis.data.model.Account
+import com.theundefined.omnis.data.model.CatalogLink
 import com.theundefined.omnis.data.model.Tenant
 import com.theundefined.omnis.data.model.sortedForSettings
 import com.theundefined.omnis.ui.OmnisViewModel
@@ -31,6 +32,7 @@ fun SettingsScreen(
     onToggleAccount: (Account) -> Unit,
     onRemoveAccount: (Account) -> Unit,
     onAddAccount: (String, String, Tenant) -> Unit,
+    onAddCustomAccount: (String, String, CatalogLink) -> Unit,
     onEnterDemoMode: () -> Unit,
     onExitDemoMode: () -> Unit,
     isLoading: Boolean,
@@ -99,6 +101,7 @@ fun SettingsScreen(
             if (showAddForm) {
                 AddAccountForm(
                     onAdd = { u, p, t -> onAddAccount(u, p, t) },
+                    onAddCustom = { u, p, l -> onAddCustomAccount(u, p, l) },
                     onCancel = { showAddForm = false },
                     isLoading = isLoading,
                     errorMessage = errorMessage
