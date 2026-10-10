@@ -1,9 +1,19 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp"
-    android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
-    <path
-        android:fillColor="#FF000000"
-        android:pathData="M4,6h16v2H4zM4,11h16v2H4zM4,16h16v2H4z" />
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#E8453C" android:pathData="M60,30H65V46H60Z" />
+    <path android:fillColor="#F6E7D3" android:pathData="M31.0,64H77.0A2.0,2.0 0,0 1,79,66.0V74.0A2.0,2.0 0,0 1,77.0,76H31.0A2.0,2.0 0,0 1,29,74.0V66.0A2.0,2.0 0,0 1,31.0,64Z" />
+    <path android:fillColor="#E2CDB3" android:pathData="M31.0,72H77.0A2.0,2.0 0,0 1,79,74.0V74.0A2.0,2.0 0,0 1,77.0,76H31.0A2.0,2.0 0,0 1,29,74.0V74.0A2.0,2.0 0,0 1,31.0,72Z" />
+    <path android:fillColor="#E2CDB3" android:pathData="M29,72H79V74H29Z" />
+    <path android:fillColor="#C7652B" android:pathData="M36,64H41V76H36Z" />
+    <path android:fillColor="#F0B98C" android:pathData="M35.0,52H73.0A2.0,2.0 0,0 1,75,54.0V62.0A2.0,2.0 0,0 1,73.0,64H35.0A2.0,2.0 0,0 1,33,62.0V54.0A2.0,2.0 0,0 1,35.0,52Z" />
+    <path android:fillColor="#DDA275" android:pathData="M35.0,60H73.0A2.0,2.0 0,0 1,75,62.0V62.0A2.0,2.0 0,0 1,73.0,64H35.0A2.0,2.0 0,0 1,33,62.0V62.0A2.0,2.0 0,0 1,35.0,60Z" />
+    <path android:fillColor="#DDA275" android:pathData="M33,60H75V62H33Z" />
+    <path android:fillColor="#A84A17" android:pathData="M65,52H70V64H65Z" />
+    <path android:fillColor="#FBF0E3" android:pathData="M33.0,40H71.0A2.0,2.0 0,0 1,73,42.0V50.0A2.0,2.0 0,0 1,71.0,52H33.0A2.0,2.0 0,0 1,31,50.0V42.0A2.0,2.0 0,0 1,33.0,40Z" />
+    <path android:fillColor="#E6D3BD" android:pathData="M33.0,48H71.0A2.0,2.0 0,0 1,73,50.0V50.0A2.0,2.0 0,0 1,71.0,52H33.0A2.0,2.0 0,0 1,31,50.0V50.0A2.0,2.0 0,0 1,33.0,48Z" />
+    <path android:fillColor="#E6D3BD" android:pathData="M31,48H73V50H31Z" />
+    <path android:fillColor="#C7652B" android:pathData="M38,40H43V52H38Z" />
 </vector>

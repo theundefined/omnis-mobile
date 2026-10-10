@@ -165,10 +165,21 @@ fun SettingsScreen(
                             )
                         context.startActivity(intent)
                     },
-                    modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 16.dp)
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
                 ) {
                     Text(
                         stringResource(R.string.about_app_source_link),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+
+                // Wymóg Google Play: polityka prywatności dostępna także w samej aplikacji.
+                TextButton(
+                    onClick = { openUrl(context, PRIVACY_POLICY_URL) },
+                    modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 16.dp)
+                ) {
+                    Text(
+                        stringResource(R.string.privacy_policy_link),
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -176,6 +187,8 @@ fun SettingsScreen(
         }
     }
 }
+
+private const val PRIVACY_POLICY_URL = "https://theundefined.github.io/omnis-mobile/privacy.html"
 
 @Composable
 fun AccountSettingsItem(account: Account, onToggle: () -> Unit, onRemove: () -> Unit) {
