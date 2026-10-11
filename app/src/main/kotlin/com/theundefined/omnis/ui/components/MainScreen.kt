@@ -24,9 +24,12 @@ import com.theundefined.omnis.ui.isReadyHoldsBannerVisible
 import com.theundefined.omnis.ui.readyHolds
 import kotlinx.coroutines.flow.collectLatest
 
+/** Żądanie otwarcia ekranu z zewnątrz (powiadomienie); `seq` odróżnia kolejne kliknięcia. */
+data class NavRequest(val screen: String, val seq: Int)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
+fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0, navRequest: NavRequest? = null) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val holdsState by viewModel.holdsUiState.collectAsStateWithLifecycle()
     val dismissedReadyHolds by viewModel.dismissedReadyHolds.collectAsStateWithLifecycle()
@@ -50,6 +53,13 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0) {
     // loadHolds() bez forceRefresh nic nie robi, więc zmiany listy kont (np. odświeżone kary) nie
     // powodują ponownych logowań; zmiana zestawu kont i tak kasuje stan rezerwacji.
     LaunchedEffect(uiState.accounts) { if (uiState.accounts.isNotEmpty()) viewModel.loadHolds() }
+
+    LaunchedEffect(navRequest) {
+        val request = navRequest ?: return@LaunchedEffect
+        currentScreen = request.screen
+        // Powiadomienie mówi o świeżych danych z tła — lista w pamięci mogła być starsza.
+        if (request.screen == "holds") viewModel.loadHolds(forceRefresh = true)
+    }
 
     LaunchedEffect(scanRequests) {
         if (scanRequests > 0) {

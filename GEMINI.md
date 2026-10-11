@@ -34,7 +34,7 @@ Projekt stosuje rygorystyczny model **Continuous Delivery**, w którym GitHub Ac
 
 - **Kody kreskowe:** Wyświetlanie karty bibliotecznej jako Code 128.
 - **Bulk Renew:** Przycisk przedłużenia wszystkich książek jednocześnie.
-- **Powiadomienia:** Przypomnienia o kończących się terminach w tle.
+- **Powiadomienia:** zaimplementowane — strażnik terminów (`guard/`, WorkManager raz na dobę ~9:00, opt-in w Ustawieniach): terminy zwrotu (próg 1–7 dni, domyślnie 3; ponownie w ostatni dzień; przeterminowane codziennie), rezerwacje do odbioru, wzrost kar, wstrzymanie konta po 3 odrzuceniach logowania z rzędu (do zmiany hasła). Auto-przedłużanie per konto (`Account.autoRenew`), 2 dni przed terminem, raz na termin; sukces = termin przesunięty po ponownym pobraniu, nie kod HTTP. Jedno logowanie na konto na przebieg (`OmnisRepository.guardCheck`). Konto demo pominięte (auto-przedłużanie zmieniałoby wspólne konto).
 - **Grupowanie:** Rozbudowa widoku filii o informację o użytkowniku wypożyczającym.
 - **Historia wypożyczeń:** zaimplementowana (paginacja + trwały cache per stronę).
 - **Wyszukiwanie książek w katalogu:** zaimplementowane — checkboxy preferowanych filii (trwałe per biblioteka), wszystkie wydania, termin zwrotu dla wypożyczonych; wyszukiwanie równoległe po unikalnych bibliotekach z flagą "preferowane do wyszukiwania" na koncie.

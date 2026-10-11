@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.theundefined.omnis.data.model.Account
+import com.theundefined.omnis.guard.GuardSettings
+import com.theundefined.omnis.guard.GuardState
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -188,6 +190,37 @@ class AccountManager(context: Context) {
 
     fun saveSearchTenantKeys(keys: Set<String>) {
         sharedPreferences.edit().putString("search_tenants", json.encodeToString(keys)).apply()
+    }
+
+    /**
+     * Ustawienia i stan strażnika terminów (guard/). Stan osobno od kont: worker w tle nigdy nie
+     * zapisuje listy kont, żeby nie nadpisać zmian zrobionych równolegle w UI.
+     */
+    fun getGuardSettings(): GuardSettings {
+        val jsonStr = sharedPreferences.getString("guard_settings", null) ?: return GuardSettings()
+        return try {
+            json.decodeFromString<GuardSettings>(jsonStr)
+        } catch (e: Exception) {
+            GuardSettings()
+        }
+    }
+
+    fun saveGuardSettings(settings: GuardSettings) {
+        sharedPreferences.edit().putString("guard_settings", json.encodeToString(settings)).apply()
+    }
+
+    fun getGuardState(): GuardState {
+        val jsonStr = sharedPreferences.getString("guard_state", null) ?: return GuardState()
+        return try {
+            json.decodeFromString<GuardState>(jsonStr)
+        } catch (e: Exception) {
+            GuardState()
+        }
+    }
+
+    /** commit(), nie apply(): worker kończy się zaraz po zapisie, a proces może zaraz zniknąć. */
+    fun saveGuardState(state: GuardState) {
+        sharedPreferences.edit().putString("guard_state", json.encodeToString(state)).commit()
     }
 
     fun addAccount(account: Account) {

@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkManager
 import com.theundefined.omnis.R
 import com.theundefined.omnis.data.local.ViewPrefs
 import com.theundefined.omnis.data.model.Account
@@ -29,6 +30,9 @@ import com.theundefined.omnis.data.model.seriesSearchTerm
 import com.theundefined.omnis.data.model.seriesVolume
 import com.theundefined.omnis.data.remote.PlaceGeocoder
 import com.theundefined.omnis.data.repository.OmnisRepository
+import com.theundefined.omnis.guard.GuardScheduler
+import com.theundefined.omnis.guard.GuardSettings
+import com.theundefined.omnis.guard.isPaused
 import java.text.Collator
 import java.util.Locale
 import kotlinx.coroutines.Job
@@ -45,9 +49,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 data class UiState(
     val accounts: List<Account> = emptyList(),
@@ -98,6 +104,17 @@ data class StatsUiState(
     val hasLoadedOnce: Boolean = false,
     val progress: RefreshProgress? = null,
     val error: String? = null
+)
+
+/**
+ * Sekcja "Przypomnienia" w Ustawieniach. `pausedAccountIds` — konta, których strażnik nie sprawdza
+ * po kolejnych odrzuceniach logowania (do zmiany hasła).
+ */
+data class GuardUiState(
+    val settings: GuardSettings = GuardSettings(),
+    val lastRunAt: Long? = null,
+    val pausedAccountIds: Set<String> = emptySet(),
+    val isChecking: Boolean = false
 )
 
 /**
@@ -507,10 +524,84 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
             UiEvent()
     }
 
+    private val _guardUiState = MutableStateFlow(GuardUiState())
+    val guardUiState: StateFlow<GuardUiState> = _guardUiState.asStateFlow()
+
+    // lastRunAt strażnika, którego wynik (cache wypożyczeń) już pokazujemy.
+    private var shownGuardRunAt: Long? = null
+
     init {
         refreshAccounts()
         loadCachedLoans()
         refreshAllLoans(isManual = false)
+        loadGuardState()
+        shownGuardRunAt = _guardUiState.value.lastRunAt
+    }
+
+    fun loadGuardState() {
+        val state = repository.getGuardState()
+        val paused = repository.getAccounts().filter { isPaused(state, it) }.map { it.id }.toSet()
+        _guardUiState.update {
+            it.copy(
+                settings = repository.getGuardSettings(),
+                lastRunAt = state.lastRunAt,
+                pausedAccountIds = paused
+            )
+        }
+    }
+
+    /**
+     * Powrót aplikacji na pierwszy plan: jeśli w międzyczasie strażnik odświeżył cache w tle (np.
+     * przedłużył książki), pokaż to od razu, bez sieci. Nie w trakcie odświeżania — jego wynik i
+     * tak zaraz nadpisze listę.
+     */
+    fun onAppForeground() {
+        loadGuardState()
+        val lastRun = _guardUiState.value.lastRunAt
+        if (lastRun != shownGuardRunAt && !_uiState.value.isLoading) {
+            shownGuardRunAt = lastRun
+            refreshAccounts()
+            loadCachedLoans()
+        }
+    }
+
+    fun setGuardEnabled(enabled: Boolean) {
+        val app = getApplication<Application>()
+        repository.saveGuardSettings(repository.getGuardSettings().copy(enabled = enabled))
+        if (enabled) GuardScheduler.schedule(app, replace = true) else GuardScheduler.cancel(app)
+        loadGuardState()
+    }
+
+    fun setGuardThreshold(days: Int) {
+        repository.saveGuardSettings(repository.getGuardSettings().copy(thresholdDays = days))
+        loadGuardState()
+    }
+
+    /** Jak setCardNumber: konto czytane na świeżo, żeby nie nadpisać równoległych zmian. */
+    fun setAutoRenew(account: Account, enabled: Boolean) {
+        val current = repository.getAccounts().find { it.id == account.id } ?: return
+        repository.updateAccount(current.copy(autoRenew = enabled))
+        refreshAccounts()
+    }
+
+    fun checkGuardNow() {
+        if (_guardUiState.value.isChecking) return
+        val app = getApplication<Application>()
+        val id = GuardScheduler.checkNow(app)
+        _guardUiState.update { it.copy(isChecking = true) }
+        viewModelScope.launch {
+            // Bez sieci zadanie czeka na połączenie — nie kręćmy wskaźnikiem w nieskończoność;
+            // przebieg i tak wykona się, gdy sieć wróci.
+            withTimeoutOrNull(CHECK_NOW_TIMEOUT_MILLIS) {
+                // Po id, nie po nazwie: zakończony poprzedni przebieg "Sprawdź teraz" WorkManager
+                // pamięta jeszcze przez dobę i od razu spełniłby warunek.
+                WorkManager.getInstance(app).getWorkInfoByIdFlow(id).first { info ->
+                    info?.state?.isFinished == true
+                }
+            }
+            _guardUiState.update { it.copy(isChecking = false) }
+            onAppForeground()
+        }
     }
 
     fun refreshAccounts() {
@@ -1747,6 +1838,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
     }
 
     private companion object {
+        const val CHECK_NOW_TIMEOUT_MILLIS = 120_000L
         const val PREF_LOANS_GROUPING = "loans_grouping"
         const val PREF_LOANS_SORT = "loans_sort"
         const val PREF_HISTORY_GROUPING = "history_grouping"

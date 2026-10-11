@@ -60,7 +60,7 @@ interface OmnisApi {
         @Header("Authorization") token: String,
         @Query("lang") lang: String = "pl",
         @Body body: Map<String, String>
-    ): Response<Any>
+    ): Response<ResponseBody>
 
     @GET("/primaws/rest/priv/myaccount/requests")
     suspend fun getRequests(

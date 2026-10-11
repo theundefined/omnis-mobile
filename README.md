@@ -28,6 +28,9 @@ z serwerem wybranej biblioteki — autor nie prowadzi żadnego serwera pośredni
 - Szczegóły wypożyczenia (sygnatura, kategoria, powód braku możliwości przedłużenia), adres filii
   z nawigacją, udostępnianie.
 - Historia wypożyczeń doczytywana stronami i zapamiętywana na telefonie.
+- Przypomnienia w tle (opcjonalne): raz dziennie powiadomienie o zbliżającym się lub minionym
+  terminie zwrotu, rezerwacjach do odbioru i nowych karach; automatyczne przedłużanie na wybranych
+  kontach.
 
 **Wyszukiwarka** — anonimowa, działa bez konta w danej bibliotece
 - Dowolna z 55 obsługiwanych bibliotek, także kilka naraz.

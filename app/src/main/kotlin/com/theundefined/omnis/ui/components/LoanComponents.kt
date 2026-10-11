@@ -28,6 +28,7 @@ import com.theundefined.omnis.data.model.displayTitle
 import com.theundefined.omnis.data.model.isMapsLink
 import com.theundefined.omnis.data.model.isRegularLoanStatus
 import com.theundefined.omnis.data.model.mapsSearchUrl
+import com.theundefined.omnis.data.model.parseFlexibleDate
 import com.theundefined.omnis.data.model.seriesSearchTerm
 import com.theundefined.omnis.ui.BranchDialogState
 import com.theundefined.omnis.ui.OmnisViewModel
@@ -223,23 +224,6 @@ fun getDueDateColor(dueDateStr: String): Color {
         daysUntil <= 7 -> Color(0xFFFBC02D) // Bold Yellow
         else -> Color(0xFF388E3C) // Green
     }
-}
-
-fun parseFlexibleDate(dateStr: String): LocalDate? {
-    val formatters =
-        listOf(
-            DateTimeFormatter.ofPattern("dd/MM/yyyy"),
-            DateTimeFormatter.ofPattern("yyyy-MM-dd"),
-            DateTimeFormatter.ofPattern("yyyyMMdd")
-        )
-    for (formatter in formatters) {
-        try {
-            return LocalDate.parse(dateStr, formatter)
-        } catch (e: Exception) {
-            continue
-        }
-    }
-    return null
 }
 
 // Polski ma kilka form liczby mnogiej ("1 dzień", "2 dni", "5 dni") — stąd plurals, nie string.

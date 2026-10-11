@@ -261,4 +261,38 @@
         <item quantity="one">Based on %d returned item.</item>
         <item quantity="other">Based on %d returned items.</item>
     </plurals>
+
+    <!-- Due-date guard (background reminders) -->
+    <string name="guard_section_title">Reminders</string>
+    <string name="guard_enable">Remind me about due dates</string>
+    <string name="guard_enable_desc">Once a day (around 9:00) the app checks enabled accounts in the background: due dates, holds ready for pickup and new fines. One login per account per day.</string>
+    <string name="guard_threshold">Remind this many days before the due date:</string>
+    <string name="guard_last_run">Last check: %1$s</string>
+    <string name="guard_never_run">Not checked yet</string>
+    <string name="guard_check_now">Check now</string>
+    <string name="guard_permission_denied">Notifications are blocked — reminders can\'t work without them.</string>
+    <string name="guard_open_notification_settings">Notification settings</string>
+    <string name="guard_auto_renew">Renew automatically (2 days before due)</string>
+    <string name="guard_paused">The library rejects the password — background checks are paused. Add the account again with the current password.</string>
+    <string name="guard_channel_due">Due dates</string>
+    <string name="guard_channel_holds">Holds ready for pickup</string>
+    <string name="guard_channel_account">Account problems</string>
+    <string name="guard_title_overdue">Loans are overdue</string>
+    <string name="guard_title_due">Loans due soon</string>
+    <string name="guard_title_renewed">Loans renewed</string>
+    <string name="guard_line_renewed">Renewed: %1$s — until %2$s</string>
+    <string name="guard_line_renew_failed">Could not renew: %1$s</string>
+    <string name="guard_line_overdue">Overdue: %1$s</string>
+    <string name="guard_line_due_today">Due today: %1$s</string>
+    <string name="guard_line_due_tomorrow">Due tomorrow: %1$s</string>
+    <plurals name="guard_line_due_in">
+        <item quantity="one">Due in %1$d day: %2$s</item>
+        <item quantity="other">Due in %1$d days: %2$s</item>
+    </plurals>
+    <string name="guard_line_hold_until">%1$s — pick up by %2$s</string>
+    <string name="guard_title_fines">New fine</string>
+    <string name="guard_line_fines">%1$s: fines %2$.2f %3$s</string>
+    <string name="guard_title_login">Cannot log in to an account</string>
+    <string name="guard_line_login">%1$s (%2$s) — check the password</string>
+    <string name="guard_more_lines">and %1$d more</string>
 </resources>

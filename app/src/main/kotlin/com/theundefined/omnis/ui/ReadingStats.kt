@@ -1,7 +1,7 @@
 package com.theundefined.omnis.ui
 
 import com.theundefined.omnis.data.model.Loan
-import com.theundefined.omnis.ui.components.parseFlexibleDate
+import com.theundefined.omnis.data.model.parseFlexibleDate
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.temporal.ChronoUnit

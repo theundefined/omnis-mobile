@@ -19,7 +19,9 @@ data class Account(
     val isDemo: Boolean = false,
     val disabledByDemo: Boolean = false,
     /** Numer karty ustawiony ręcznie; null = numer wynika z loginu (patrz [libraryCardNumber]). */
-    val cardNumber: String? = null
+    val cardNumber: String? = null,
+    /** Strażnik terminów przedłuża w tle pozycje tego konta (opt-in; patrz guard/). */
+    val autoRenew: Boolean = false
 ) {
     val finesCurrency: String
         get() = _finesCurrency ?: "PLN"

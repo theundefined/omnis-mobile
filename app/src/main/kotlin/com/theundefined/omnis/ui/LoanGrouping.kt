@@ -1,7 +1,7 @@
 package com.theundefined.omnis.ui
 
 import com.theundefined.omnis.data.model.Loan
-import com.theundefined.omnis.ui.components.parseFlexibleDate
+import com.theundefined.omnis.data.model.parseFlexibleDate
 
 enum class GroupingMode {
     ACCOUNT,
