@@ -125,6 +125,9 @@ dependencies {
     // Mapa filii — kafelki OpenStreetMap, bez klucza API i natywnych bibliotek
     implementation("org.osmdroid:osmdroid-android:6.1.20")
 
+    // Strażnik terminów w tle. 2.10.x, bo 2.11+ wymaga kotlin-stdlib 2.1 (projekt: Kotlin 2.0).
+    implementation("androidx.work:work-runtime-ktx:2.10.5")
+
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 

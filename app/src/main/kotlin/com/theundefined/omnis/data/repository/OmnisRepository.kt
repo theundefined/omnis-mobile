@@ -3,6 +3,8 @@ package com.theundefined.omnis.data.repository
 import com.theundefined.omnis.data.local.AccountManager
 import com.theundefined.omnis.data.model.*
 import com.theundefined.omnis.data.remote.OmnisApi
+import com.theundefined.omnis.guard.GuardSettings
+import com.theundefined.omnis.guard.GuardState
 import java.net.URI
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -150,7 +152,7 @@ class OmnisRepository(private val accountManager: AccountManager) {
                     actions.forEach { action ->
                         when (action.type) {
                             "Loans" -> loansCount = action.value.toIntOrNull() ?: 0
-                            "Fines" -> finesAmount = action.value.toDoubleOrNull() ?: 0.0
+                            "Fines" -> finesAmount = parseCounterAmount(action.value) ?: 0.0
                         }
                     }
                 }
@@ -255,7 +257,7 @@ class OmnisRepository(private val accountManager: AccountManager) {
                 actions.forEach { action ->
                     when (action.type) {
                         "Loans" -> loansCount = action.value.toIntOrNull() ?: loansCount
-                        "Fines" -> finesAmount = action.value.toDoubleOrNull() ?: finesAmount
+                        "Fines" -> finesAmount = parseCounterAmount(action.value) ?: finesAmount
                     }
                 }
             }
@@ -302,6 +304,10 @@ class OmnisRepository(private val accountManager: AccountManager) {
                 view = account.tenant.view,
                 targetUrl = "${account.tenant.baseUrl}/discovery/search?vid=${account.tenant.view}"
             )
+        // Tylko 401 — 403 bywa odpowiedzią WAF-u/limitu zapytań, nie odrzuceniem hasła.
+        if (loginResponse.code() == 401) {
+            return Result.failure(LoginRejectedException("Sesja wygasła lub błędne hasło."))
+        }
         val token =
             loginResponse.body()?.jwtData?.trim('"')
                 ?: return Result.failure(Exception("Błąd autoryzacji podczas pobierania książek."))
@@ -347,35 +353,42 @@ class OmnisRepository(private val accountManager: AccountManager) {
                 loginForToken(api, account).getOrElse {
                     return Result.failure(it)
                 }
-
-            val allItems = mutableListOf<LoanResponseItem>()
-            var offset = 1
-            while (true) {
-                val loansResponse =
-                    api.getLoans(
-                        "Bearer $token",
-                        bulk = HISTORY_PAGE_SIZE,
-                        offset = offset,
-                        type = type
-                    )
-                if (!loansResponse.isSuccessful) {
-                    val errorMsg =
-                        if (loansResponse.code() == 401) "Sesja wygasła lub błędne hasło."
-                        else "Błąd pobierania danych: ${loansResponse.code()}"
-                    return Result.failure(Exception(errorMsg))
-                }
-                val loansList = loansResponse.body()?.data?.loans
-                allItems.addAll(loansList?.loan ?: emptyList())
-
-                val showMore = loansList?.showmore
-                if (showMore.isNullOrEmpty() || "Y" !in showMore) break
-                offset += HISTORY_PAGE_SIZE
-            }
-
-            Result.success(allItems.map { toLoan(it, account) })
+            fetchAllLoans(api, token, account, type)
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    private suspend fun fetchAllLoans(
+        api: OmnisApi,
+        token: String,
+        account: Account,
+        type: String = "active"
+    ): Result<List<Loan>> {
+        val allItems = mutableListOf<LoanResponseItem>()
+        var offset = 1
+        while (true) {
+            val loansResponse =
+                api.getLoans(
+                    "Bearer $token",
+                    bulk = HISTORY_PAGE_SIZE,
+                    offset = offset,
+                    type = type
+                )
+            if (!loansResponse.isSuccessful) {
+                val errorMsg =
+                    if (loansResponse.code() == 401) "Sesja wygasła lub błędne hasło."
+                    else "Błąd pobierania danych: ${loansResponse.code()}"
+                return Result.failure(Exception(errorMsg))
+            }
+            val loansList = loansResponse.body()?.data?.loans
+            allItems.addAll(loansList?.loan ?: emptyList())
+
+            val showMore = loansList?.showmore
+            if (showMore.isNullOrEmpty() || "Y" !in showMore) break
+            offset += HISTORY_PAGE_SIZE
+        }
+        return Result.success(allItems.map { toLoan(it, account) })
     }
 
     /**
@@ -448,6 +461,23 @@ class OmnisRepository(private val accountManager: AccountManager) {
     }
 
     private data class CatalogDetails(val series: String?, val author: String?)
+
+    /**
+     * Jak [withCatalogDetails], ale bez sieci — tylko przepisuje serię/autora z poprzedniego
+     * cache'u. Dla strażnika w tle: nie dokłada zapytań do katalogu, a niesprawdzone pozycje
+     * zostają z catalogFetched=false i uzupełni je najbliższe odświeżenie w aplikacji.
+     */
+    fun withCachedCatalogDetails(loans: List<Loan>, previous: List<Loan>): List<Loan> {
+        val known = previous.filter { it.catalogFetched }.associateBy { it.mmsid }
+        return loans.map { loan ->
+            val prev = known[loan.mmsid] ?: return@map loan
+            loan.copy(
+                series = prev.series,
+                catalogAuthor = prev.catalogAuthor,
+                catalogFetched = true
+            )
+        }
+    }
 
     /**
      * Pobiera JEDNĄ stronę historii wypożyczeń (bez podążania za `showmore`) — pozwala UI
@@ -605,27 +635,110 @@ class OmnisRepository(private val accountManager: AccountManager) {
                     account.tenant.baseUrl,
                     account.timeoutSeconds ?: DEFAULT_TIMEOUT_SECONDS
                 )
-            val loginResponse =
-                api.login(
-                    authProfile = account.tenant.authProfile ?: DEFAULT_AUTH_PROFILE,
-                    username = account.username,
-                    password = account.password,
-                    institution = account.tenant.institution,
-                    view = account.tenant.view,
-                    targetUrl =
-                        "${account.tenant.baseUrl}/discovery/search?vid=${account.tenant.view}"
+            val token =
+                loginForToken(api, account).getOrElse {
+                    return Result.failure(it)
+                }
+            renewWithToken(api, token, loanId)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Kształt odpowiedzi renew_loans nie był zweryfikowany na żywo — jak przy anulowaniu rezerwacji
+     * odrzucamy przynajmniej kopertę z `status: failed` przy HTTP 200. Pewność daje dopiero ponowne
+     * pobranie wypożyczeń (strażnik porównuje terminy przed i po).
+     */
+    private suspend fun renewWithToken(api: OmnisApi, token: String, loanId: String): Result<Unit> {
+        val response = api.renewLoan("Bearer $token", body = mapOf("id" to loanId))
+        if (!response.isSuccessful) {
+            return Result.failure(Exception("Przedłużenie nieudane: ${response.code()}"))
+        }
+        primoFailureMessage(response.body()?.string())?.let {
+            return Result.failure(Exception(it))
+        }
+        return Result.success(Unit)
+    }
+
+    /** Wynik jednego przebiegu strażnika dla konta. null = tej części nie udało się pobrać. */
+    data class GuardFetch(
+        val loans: List<Loan>,
+        /** Wypożyczenia przed przedłużeniem (te, które próbowaliśmy przedłużyć). */
+        val renewAttempted: List<Loan>,
+        /**
+         * false = po przedłużeniach nie udało się pobrać listy ponownie; `loans` to wtedy stan
+         * sprzed przedłużeń i wyniku przedłużeń nie da się ocenić.
+         */
+        val refetched: Boolean,
+        val holds: List<Hold>?,
+        val finesAmount: Double?
+    )
+
+    /**
+     * Wszystko, czego strażnik potrzebuje od konta, w JEDNEJ sesji: logowanie, wypożyczenia,
+     * przedłużenia wybranych pozycji i ponowne pobranie, liczniki (kary), rezerwacje. Jedno
+     * logowanie dziennie na konto zamiast osobnego przy każdej operacji — strażnik działa bez
+     * udziału użytkownika, więc nie może obciążać serwera bardziej niż wizyta na stronie.
+     */
+    suspend fun guardCheck(
+        account: Account,
+        pickRenewals: (List<Loan>) -> List<Loan>
+    ): Result<GuardFetch> {
+        return try {
+            val api =
+                createClient(
+                    account.tenant.baseUrl,
+                    account.timeoutSeconds ?: DEFAULT_TIMEOUT_SECONDS
                 )
             val token =
-                loginResponse.body()?.jwtData?.trim('"')
-                    ?: return Result.failure(Exception("Błąd autoryzacji podczas przedłużania."))
-
-            val response = api.renewLoan("Bearer $token", body = mapOf("id" to loanId))
-            if (response.isSuccessful) {
-                Result.success(Unit)
-            } else {
-                Result.failure(Exception("Przedłużenie nieudane: ${response.code()}"))
+                loginForToken(api, account).getOrElse {
+                    return Result.failure(it)
+                }
+            var loans =
+                fetchAllLoans(api, token, account).getOrElse {
+                    return Result.failure(it)
+                }
+            val toRenew = pickRenewals(loans)
+            var refetched = true
+            if (toRenew.isNotEmpty()) {
+                // Po kolei; wynik ocenia ponowne pobranie, nie odpowiedź renew_loans.
+                toRenew.forEach { loan ->
+                    try {
+                        renewWithToken(api, token, loan.id)
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                    }
+                }
+                val after = fetchAllLoans(api, token, account).getOrNull()
+                refetched = after != null
+                if (after != null) loans = after
             }
+            val fines =
+                try {
+                    api.getCounters("Bearer $token")
+                        .takeIf { it.isSuccessful }
+                        ?.body()
+                        ?.data
+                        ?.listofactions
+                        ?.action
+                        ?.firstOrNull { it.type == "Fines" }
+                        ?.value
+                        ?.let { parseCounterAmount(it) }
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    null
+                }
+            val holds =
+                try {
+                    fetchHolds(api, token, account).getOrNull()
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    null
+                }
+            Result.success(GuardFetch(loans, toRenew, refetched, holds, fines))
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             Result.failure(e)
         }
     }
@@ -1207,4 +1320,24 @@ class OmnisRepository(private val accountManager: AccountManager) {
     fun getSearchTenantKeys(): Set<String>? = accountManager.getSearchTenantKeys()
 
     fun saveSearchTenantKeys(keys: Set<String>) = accountManager.saveSearchTenantKeys(keys)
+
+    fun getGuardSettings(): GuardSettings = accountManager.getGuardSettings()
+
+    fun saveGuardSettings(settings: GuardSettings) = accountManager.saveGuardSettings(settings)
+
+    fun getGuardState(): GuardState = accountManager.getGuardState()
 }
+
+/** Serwer odrzucił dane logowania (HTTP 401) — w odróżnieniu od błędu sieci czy serwera. */
+class LoginRejectedException(message: String) : Exception(message)
+
+/**
+ * Kwota z `myaccount/counters` ("0.00"; inny format niż "0,20 PLN" z `myaccount/fines`). Przecinek
+ * też przyjmujemy, żeby zmiana formatu nie dała cicho null i przeoczonej kary.
+ */
+fun parseCounterAmount(value: String): Double? =
+    value
+        .trim()
+        .replace(',', '.')
+        .takeWhile { it.isDigit() || it == '.' || it == '-' }
+        .toDoubleOrNull()

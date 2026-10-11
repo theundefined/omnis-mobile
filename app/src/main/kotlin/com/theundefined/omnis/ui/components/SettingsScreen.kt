@@ -1,11 +1,18 @@
 package com.theundefined.omnis.ui.components
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -13,15 +20,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.theundefined.omnis.R
 import com.theundefined.omnis.data.model.Account
 import com.theundefined.omnis.data.model.CatalogLink
 import com.theundefined.omnis.data.model.Tenant
 import com.theundefined.omnis.data.model.sortedForSettings
+import com.theundefined.omnis.guard.GuardNotifier
+import com.theundefined.omnis.guard.THRESHOLD_CHOICES
+import com.theundefined.omnis.ui.GuardUiState
 import com.theundefined.omnis.ui.OmnisViewModel
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.flow.collectLatest
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -42,6 +58,7 @@ fun SettingsScreen(
     var showAddForm by remember { mutableStateOf(false) }
     var accountToRemove by remember { mutableStateOf<Account?>(null) }
     val context = LocalContext.current
+    val guardState by viewModel.guardUiState.collectAsStateWithLifecycle()
 
     // Closing the add-account form takes priority over leaving the settings screen; when the
     // form isn't shown, the enclosing MainScreen's BackHandler (currentScreen == "settings")
@@ -112,7 +129,19 @@ fun SettingsScreen(
                         AccountSettingsItem(
                             account = account,
                             onToggle = { onToggleAccount(account) },
-                            onRemove = { accountToRemove = account }
+                            onRemove = { accountToRemove = account },
+                            showAutoRenew =
+                                guardState.settings.enabled && account.isEnabled && !account.isDemo,
+                            onAutoRenewChange = { viewModel.setAutoRenew(account, it) },
+                            guardPaused = account.id in guardState.pausedAccountIds
+                        )
+                    }
+                    item(key = "guard") {
+                        GuardSettingsCard(
+                            state = guardState,
+                            onEnabledChange = { viewModel.setGuardEnabled(it) },
+                            onThresholdChange = { viewModel.setGuardThreshold(it) },
+                            onCheckNow = { viewModel.checkGuardNow() }
                         )
                     }
                 }
@@ -191,9 +220,19 @@ fun SettingsScreen(
 private const val PRIVACY_POLICY_URL = "https://theundefined.github.io/omnis-mobile/privacy.html"
 
 @Composable
-fun AccountSettingsItem(account: Account, onToggle: () -> Unit, onRemove: () -> Unit) {
+fun AccountSettingsItem(
+    account: Account,
+    onToggle: () -> Unit,
+    onRemove: () -> Unit,
+    showAutoRenew: Boolean = false,
+    onAutoRenewChange: (Boolean) -> Unit = {},
+    guardPaused: Boolean = false
+) {
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Column(modifier = Modifier.weight(1f)) {
                 val accountTitle =
                     if (account.displayName != null && account.displayName != account.username) {
@@ -226,5 +265,157 @@ fun AccountSettingsItem(account: Account, onToggle: () -> Unit, onRemove: () -> 
                 Icon(painterResource(R.drawable.ic_delete), contentDescription = null)
             }
         }
+        if (guardPaused && account.isEnabled) {
+            Text(
+                stringResource(R.string.guard_paused),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+        }
+        if (showAutoRenew) {
+            Row(
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .toggleable(
+                            value = account.autoRenew,
+                            role = Role.Checkbox,
+                            onValueChange = onAutoRenewChange
+                        )
+                        .padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(checked = account.autoRenew, onCheckedChange = null)
+                Text(
+                    stringResource(R.string.guard_auto_renew),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+        Spacer(Modifier.height(if (showAutoRenew) 8.dp else 16.dp))
     }
 }
+
+/**
+ * Przypomnienia (strażnik terminów, guard/). Domyślnie wyłączone; włączenie na Androidzie 13+
+ * najpierw prosi o zgodę na powiadomienia — bez niej przełącznik zostaje wyłączony.
+ */
+@Composable
+private fun GuardSettingsCard(
+    state: GuardUiState,
+    onEnabledChange: (Boolean) -> Unit,
+    onThresholdChange: (Int) -> Unit,
+    onCheckNow: () -> Unit
+) {
+    val context = LocalContext.current
+    var permissionDenied by remember { mutableStateOf(false) }
+    val permissionLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            permissionDenied = !granted
+            if (granted) onEnabledChange(true)
+        }
+    val notificationsBlocked = state.settings.enabled && !GuardNotifier(context).canNotify()
+
+    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                stringResource(R.string.guard_section_title),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.guard_enable),
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f)
+                )
+                Switch(
+                    checked = state.settings.enabled,
+                    onCheckedChange = { enabled ->
+                        if (
+                            enabled &&
+                                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.POST_NOTIFICATIONS
+                                ) != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            permissionDenied = false
+                            onEnabledChange(enabled)
+                        }
+                    }
+                )
+            }
+            Text(
+                stringResource(R.string.guard_enable_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (permissionDenied || notificationsBlocked) {
+                Text(
+                    stringResource(R.string.guard_permission_denied),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+                TextButton(
+                    onClick = {
+                        val intent =
+                            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                        context.startActivity(intent)
+                    }
+                ) {
+                    Text(stringResource(R.string.guard_open_notification_settings))
+                }
+            }
+            if (state.settings.enabled) {
+                Text(
+                    stringResource(R.string.guard_threshold),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 12.dp)
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    THRESHOLD_CHOICES.forEach { days ->
+                        FilterChip(
+                            selected = state.settings.thresholdDays == days,
+                            onClick = { onThresholdChange(days) },
+                            label = { Text(days.toString()) }
+                        )
+                    }
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 8.dp)
+                ) {
+                    Text(
+                        state.lastRunAt?.let {
+                            stringResource(
+                                R.string.guard_last_run,
+                                Instant.ofEpochMilli(it)
+                                    .atZone(ZoneId.systemDefault())
+                                    .format(LAST_RUN_FORMAT)
+                            )
+                        } ?: stringResource(R.string.guard_never_run),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (state.isChecking) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        TextButton(onClick = onCheckNow) {
+                            Text(stringResource(R.string.guard_check_now))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private val LAST_RUN_FORMAT = DateTimeFormatter.ofPattern("dd.MM HH:mm")

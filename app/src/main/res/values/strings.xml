@@ -273,4 +273,40 @@
         <item quantity="many">Na podstawie %d zwróconych pozycji.</item>
         <item quantity="other">Na podstawie %d zwróconych pozycji.</item>
     </plurals>
+
+    <!-- Strażnik terminów (przypomnienia w tle) -->
+    <string name="guard_section_title">Przypomnienia</string>
+    <string name="guard_enable">Przypominaj o terminach</string>
+    <string name="guard_enable_desc">Raz dziennie (około 9:00) aplikacja sprawdza w tle włączone konta: terminy zwrotu, rezerwacje do odbioru i nowe kary. Jedno logowanie na konto dziennie.</string>
+    <string name="guard_threshold">Przypominaj tyle dni przed terminem:</string>
+    <string name="guard_last_run">Ostatnie sprawdzenie: %1$s</string>
+    <string name="guard_never_run">Jeszcze nie sprawdzano</string>
+    <string name="guard_check_now">Sprawdź teraz</string>
+    <string name="guard_permission_denied">Powiadomienia są zablokowane — bez nich przypomnienia nie działają.</string>
+    <string name="guard_open_notification_settings">Ustawienia powiadomień</string>
+    <string name="guard_auto_renew">Przedłużaj automatycznie (2 dni przed terminem)</string>
+    <string name="guard_paused">Biblioteka odrzuca hasło — sprawdzanie w tle wstrzymane. Dodaj konto ponownie z aktualnym hasłem.</string>
+    <string name="guard_channel_due">Terminy zwrotu</string>
+    <string name="guard_channel_holds">Rezerwacje do odbioru</string>
+    <string name="guard_channel_account">Problemy z kontem</string>
+    <string name="guard_title_overdue">Minął termin zwrotu</string>
+    <string name="guard_title_due">Zbliża się termin zwrotu</string>
+    <string name="guard_title_renewed">Przedłużono wypożyczenia</string>
+    <string name="guard_line_renewed">Przedłużono: %1$s — do %2$s</string>
+    <string name="guard_line_renew_failed">Nie udało się przedłużyć: %1$s</string>
+    <string name="guard_line_overdue">Po terminie: %1$s</string>
+    <string name="guard_line_due_today">Zwrot dziś: %1$s</string>
+    <string name="guard_line_due_tomorrow">Zwrot jutro: %1$s</string>
+    <plurals name="guard_line_due_in">
+        <item quantity="one">Zwrot za %1$d dzień: %2$s</item>
+        <item quantity="few">Zwrot za %1$d dni: %2$s</item>
+        <item quantity="many">Zwrot za %1$d dni: %2$s</item>
+        <item quantity="other">Zwrot za %1$d dnia: %2$s</item>
+    </plurals>
+    <string name="guard_line_hold_until">%1$s — odbiór do %2$s</string>
+    <string name="guard_title_fines">Nowa kara</string>
+    <string name="guard_line_fines">%1$s: kary %2$.2f %3$s</string>
+    <string name="guard_title_login">Nie można zalogować się do konta</string>
+    <string name="guard_line_login">%1$s (%2$s) — sprawdź hasło</string>
+    <string name="guard_more_lines">i %1$d więcej</string>
 </resources>
