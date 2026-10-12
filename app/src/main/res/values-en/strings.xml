@@ -239,6 +239,8 @@
     <string name="stats_tile_best_month">Best month</string>
     <string name="stats_chart_months">Loans by month, %1$d</string>
     <string name="stats_chart_years">Loans by year</string>
+    <string name="stats_compare_years">Compare years</string>
+    <string name="stats_chart_compare_years">Months year over year</string>
     <string name="stats_chart_hint">Tap a bar to see details.</string>
     <string name="stats_years_table">Year by year</string>
     <string name="stats_col_year">Year</string>

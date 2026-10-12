@@ -40,6 +40,7 @@ data class ReadingStats(
     val bestMonth: Pair<YearMonth, Int>?,
     val months: List<MonthBucket>, // 12 pozycji dla wybranego roku, pusta gdy rok == null
     val years: List<YearBucket>, // rosnąco, wszystkie lata (niezależnie od wybranego roku)
+    val monthsByYear: Map<Int, List<Int>>, // rok -> 12 liczników miesięcznych, wszystkie lata
     val topAuthors: List<CountEntry>,
     val categories: List<CountEntry>,
     val libraries: List<CountEntry>,
@@ -89,6 +90,14 @@ fun computeReadingStats(
             }
         }
 
+    val monthsByYear =
+        dated
+            .groupBy { (_, date) -> date.year }
+            .mapValues { (_, entries) ->
+                val counts = entries.groupingBy { (_, date) -> date.monthValue }.eachCount()
+                (1..12).map { counts[it] ?: 0 }
+            }
+
     val bestMonth =
         inScope
             .groupingBy { (_, date) -> YearMonth.from(date) }
@@ -110,6 +119,7 @@ fun computeReadingStats(
         bestMonth = bestMonth,
         months = months,
         years = years,
+        monthsByYear = monthsByYear,
         topAuthors = ranking(scopeLoans, TOP_LIMIT, ::authorKey) { authorLabel(it) },
         categories =
             ranking(scopeLoans, null, { it.itemCategoryName?.trim()?.lowercase() }) {

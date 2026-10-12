@@ -70,6 +70,9 @@ private val ACCOUNT_COLORS_DARK =
 
 private val CHART_HEIGHT = 160.dp
 
+// Ile lat naraz na wykresie porównawczym — więcej się nie mieści czytelnie na telefonie.
+private const val MAX_COMPARED_YEARS = 4
+
 private data class ChartBar(
     val label: String,
     val detailLabel: String,
@@ -102,6 +105,7 @@ fun StatsScreen(viewModel: OmnisViewModel, onBack: () -> Unit) {
 
     val today = remember { LocalDate.now() }
     var selectedYear by rememberSaveable { mutableStateOf<Int?>(today.year) }
+    var compareYears by rememberSaveable { mutableStateOf(false) }
     // null = wszystkie konta
     var selectedAccounts by remember { mutableStateOf<Set<String>?>(null) }
     val stats =
@@ -186,6 +190,8 @@ fun StatsScreen(viewModel: OmnisViewModel, onBack: () -> Unit) {
                         onSelectedAccountsChange = { selectedAccounts = it },
                         selectedYear = selectedYear,
                         onSelectedYearChange = { selectedYear = it },
+                        compareYears = compareYears,
+                        onCompareYearsChange = { compareYears = it },
                         colorOf = colorOf,
                         nameOf = nameOf
                     )
@@ -204,10 +210,15 @@ private fun StatsContent(
     onSelectedAccountsChange: (Set<String>?) -> Unit,
     selectedYear: Int?,
     onSelectedYearChange: (Int?) -> Unit,
+    compareYears: Boolean,
+    onCompareYearsChange: (Boolean) -> Unit,
     colorOf: (String) -> Color,
     nameOf: (String) -> String
 ) {
     val locale = LocalConfiguration.current.locales[0]
+    // Kolory lat z tej samej palety co konta, wg roku — kolejne lata to sąsiednie (sprawdzone
+    // pod kątem daltonizmu) kolory, a rok trzyma kolor niezależnie od filtrów.
+    val yearPalette = if (isSystemInDarkTheme()) ACCOUNT_COLORS_DARK else ACCOUNT_COLORS_LIGHT
     // Konta w kolejności stosu słupków — tylko te uwzględnione w filtrze.
     val stackOrder =
         accounts.map { it.id }.filter { selectedAccounts == null || it in selectedAccounts }
@@ -274,6 +285,15 @@ private fun StatsContent(
         item { SummaryTiles(stats, selectedYear, today, locale) }
 
         item {
+            // Porównanie lat: okno lat z danymi kończące się na wybranym roku (albo najnowszym);
+            // dla najstarszych lat okno sięga do przodu, żeby było z czym porównać.
+            val yearsAsc = stats.availableYears.sorted()
+            val upTo =
+                if (selectedYear == null) yearsAsc.size else yearsAsc.count { it <= selectedYear }
+            val windowEnd = maxOf(upTo, minOf(yearsAsc.size, MAX_COMPARED_YEARS))
+            val comparedYears =
+                yearsAsc.subList(maxOf(0, windowEnd - MAX_COMPARED_YEARS), windowEnd)
+            val canCompare = comparedYears.size > 1
             val bars =
                 if (selectedYear != null) {
                     stats.months.map { bucket ->
@@ -298,13 +318,34 @@ private fun StatsContent(
                         )
                     }
                 }
+            val comparing = compareYears && canCompare
             StatsCard(
                 title =
-                    if (selectedYear != null)
-                        stringResource(R.string.stats_chart_months, selectedYear)
-                    else stringResource(R.string.stats_chart_years)
+                    when {
+                        comparing -> stringResource(R.string.stats_chart_compare_years)
+                        selectedYear != null ->
+                            stringResource(R.string.stats_chart_months, selectedYear)
+                        else -> stringResource(R.string.stats_chart_years)
+                    }
             ) {
-                StackedBarChart(bars, stackOrder, colorOf, nameOf)
+                if (canCompare) {
+                    FilterChip(
+                        selected = compareYears,
+                        onClick = { onCompareYearsChange(!compareYears) },
+                        label = { Text(stringResource(R.string.stats_compare_years)) }
+                    )
+                    Spacer(Modifier.height(4.dp))
+                }
+                if (comparing) {
+                    YearComparisonChart(
+                        years = comparedYears,
+                        monthsByYear = stats.monthsByYear,
+                        colorOf = { year -> yearPalette[Math.floorMod(year, yearPalette.size)] },
+                        locale = locale
+                    )
+                } else {
+                    StackedBarChart(bars, stackOrder, colorOf, nameOf)
+                }
             }
         }
 
@@ -508,6 +549,96 @@ private fun StackedBarChart(
                     Spacer(Modifier.width(4.dp))
                     Text(nameOf(id), style = MaterialTheme.typography.bodySmall)
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Słupki grupowane: dla każdego miesiąca po jednym słupku na rok (najstarszy z lewej), kolor = rok.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun YearComparisonChart(
+    years: List<Int>,
+    monthsByYear: Map<Int, List<Int>>,
+    colorOf: (Int) -> Color,
+    locale: Locale
+) {
+    var selected by remember(years, monthsByYear) { mutableStateOf<Int?>(null) }
+    val countOf: (Int, Int) -> Int = { year, month -> monthsByYear[year]?.getOrNull(month) ?: 0 }
+    val max =
+        years.maxOfOrNull { y -> (0 until 12).maxOf { m -> countOf(y, m) } }?.takeIf { it > 0 } ?: 1
+    val secondary = MaterialTheme.colorScheme.onSurfaceVariant
+
+    Row(Modifier.fillMaxWidth()) {
+        (0 until 12).forEach { month ->
+            val dimmed = selected != null && selected != month
+            Column(
+                modifier =
+                    Modifier.weight(1f)
+                        .clickable { selected = if (selected == month) null else month }
+                        .alpha(if (dimmed) 0.4f else 1f),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Row(
+                    Modifier.fillMaxWidth(0.85f).height(CHART_HEIGHT),
+                    horizontalArrangement = Arrangement.spacedBy(1.dp),
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    years.forEach { year ->
+                        val count = countOf(year, month)
+                        Box(
+                            Modifier.weight(1f)
+                                .height(CHART_HEIGHT * (count.toFloat() / max))
+                                .background(
+                                    colorOf(year),
+                                    RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp)
+                                )
+                        )
+                    }
+                }
+                HorizontalDivider()
+                Text(
+                    Month.of(month + 1).getDisplayName(TextStyle.SHORT_STANDALONE, locale),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = secondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+        }
+    }
+
+    Spacer(Modifier.height(8.dp))
+    val month = selected
+    if (month != null) {
+        Text(
+            Month.of(month + 1).getDisplayName(TextStyle.FULL_STANDALONE, locale) +
+                ": " +
+                years.asReversed().joinToString(" · ") { "$it: ${countOf(it, month)}" },
+            style = MaterialTheme.typography.bodyMedium
+        )
+    } else {
+        Text(
+            stringResource(R.string.stats_chart_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = secondary
+        )
+    }
+
+    Spacer(Modifier.height(8.dp))
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        years.forEach { year ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ColorDot(colorOf(year))
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    "$year (${monthsByYear[year]?.sum() ?: 0})",
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
         }
     }
