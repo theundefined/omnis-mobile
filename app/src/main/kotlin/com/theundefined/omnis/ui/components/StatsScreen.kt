@@ -216,9 +216,9 @@ private fun StatsContent(
     nameOf: (String) -> String
 ) {
     val locale = LocalConfiguration.current.locales[0]
-    // Kolory lat z tej samej palety co konta; rok trzyma kolor niezależnie od zaznaczenia.
+    // Kolory lat z tej samej palety co konta, wg roku — kolejne lata to sąsiednie (sprawdzone
+    // pod kątem daltonizmu) kolory, a rok trzyma kolor niezależnie od filtrów.
     val yearPalette = if (isSystemInDarkTheme()) ACCOUNT_COLORS_DARK else ACCOUNT_COLORS_LIGHT
-    val fallbackColor = MaterialTheme.colorScheme.outline
     // Konta w kolejności stosu słupków — tylko te uwzględnione w filtrze.
     val stackOrder =
         accounts.map { it.id }.filter { selectedAccounts == null || it in selectedAccounts }
@@ -285,13 +285,15 @@ private fun StatsContent(
         item { SummaryTiles(stats, selectedYear, today, locale) }
 
         item {
-            // Porównanie lat: wybrany rok (albo najnowszy) i kilka wcześniejszych z danymi.
+            // Porównanie lat: okno lat z danymi kończące się na wybranym roku (albo najnowszym);
+            // dla najstarszych lat okno sięga do przodu, żeby było z czym porównać.
+            val yearsAsc = stats.availableYears.sorted()
+            val upTo =
+                if (selectedYear == null) yearsAsc.size else yearsAsc.count { it <= selectedYear }
+            val windowEnd = maxOf(upTo, minOf(yearsAsc.size, MAX_COMPARED_YEARS))
             val comparedYears =
-                stats.availableYears
-                    .filter { selectedYear == null || it <= selectedYear }
-                    .take(MAX_COMPARED_YEARS)
-                    .sorted()
-            val canCompare = stats.monthsByYear.size > 1
+                yearsAsc.subList(maxOf(0, windowEnd - MAX_COMPARED_YEARS), windowEnd)
+            val canCompare = comparedYears.size > 1
             val bars =
                 if (selectedYear != null) {
                     stats.months.map { bucket ->
@@ -316,7 +318,7 @@ private fun StatsContent(
                         )
                     }
                 }
-            val comparing = compareYears && canCompare && comparedYears.size > 1
+            val comparing = compareYears && canCompare
             StatsCard(
                 title =
                     when {
@@ -338,10 +340,7 @@ private fun StatsContent(
                     YearComparisonChart(
                         years = comparedYears,
                         monthsByYear = stats.monthsByYear,
-                        colorOf = { year ->
-                            yearPalette.getOrNull(stats.availableYears.indexOf(year))
-                                ?: fallbackColor
-                        },
+                        colorOf = { year -> yearPalette[Math.floorMod(year, yearPalette.size)] },
                         locale = locale
                     )
                 } else {
