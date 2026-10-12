@@ -87,6 +87,19 @@ class ReadingStatsTest {
     }
 
     @Test
+    fun `months by year cover every year regardless of selected year`() {
+        val stats = computeReadingStats(loans, null, 2026, today)
+
+        assertEquals(setOf(2025, 2026), stats.monthsByYear.keys)
+        assertEquals(listOf(1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), stats.monthsByYear[2025])
+        assertEquals(listOf(0, 0, 3, 0, 0, 0, 0, 0, 0, 1, 0, 0), stats.monthsByYear[2026])
+        assertEquals(
+            listOf(0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0),
+            computeReadingStats(loans, setOf("bartek"), null, today).monthsByYear[2026]
+        )
+    }
+
+    @Test
     fun `account filter limits every statistic`() {
         val stats = computeReadingStats(loans, setOf("bartek"), null, today)
 

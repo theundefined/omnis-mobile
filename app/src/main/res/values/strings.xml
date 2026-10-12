@@ -246,6 +246,8 @@
     <string name="stats_tile_best_month">Najlepszy miesiąc</string>
     <string name="stats_chart_months">Wypożyczenia w miesiącach %1$d</string>
     <string name="stats_chart_years">Wypożyczenia w latach</string>
+    <string name="stats_compare_years">Porównaj lata</string>
+    <string name="stats_chart_compare_years">Miesiące rok do roku</string>
     <string name="stats_chart_hint">Dotknij słupka, aby zobaczyć szczegóły.</string>
     <string name="stats_years_table">Rok po roku</string>
     <string name="stats_col_year">Rok</string>
