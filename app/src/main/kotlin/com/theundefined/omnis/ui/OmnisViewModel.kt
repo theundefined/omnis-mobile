@@ -91,6 +91,7 @@ data class HistoryUiState(
     val isLoadingMore: Boolean = false, // incremental "load more" page in flight
     val hasLoadedOnce: Boolean = false,
     val canLoadMore: Boolean = false,
+    val filter: String = "", // tytuł/autor — patrz filterLoans
     val error: String? = null
 )
 
@@ -1229,7 +1230,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
     private fun finishHistoryUpdate(failedAccountNames: List<String>, hasSuccess: Boolean = true) {
         val grouped =
             groupAndSortLoans(
-                historyFlatLoans,
+                filterLoans(historyFlatLoans, _historyUiState.value.filter),
                 _historyUiState.value.groupingMode,
                 _historyUiState.value.sortMode,
                 allGroupLabel()
@@ -1552,10 +1553,16 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         reapplyHistoryGroupingAndSorting()
     }
 
+    fun setHistoryFilter(filter: String) {
+        if (filter == _historyUiState.value.filter) return
+        _historyUiState.update { it.copy(filter = filter) }
+        reapplyHistoryGroupingAndSorting()
+    }
+
     private fun reapplyHistoryGroupingAndSorting() {
         val grouped =
             groupAndSortLoans(
-                historyFlatLoans,
+                filterLoans(historyFlatLoans, _historyUiState.value.filter),
                 _historyUiState.value.groupingMode,
                 _historyUiState.value.sortMode,
                 allGroupLabel()

@@ -1,6 +1,8 @@
 package com.theundefined.omnis.ui.components
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -85,7 +87,11 @@ fun HistoryScreen(
                 // Pokrywa zarówno "sprawdziliśmy, historia jest pusta", jak i "brak włączonych
                 // kont" (state.loans jest wtedy trywialnie pustą mapą) — w obu przypadkach nie
                 // ma czego pokazać i nie ma błędu do zgłoszenia, więc ten sam komunikat pasuje.
-                !state.isLoading && state.loans.values.all { it.isEmpty() } -> {
+                // Z aktywnym filtrem pusta lista to "nic nie pasuje" — zostajemy w widoku z polem
+                // filtra, żeby dało się go zmienić.
+                !state.isLoading &&
+                    state.filter.isEmpty() &&
+                    state.loans.values.all { it.isEmpty() } -> {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(stringResource(R.string.no_history))
                     }
@@ -98,24 +104,47 @@ fun HistoryScreen(
                             onGroupingChange = { viewModel.setHistoryGroupingMode(it) },
                             onSortChange = { viewModel.setHistorySortMode(it) }
                         )
+                        HistoryFilterField(
+                            state.filter,
+                            onChange = { viewModel.setHistoryFilter(it) }
+                        )
                         PullToRefreshBox(
                             isRefreshing = state.isLoading,
                             onRefresh = { viewModel.loadHistory(forceRefresh = true) },
                             modifier = Modifier.fillMaxSize()
                         ) {
-                            LoanList(
-                                groupedLoans = state.loans,
-                                isHistory = true,
-                                onBranchClick = { loans -> viewModel.showBranchInfo(loans) },
-                                branchHeaders = state.groupingMode == GroupingMode.BRANCH,
-                                onSearch = onSearch,
-                                footer = {
+                            if (
+                                state.filter.isNotEmpty() && state.loans.values.all { it.isEmpty() }
+                            ) {
+                                // Przewijalna kolumna, bo PullToRefreshBox reaguje tylko na
+                                // przewijaną zawartość; stopka pozwala doładować resztę historii.
+                                Column(
+                                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        stringResource(R.string.history_filter_no_results),
+                                        modifier = Modifier.padding(top = 32.dp)
+                                    )
                                     HistoryFooter(
                                         state,
                                         onLoadMore = { viewModel.loadMoreHistory() }
                                     )
                                 }
-                            )
+                            } else
+                                LoanList(
+                                    groupedLoans = state.loans,
+                                    isHistory = true,
+                                    onBranchClick = { loans -> viewModel.showBranchInfo(loans) },
+                                    branchHeaders = state.groupingMode == GroupingMode.BRANCH,
+                                    onSearch = onSearch,
+                                    footer = {
+                                        HistoryFooter(
+                                            state,
+                                            onLoadMore = { viewModel.loadMoreHistory() }
+                                        )
+                                    }
+                                )
                             BranchInfoDialogHost(viewModel)
                         }
                     }
@@ -123,6 +152,28 @@ fun HistoryScreen(
             }
         }
     }
+}
+
+@Composable
+private fun HistoryFilterField(filter: String, onChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = filter,
+        onValueChange = onChange,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        placeholder = { Text(stringResource(R.string.history_filter_hint)) },
+        leadingIcon = { Icon(painterResource(R.drawable.ic_search), contentDescription = null) },
+        trailingIcon = {
+            if (filter.isNotEmpty()) {
+                IconButton(onClick = { onChange("") }) {
+                    Icon(
+                        painterResource(R.drawable.ic_close),
+                        contentDescription = stringResource(R.string.cd_clear_filter)
+                    )
+                }
+            }
+        },
+        singleLine = true
+    )
 }
 
 @Composable

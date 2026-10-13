@@ -34,6 +34,13 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0, navRequest: Nav
     val holdsState by viewModel.holdsUiState.collectAsStateWithLifecycle()
     val dismissedReadyHolds by viewModel.dismissedReadyHolds.collectAsStateWithLifecycle()
     var currentScreen by remember { mutableStateOf("main") }
+    // Historia otwarta kliknięciem autora w statystykach wraca do statystyk, nie na główny.
+    var historyBackTo by remember { mutableStateOf("main") }
+    val leaveHistory = {
+        viewModel.setHistoryFilter("")
+        currentScreen = historyBackTo
+        historyBackTo = "main"
+    }
     // Skan zlecony skrótem aplikacji, konsumowany jednorazowo przez SearchScreen — dzięki temu
     // powrót do wyszukiwarki z listy nie odpala skanera ponownie.
     var pendingScan by remember { mutableStateOf(false) }
@@ -96,7 +103,7 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0, navRequest: Nav
                 currentScreen == "search" ||
                 currentScreen == "card"
     ) {
-        currentScreen = "main"
+        if (currentScreen == "history") leaveHistory() else currentScreen = "main"
     }
 
     if (currentScreen == "settings") {
@@ -121,8 +128,10 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0, navRequest: Nav
     if (currentScreen == "history") {
         HistoryScreen(
             viewModel = viewModel,
-            onBack = { currentScreen = "main" },
+            onBack = leaveHistory,
             onSearch = { loan, query, field ->
+                viewModel.setHistoryFilter("")
+                historyBackTo = "main"
                 viewModel.searchFromLoan(loan, query, field)
                 currentScreen = "search"
             }
@@ -131,7 +140,15 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0, navRequest: Nav
     }
 
     if (currentScreen == "stats") {
-        StatsScreen(viewModel = viewModel, onBack = { currentScreen = "main" })
+        StatsScreen(
+            viewModel = viewModel,
+            onBack = { currentScreen = "main" },
+            onAuthorClick = { author ->
+                viewModel.setHistoryFilter(author)
+                historyBackTo = "stats"
+                currentScreen = "history"
+            }
+        )
         return
     }
 

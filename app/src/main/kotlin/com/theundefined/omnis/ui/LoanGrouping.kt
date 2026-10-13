@@ -79,3 +79,22 @@ fun sortLoans(loans: List<Loan>, sortMode: SortMode): List<Loan> {
         SortMode.TITLE -> loans.sortedBy { it.title.lowercase() }
     }
 }
+
+/**
+ * Filtr listy historii: fragment tytułu albo autora (bez rozróżniania wielkości liter). Autor jest
+ * sprawdzany także w postaci z `normalizeAuthor` — tą samą, którą pokazują statystyki, więc
+ * kliknięcie autora w rankingu znajduje wszystkie jego zapisy ("Piekara, Jacek (1965- ). Autor").
+ */
+fun filterLoans(loans: List<Loan>, query: String): List<Loan> {
+    val q = query.trim().lowercase()
+    if (q.isEmpty()) return loans
+    return loans.filter { loan ->
+        listOfNotNull(
+                loan.title,
+                loan.author,
+                loan.catalogAuthor,
+                normalizeAuthor(loan.catalogAuthor ?: loan.author)
+            )
+            .any { it.lowercase().contains(q) }
+    }
+}

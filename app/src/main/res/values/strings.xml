@@ -110,6 +110,9 @@
     <string name="hold_place_no_pickup">Biblioteka nie podała miejsca odbioru dla tego egzemplarza.</string>
     <string name="load_more">Załaduj więcej</string>
     <string name="history_end">To już cała historia.</string>
+    <string name="history_filter_hint">Filtruj po tytule lub autorze…</string>
+    <string name="history_filter_no_results">Nic w pobranej historii nie pasuje do filtra.</string>
+    <string name="cd_clear_filter">Wyczyść filtr</string>
     <string name="retry">Spróbuj ponownie</string>
 
     <string name="share_book">📚 Książka: %1$s\n✍️ Autor: %2$s\n📅 Termin zwrotu: %3$s\n📍 Lokalizacja: %4$s\n🔑 Kod kreskowy: %5$s</string>

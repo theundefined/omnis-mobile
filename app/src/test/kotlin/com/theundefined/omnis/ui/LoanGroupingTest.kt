@@ -87,4 +87,20 @@ class LoanGroupingTest {
         assertEquals(setOf("Filia 35", "Filia 01"), result.keys)
         assertEquals(listOf("b1", "a1"), result.getValue("Filia 35").map { it.id })
     }
+
+    @Test
+    fun filterLoans_matchesTitleAndNormalizedAuthor() {
+        val piekara =
+            loan("p1", "Anna", "20/10/2026")
+                .copy(title = "Sługa Boży", catalogAuthor = "Piekara, Jacek (1965- ). Autor")
+        val other =
+            loan("o1", "Anna", "20/10/2026").copy(title = "Diuna", author = "Herbert, Frank")
+        val all = listOf(piekara, other)
+
+        assertEquals(all, filterLoans(all, "  "))
+        assertEquals(listOf(piekara), filterLoans(all, "Piekara, Jacek"))
+        assertEquals(listOf(piekara), filterLoans(all, "sługa"))
+        assertEquals(listOf(other), filterLoans(all, "HERBERT"))
+        assertEquals(emptyList<Loan>(), filterLoans(all, "Tolkien"))
+    }
 }

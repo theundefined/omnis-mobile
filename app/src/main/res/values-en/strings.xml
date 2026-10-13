@@ -102,6 +102,9 @@
     <string name="hold_place_no_pickup">The library offered no pickup location for this copy.</string>
     <string name="load_more">Load more</string>
     <string name="history_end">That\'s the whole history.</string>
+    <string name="history_filter_hint">Filter by title or author…</string>
+    <string name="history_filter_no_results">Nothing in the loaded history matches the filter.</string>
+    <string name="cd_clear_filter">Clear filter</string>
     <string name="retry">Try again</string>
 
     <string name="share_book">📚 Book: %1$s\n✍️ Author: %2$s\n📅 Due date: %3$s\n📍 Location: %4$s\n🔑 Barcode: %5$s</string>

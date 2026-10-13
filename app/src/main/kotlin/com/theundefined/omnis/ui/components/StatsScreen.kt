@@ -84,7 +84,11 @@ private data class ChartBar(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StatsScreen(viewModel: OmnisViewModel, onBack: () -> Unit) {
+fun StatsScreen(
+    viewModel: OmnisViewModel,
+    onBack: () -> Unit,
+    onAuthorClick: (String) -> Unit = {}
+) {
     val state by viewModel.statsUiState.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -193,7 +197,8 @@ fun StatsScreen(viewModel: OmnisViewModel, onBack: () -> Unit) {
                         compareYears = compareYears,
                         onCompareYearsChange = { compareYears = it },
                         colorOf = colorOf,
-                        nameOf = nameOf
+                        nameOf = nameOf,
+                        onAuthorClick = onAuthorClick
                     )
             }
         }
@@ -213,7 +218,8 @@ private fun StatsContent(
     compareYears: Boolean,
     onCompareYearsChange: (Boolean) -> Unit,
     colorOf: (String) -> Color,
-    nameOf: (String) -> String
+    nameOf: (String) -> String,
+    onAuthorClick: (String) -> Unit
 ) {
     val locale = LocalConfiguration.current.locales[0]
     // Kolory lat z tej samej palety co konta, wg roku — kolejne lata to sąsiednie (sprawdzone
@@ -360,7 +366,7 @@ private fun StatsContent(
         if (stats.topAuthors.isNotEmpty()) {
             item {
                 StatsCard(title = stringResource(R.string.stats_top_authors)) {
-                    RankedList(stats.topAuthors)
+                    RankedList(stats.topAuthors, onClick = onAuthorClick)
                 }
             }
         }
@@ -727,12 +733,16 @@ private fun YearsTable(stats: ReadingStats, stackOrder: List<String>, nameOf: (S
 }
 
 @Composable
-private fun RankedList(entries: List<CountEntry>) {
+private fun RankedList(entries: List<CountEntry>, onClick: ((String) -> Unit)? = null) {
     val max = entries.maxOfOrNull { it.count }?.takeIf { it > 0 } ?: 1
     val unknown = stringResource(R.string.stats_unknown_category)
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         entries.forEach { entry ->
-            Column {
+            val label = entry.label
+            Column(
+                if (onClick != null && label != null) Modifier.clickable { onClick(label) }
+                else Modifier
+            ) {
                 Row(Modifier.fillMaxWidth()) {
                     Text(
                         entry.label ?: unknown,
