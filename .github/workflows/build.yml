@@ -122,7 +122,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/ui-tests.yml
 
-  # Publishes to the Play internal track. GCP identifiers live in google-play
+  # Publishes to the Play internal and closed (alpha) tracks. GCP identifiers live in google-play
   # environment secrets (masked in public logs). Authenticates via Workload Identity
   # Federation (keyless): GCP only trusts OIDC tokens from this repo, branch main,
   # environment google-play. The service account can only release to testing tracks.
@@ -147,7 +147,7 @@ jobs:
       group: play-publish
       cancel-in-progress: false
     env:
-      PLAY_TRACK: internal
+      PLAY_TRACKS: internal alpha
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || needs.check-and-build.outputs.release_version }}
       # Commit the bundle was built from (scripts are always taken from the checked-out HEAD).
       RELEASE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.sha }}
@@ -203,8 +203,10 @@ jobs:
 
     - name: Publish to Google Play
       run: |
-        python .github/scripts/publish_to_play.py \
-          --aab "${{ steps.meta.outputs.aab }}" \
-          --version-code "${{ steps.meta.outputs.version_code }}" \
-          --track "$PLAY_TRACK" \
-          --release-notes-file release-notes.txt
+        for track in $PLAY_TRACKS; do
+          python .github/scripts/publish_to_play.py \
+            --aab "${{ steps.meta.outputs.aab }}" \
+            --version-code "${{ steps.meta.outputs.version_code }}" \
+            --track "$track" \
+            --release-notes-file release-notes.txt
+        done
