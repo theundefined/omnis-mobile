@@ -1,7 +1,9 @@
 package com.theundefined.omnis.ui.components
 
 import android.content.Context
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -33,6 +35,7 @@ import com.theundefined.omnis.data.model.seriesSearchTerm
 import com.theundefined.omnis.ui.BranchDialogState
 import com.theundefined.omnis.ui.OmnisViewModel
 import com.theundefined.omnis.ui.branchLabel
+import com.theundefined.omnis.ui.loanKey
 import com.theundefined.omnis.ui.spansSeveralLibraries
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -49,6 +52,10 @@ fun LoanList(
     branchHeaders: Boolean = false,
     // Kliknięcie autora/serii — przejście do wyszukiwarki (OmnisViewModel.searchFromLoan).
     onSearch: ((Loan, String, SearchField) -> Unit)? = null,
+    // Tryb zaznaczania: gdy onToggleSelect != null, długie przytrzymanie karty zaznacza ją, a przy
+    // niepustym zaznaczeniu zwykłe stuknięcie przełącza zaznaczenie. Klucze: loanKey().
+    selectedKeys: Set<String> = emptySet(),
+    onToggleSelect: ((Loan) -> Unit)? = null,
     footer: (@Composable () -> Unit)? = null
 ) {
     var renewConfirmGroup by remember { mutableStateOf<Pair<String, List<Loan>>?>(null) }
@@ -128,7 +135,10 @@ fun LoanList(
                         isHistory = isHistory,
                         withLibrary = withLibrary,
                         onBranchClick = onBranchClick?.let { { it(listOf(loan)) } },
-                        onSearch = onSearch?.let { { query, field -> it(loan, query, field) } }
+                        onSearch = onSearch?.let { { query, field -> it(loan, query, field) } },
+                        selected = loanKey(loan) in selectedKeys,
+                        selectionActive = selectedKeys.isNotEmpty(),
+                        onToggleSelect = onToggleSelect?.let { { it(loan) } }
                     )
                 }
             }
@@ -187,7 +197,7 @@ private fun buildLoanShareText(
     )
 
 @Composable
-private fun buildGroupShareText(groupKey: String, loans: List<Loan>, isHistory: Boolean): String {
+internal fun buildGroupShareText(groupKey: String, loans: List<Loan>, isHistory: Boolean): String {
     val context = LocalContext.current
     // `joinToString { ... }` nie jest inline w stdlibie, więc Compose nie pozwala wywoływać z jego
     // lambdy funkcji @Composable (formatRelativeDate) — zwykła pętla `for` działa, bo to
@@ -269,6 +279,7 @@ fun formatPlainDate(dateStr: String): String {
     return date.format(DateTimeFormatter.ofPattern("yyyy.MM.dd"))
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LoanItem(
     loan: Loan,
@@ -276,7 +287,10 @@ fun LoanItem(
     isHistory: Boolean = false,
     withLibrary: Boolean = false,
     onBranchClick: (() -> Unit)? = null,
-    onSearch: ((String, SearchField) -> Unit)? = null
+    onSearch: ((String, SearchField) -> Unit)? = null,
+    selected: Boolean = false,
+    selectionActive: Boolean = false,
+    onToggleSelect: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     // Dla historii wypożyczenie jest już zakończone — kolorowanie "ile dni zostało" i opis
@@ -287,7 +301,25 @@ fun LoanItem(
         if (isHistory) formatPlainDate(loan.dueDate) else formatRelativeDate(loan.dueDate)
     var showDetails by remember { mutableStateOf(false) }
 
-    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+    Card(
+        modifier =
+            Modifier.fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .then(
+                    if (onToggleSelect != null)
+                        Modifier.combinedClickable(
+                            onClick = { if (selectionActive) onToggleSelect() },
+                            onLongClick = onToggleSelect
+                        )
+                    else Modifier
+                ),
+        colors =
+            if (selected)
+                CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                )
+            else CardDefaults.cardColors()
+    ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 displayTitle(loan.title),

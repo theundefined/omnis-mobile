@@ -21,6 +21,7 @@ import com.theundefined.omnis.ui.RefreshProgress
 import com.theundefined.omnis.ui.holdDeadline
 import com.theundefined.omnis.ui.isHoldDeadlineUrgent
 import com.theundefined.omnis.ui.isReadyHoldsBannerVisible
+import com.theundefined.omnis.ui.loanKey
 import com.theundefined.omnis.ui.readyHolds
 import kotlinx.coroutines.flow.collectLatest
 
@@ -46,6 +47,15 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0, navRequest: Nav
     var pendingScan by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
+    // Zaznaczone wypożyczenia (klucze loanKey) do udostępnienia — wyłącznie stan widoku.
+    var selectedKeys by remember { mutableStateOf(emptySet<String>()) }
+    val visibleLoans = remember(uiState.loans) { uiState.loans.values.flatten() }
+    // Zaznaczenie przestaje dotyczyć książek, które zniknęły z widoku (filtr, odświeżenie).
+    LaunchedEffect(visibleLoans) {
+        val visibleKeys = visibleLoans.map(::loanKey).toSet()
+        if (selectedKeys.any { it !in visibleKeys })
+            selectedKeys = selectedKeys intersect visibleKeys
+    }
 
     val error = uiState.error
 
@@ -92,6 +102,10 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0, navRequest: Nav
                 snackbarHostState.showSnackbar(message)
             }
         }
+    }
+
+    BackHandler(enabled = currentScreen == "main" && selectedKeys.isNotEmpty()) {
+        selectedKeys = emptySet()
     }
 
     BackHandler(
@@ -179,80 +193,110 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0, navRequest: Nav
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.app_name)) },
-                actions = {
-                    val searchDescription = stringResource(R.string.cd_search)
-                    IconButton(
-                        onClick = { currentScreen = "search" },
-                        modifier = Modifier.semantics { contentDescription = searchDescription }
-                    ) {
-                        Icon(painterResource(R.drawable.ic_search), contentDescription = null)
+            if (selectedKeys.isNotEmpty()) {
+                val selectedLoans = visibleLoans.filter { loanKey(it) in selectedKeys }
+                val shareText =
+                    buildGroupShareText(
+                        stringResource(R.string.selection_group_label),
+                        selectedLoans,
+                        isHistory = false
+                    )
+                TopAppBar(
+                    title = { Text(stringResource(R.string.selection_count, selectedLoans.size)) },
+                    navigationIcon = {
+                        IconButton(onClick = { selectedKeys = emptySet() }) {
+                            Icon(
+                                painterResource(R.drawable.ic_close),
+                                stringResource(R.string.cd_clear_selection)
+                            )
+                        }
+                    },
+                    actions = {
+                        TextButton(
+                            onClick = { selectedKeys = visibleLoans.map(::loanKey).toSet() }
+                        ) {
+                            Text(stringResource(R.string.cd_select_all))
+                        }
+                        ShareButton { shareText }
                     }
-
-                    val refreshDescription = stringResource(R.string.cd_refresh)
-                    IconButton(
-                        onClick = {
-                            viewModel.refreshAllLoans(isManual = true)
-                            viewModel.loadHolds(forceRefresh = true)
-                        },
-                        modifier = Modifier.semantics { contentDescription = refreshDescription }
-                    ) {
-                        Icon(painterResource(R.drawable.ic_refresh), contentDescription = null)
-                    }
-
-                    var showMoreMenu by remember { mutableStateOf(false) }
-                    val moreDescription = stringResource(R.string.cd_more_options)
-                    Box {
+                )
+            } else
+                TopAppBar(
+                    title = { Text(stringResource(R.string.app_name)) },
+                    actions = {
+                        val searchDescription = stringResource(R.string.cd_search)
                         IconButton(
-                            onClick = { showMoreMenu = true },
-                            modifier = Modifier.semantics { contentDescription = moreDescription }
+                            onClick = { currentScreen = "search" },
+                            modifier = Modifier.semantics { contentDescription = searchDescription }
                         ) {
-                            Text("⋮")
+                            Icon(painterResource(R.drawable.ic_search), contentDescription = null)
                         }
-                        DropdownMenu(
-                            expanded = showMoreMenu,
-                            onDismissRequest = { showMoreMenu = false }
+
+                        val refreshDescription = stringResource(R.string.cd_refresh)
+                        IconButton(
+                            onClick = {
+                                viewModel.refreshAllLoans(isManual = true)
+                                viewModel.loadHolds(forceRefresh = true)
+                            },
+                            modifier =
+                                Modifier.semantics { contentDescription = refreshDescription }
                         ) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.library_card_title)) },
-                                onClick = {
-                                    showMoreMenu = false
-                                    currentScreen = "card"
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.holds_title)) },
-                                onClick = {
-                                    showMoreMenu = false
-                                    currentScreen = "holds"
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.history_title)) },
-                                onClick = {
-                                    showMoreMenu = false
-                                    currentScreen = "history"
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.stats_title)) },
-                                onClick = {
-                                    showMoreMenu = false
-                                    currentScreen = "stats"
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.cd_settings)) },
-                                onClick = {
-                                    showMoreMenu = false
-                                    currentScreen = "settings"
-                                }
-                            )
+                            Icon(painterResource(R.drawable.ic_refresh), contentDescription = null)
+                        }
+
+                        var showMoreMenu by remember { mutableStateOf(false) }
+                        val moreDescription = stringResource(R.string.cd_more_options)
+                        Box {
+                            IconButton(
+                                onClick = { showMoreMenu = true },
+                                modifier =
+                                    Modifier.semantics { contentDescription = moreDescription }
+                            ) {
+                                Text("⋮")
+                            }
+                            DropdownMenu(
+                                expanded = showMoreMenu,
+                                onDismissRequest = { showMoreMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.library_card_title)) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        currentScreen = "card"
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.holds_title)) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        currentScreen = "holds"
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.history_title)) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        currentScreen = "history"
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.stats_title)) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        currentScreen = "stats"
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.cd_settings)) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        currentScreen = "settings"
+                                    }
+                                )
+                            }
                         }
                     }
-                }
-            )
+                )
         }
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {
@@ -282,6 +326,10 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0, navRequest: Nav
                         onGroupingChange = { viewModel.setGroupingMode(it) },
                         onSortChange = { viewModel.setSortMode(it) }
                     )
+                    DueFilterBar(
+                        filter = uiState.dueFilter,
+                        onFilterChange = { viewModel.setDueFilter(it) }
+                    )
                     PullToRefreshBox(
                         isRefreshing = uiState.isLoading,
                         onRefresh = {
@@ -299,6 +347,13 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0, navRequest: Nav
                             onSearch = { loan, query, field ->
                                 viewModel.searchFromLoan(loan, query, field)
                                 currentScreen = "search"
+                            },
+                            selectedKeys = selectedKeys,
+                            onToggleSelect = { loan ->
+                                val key = loanKey(loan)
+                                selectedKeys =
+                                    if (key in selectedKeys) selectedKeys - key
+                                    else selectedKeys + key
                             }
                         )
                         BranchInfoDialogHost(viewModel)

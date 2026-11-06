@@ -60,6 +60,8 @@ data class UiState(
     val loans: Map<String, List<Loan>> = emptyMap(), // groupKey -> loans
     val groupingMode: GroupingMode = GroupingMode.ACCOUNT,
     val sortMode: SortMode = SortMode.DUE_DATE,
+    // Filtr terminu — tylko widok (nie zapamiętywany); udostępnianie dotyczy tego, co widać.
+    val dueFilter: DueFilter = DueFilter.ALL,
     val isLoading: Boolean = false,
     val error: String? = null,
     val refreshProgress: RefreshProgress? = null
@@ -690,10 +692,14 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         }
     }
 
+    // Pełna (niefiltrowana) lista — źródło dla zmiany filtra/grupowania bez sięgania do sieci.
+    private var allLoansUnfiltered: List<Pair<Account, Loan>> = emptyList()
+
     private fun updateGroupedLoans(allLoans: List<Pair<Account, Loan>>, isLoading: Boolean) {
+        allLoansUnfiltered = allLoans
         val grouped =
             groupAndSortLoans(
-                allLoans.map { it.second },
+                filterByDue(allLoans.map { it.second }, uiState.value.dueFilter),
                 uiState.value.groupingMode,
                 uiState.value.sortMode,
                 allGroupLabel()
@@ -701,8 +707,22 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         _uiState.update { it.copy(loans = grouped, isLoading = isLoading) }
     }
 
-    private fun allGroupLabel(): String =
-        getApplication<Application>().getString(R.string.group_all_header)
+    // Przy aktywnym filtrze jedyna grupa nazywa się jak filtr — trafia to też do tekstu
+    // udostępnienia.
+    private fun allGroupLabel(): String {
+        val app = getApplication<Application>()
+        return when (uiState.value.dueFilter) {
+            DueFilter.ALL -> app.getString(R.string.group_all_header)
+            DueFilter.OVERDUE -> app.getString(R.string.filter_overdue)
+            DueFilter.WITHIN_3 -> app.getString(R.string.filter_within_3)
+            DueFilter.WITHIN_7 -> app.getString(R.string.filter_within_7)
+        }
+    }
+
+    fun setDueFilter(filter: DueFilter) {
+        _uiState.update { it.copy(dueFilter = filter) }
+        reapplyGroupingAndSorting()
+    }
 
     fun setGroupingMode(mode: GroupingMode) {
         viewPrefs.put(PREF_LOANS_GROUPING, mode)
@@ -717,22 +737,20 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
     }
 
     private fun reapplyGroupingAndSorting() {
-        val currentAccounts = _uiState.value.accounts.filter { it.isEnabled }
+        // Lista w pamięci jest niefiltrowana; tylko gdy jej brak (np. po zmianie kont), sięgamy po
+        // cache.
         val allLoansList = mutableListOf<Pair<Account, Loan>>()
 
-        currentAccounts.forEach { account ->
-            // In a real app we might store current loaded loans, but we can also just use cached
-            // loans
-            // OR we can flatten current uiState.loans
-            val loansForAccount =
-                _uiState.value.loans.values.flatten().filter { it.accountId == account.id }
-            if (loansForAccount.isNotEmpty()) {
-                loansForAccount.forEach { allLoansList.add(account to it) }
-            } else {
-                val cachedLoans = repository.getCachedLoans(account.id)
-                cachedLoans.forEach { allLoansList.add(account to it) }
+        _uiState.value.accounts
+            .filter { it.isEnabled }
+            .forEach { account ->
+                val inMemory = allLoansUnfiltered.filter { it.first.id == account.id }
+                if (inMemory.isNotEmpty()) allLoansList.addAll(inMemory)
+                else
+                    repository.getCachedLoans(account.id).forEach {
+                        allLoansList.add(account to it)
+                    }
             }
-        }
         updateGroupedLoans(allLoansList, _uiState.value.isLoading)
     }
 

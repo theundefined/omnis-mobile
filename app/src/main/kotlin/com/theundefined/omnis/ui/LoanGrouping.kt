@@ -2,6 +2,8 @@ package com.theundefined.omnis.ui
 
 import com.theundefined.omnis.data.model.Loan
 import com.theundefined.omnis.data.model.parseFlexibleDate
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 
 enum class GroupingMode {
     ACCOUNT,
@@ -15,6 +17,36 @@ enum class SortMode {
     DUE_DATE,
     LOAN_DATE,
     TITLE
+}
+
+/**
+ * Filtr listy wypożyczeń po terminie zwrotu. Progi "w ciągu N dni" obejmują też książki po terminie
+ * — to one najbardziej wymagają uwagi, więc nie powinny znikać z widoku "co oddać w tym tygodniu".
+ */
+enum class DueFilter(val withinDays: Int?) {
+    ALL(null),
+    OVERDUE(-1),
+    WITHIN_3(3),
+    WITHIN_7(7)
+}
+
+/** Klucz jednoznacznie identyfikujący wypożyczenie na liście (jak klucz w `LoanList`). */
+fun loanKey(loan: Loan): String = "${loan.accountId}:${loan.id}"
+
+/**
+ * Zostawia wypożyczenia pasujące do [filter]. Przy aktywnym filtrze wpisy z niedającą się sparsować
+ * datą są pomijane (nie wiadomo, czy pasują).
+ */
+fun filterByDue(
+    loans: List<Loan>,
+    filter: DueFilter,
+    today: LocalDate = LocalDate.now()
+): List<Loan> {
+    val limit = filter.withinDays ?: return loans
+    return loans.filter { loan ->
+        val due = parseFlexibleDate(loan.dueDate) ?: return@filter false
+        ChronoUnit.DAYS.between(today, due) <= limit
+    }
 }
 
 /**
