@@ -9,6 +9,14 @@
     <string name="group_all_header">All</string>
     <string name="view_menu_group">Group</string>
     <string name="view_menu_sort">Sort</string>
+    <string name="filter_overdue">Overdue</string>
+    <string name="filter_within_3">≤ 3 days</string>
+    <string name="filter_within_7">≤ 7 days</string>
+    <string name="selection_count">Selected: %1$d</string>
+    <string name="selection_group_label">Selected</string>
+    <string name="cd_clear_selection">Clear selection</string>
+    <string name="cd_select_all">Select all</string>
+    <string name="cd_due_filter">Due date filter</string>
     <string name="view_summary">%1$s · %2$s ▾</string>
     <string name="add_first_account">Add first account</string>
     <string name="add_account">Add account</string>

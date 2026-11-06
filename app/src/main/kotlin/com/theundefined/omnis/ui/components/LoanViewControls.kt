@@ -1,11 +1,16 @@
 package com.theundefined.omnis.ui.components
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -19,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.theundefined.omnis.R
+import com.theundefined.omnis.ui.DueFilter
 import com.theundefined.omnis.ui.GroupingMode
 import com.theundefined.omnis.ui.SortMode
 
@@ -97,4 +103,40 @@ private fun CheckedMenuItem(text: String, selected: Boolean, onClick: () -> Unit
         onClick = onClick,
         leadingIcon = { Box(Modifier.width(24.dp)) { if (selected) Text("✓") } }
     )
+}
+
+private fun DueFilter.labelRes(): Int =
+    when (this) {
+        DueFilter.ALL -> R.string.group_all_header
+        DueFilter.OVERDUE -> R.string.filter_overdue
+        DueFilter.WITHIN_3 -> R.string.filter_within_3
+        DueFilter.WITHIN_7 -> R.string.filter_within_7
+    }
+
+/**
+ * Rząd chipów filtrujących listę po terminie zwrotu. Udostępnianie (nagłówek grupy) dotyczy
+ * przefiltrowanej listy, więc "tylko te za 3 dni" to jeden chip + "udostępnij". Ponowne
+ * stuknięcie w aktywny chip wyłącza filtr.
+ */
+@Composable
+fun DueFilterBar(filter: DueFilter, onFilterChange: (DueFilter) -> Unit) {
+    Row(
+        modifier =
+            Modifier.fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        DueFilter.entries
+            .filter { it != DueFilter.ALL }
+            .forEach { option ->
+                FilterChip(
+                    selected = option == filter,
+                    onClick = {
+                        onFilterChange(if (option == filter) DueFilter.ALL else option)
+                    },
+                    label = { Text(stringResource(option.labelRes())) }
+                )
+            }
+    }
 }

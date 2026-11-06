@@ -9,6 +9,14 @@
     <string name="group_all_header">Wszystkie</string>
     <string name="view_menu_group">Grupuj</string>
     <string name="view_menu_sort">Sortuj</string>
+    <string name="filter_overdue">Po terminie</string>
+    <string name="filter_within_3">≤ 3 dni</string>
+    <string name="filter_within_7">≤ 7 dni</string>
+    <string name="selection_count">Zaznaczono: %1$d</string>
+    <string name="selection_group_label">Zaznaczone</string>
+    <string name="cd_clear_selection">Anuluj zaznaczenie</string>
+    <string name="cd_select_all">Zaznacz wszystkie</string>
+    <string name="cd_due_filter">Filtr terminu zwrotu</string>
     <string name="view_summary">%1$s · %2$s ▾</string>
     <string name="add_first_account">Dodaj pierwsze konto</string>
     <string name="add_account">Dodaj konto</string>
