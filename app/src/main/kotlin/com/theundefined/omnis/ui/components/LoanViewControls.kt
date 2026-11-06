@@ -4,10 +4,10 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -115,8 +115,8 @@ private fun DueFilter.labelRes(): Int =
 
 /**
  * Rząd chipów filtrujących listę po terminie zwrotu. Udostępnianie (nagłówek grupy) dotyczy
- * przefiltrowanej listy, więc "tylko te za 3 dni" to jeden chip + "udostępnij". Ponowne
- * stuknięcie w aktywny chip wyłącza filtr.
+ * przefiltrowanej listy, więc "tylko te za 3 dni" to jeden chip + "udostępnij". Ponowne stuknięcie
+ * w aktywny chip wyłącza filtr.
  */
 @Composable
 fun DueFilterBar(filter: DueFilter, onFilterChange: (DueFilter) -> Unit) {
@@ -132,9 +132,7 @@ fun DueFilterBar(filter: DueFilter, onFilterChange: (DueFilter) -> Unit) {
             .forEach { option ->
                 FilterChip(
                     selected = option == filter,
-                    onClick = {
-                        onFilterChange(if (option == filter) DueFilter.ALL else option)
-                    },
+                    onClick = { onFilterChange(if (option == filter) DueFilter.ALL else option) },
                     label = { Text(stringResource(option.labelRes())) }
                 )
             }

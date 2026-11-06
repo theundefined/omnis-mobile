@@ -37,7 +37,8 @@ class DueFilterTest {
 
     private fun ids(f: DueFilter) = filterByDue(loans, f, today).map { it.id }
 
-    @Test fun allKeepsEverything() = assertEquals(listOf("1", "2", "3", "4", "5"), ids(DueFilter.ALL))
+    @Test
+    fun allKeepsEverything() = assertEquals(listOf("1", "2", "3", "4", "5"), ids(DueFilter.ALL))
 
     @Test fun overdueOnly() = assertEquals(listOf("1"), ids(DueFilter.OVERDUE))
 

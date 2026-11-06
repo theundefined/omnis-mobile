@@ -707,7 +707,8 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         _uiState.update { it.copy(loans = grouped, isLoading = isLoading) }
     }
 
-    // Przy aktywnym filtrze jedyna grupa nazywa się jak filtr — trafia to też do tekstu udostępnienia.
+    // Przy aktywnym filtrze jedyna grupa nazywa się jak filtr — trafia to też do tekstu
+    // udostępnienia.
     private fun allGroupLabel(): String {
         val app = getApplication<Application>()
         return when (uiState.value.dueFilter) {
@@ -745,7 +746,10 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
             .forEach { account ->
                 val inMemory = allLoansUnfiltered.filter { it.first.id == account.id }
                 if (inMemory.isNotEmpty()) allLoansList.addAll(inMemory)
-                else repository.getCachedLoans(account.id).forEach { allLoansList.add(account to it) }
+                else
+                    repository.getCachedLoans(account.id).forEach {
+                        allLoansList.add(account to it)
+                    }
             }
         updateGroupedLoans(allLoansList, _uiState.value.isLoading)
     }

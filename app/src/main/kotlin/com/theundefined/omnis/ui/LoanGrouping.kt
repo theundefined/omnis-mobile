@@ -34,10 +34,14 @@ enum class DueFilter(val withinDays: Int?) {
 fun loanKey(loan: Loan): String = "${loan.accountId}:${loan.id}"
 
 /**
- * Zostawia wypożyczenia pasujące do [filter]. Przy aktywnym filtrze wpisy z niedającą się
- * sparsować datą są pomijane (nie wiadomo, czy pasują).
+ * Zostawia wypożyczenia pasujące do [filter]. Przy aktywnym filtrze wpisy z niedającą się sparsować
+ * datą są pomijane (nie wiadomo, czy pasują).
  */
-fun filterByDue(loans: List<Loan>, filter: DueFilter, today: LocalDate = LocalDate.now()): List<Loan> {
+fun filterByDue(
+    loans: List<Loan>,
+    filter: DueFilter,
+    today: LocalDate = LocalDate.now()
+): List<Loan> {
     val limit = filter.withinDays ?: return loans
     return loans.filter { loan ->
         val due = parseFlexibleDate(loan.dueDate) ?: return@filter false
