@@ -18,6 +18,7 @@ import com.theundefined.omnis.data.model.Hold
 import com.theundefined.omnis.ui.GroupingMode
 import com.theundefined.omnis.ui.OmnisViewModel
 import com.theundefined.omnis.ui.RefreshProgress
+import com.theundefined.omnis.ui.SortMode
 import com.theundefined.omnis.ui.holdDeadline
 import com.theundefined.omnis.ui.isHoldDeadlineUrgent
 import com.theundefined.omnis.ui.isReadyHoldsBannerVisible
@@ -326,10 +327,12 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0, navRequest: Nav
                         onGroupingChange = { viewModel.setGroupingMode(it) },
                         onSortChange = { viewModel.setSortMode(it) }
                     )
-                    DueFilterBar(
-                        filter = uiState.dueFilter,
-                        onFilterChange = { viewModel.setDueFilter(it) }
-                    )
+                    if (uiState.sortMode == SortMode.DUE_DATE) {
+                        DueFilterBar(
+                            filter = uiState.dueFilter,
+                            onFilterChange = { viewModel.setDueFilter(it) }
+                        )
+                    }
                     PullToRefreshBox(
                         isRefreshing = uiState.isLoading,
                         onRefresh = {

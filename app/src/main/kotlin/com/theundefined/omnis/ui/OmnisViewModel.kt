@@ -732,7 +732,14 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
 
     fun setSortMode(mode: SortMode) {
         viewPrefs.put(PREF_LOANS_SORT, mode)
-        _uiState.update { it.copy(sortMode = mode) }
+        // Chipy filtra terminu są widoczne tylko przy sortowaniu po terminie — wychodząc z niego
+        // zdejmujemy też filtr, żeby nie został aktywny niewidocznie.
+        _uiState.update {
+            it.copy(
+                sortMode = mode,
+                dueFilter = if (mode == SortMode.DUE_DATE) it.dueFilter else DueFilter.ALL
+            )
+        }
         reapplyGroupingAndSorting()
     }
 
