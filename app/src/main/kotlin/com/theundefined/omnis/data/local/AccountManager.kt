@@ -6,6 +6,8 @@ import androidx.security.crypto.MasterKey
 import com.theundefined.omnis.data.model.Account
 import com.theundefined.omnis.guard.GuardSettings
 import com.theundefined.omnis.guard.GuardState
+import com.theundefined.omnis.guard.WatchedTitle
+import com.theundefined.omnis.guard.validated
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -199,7 +201,7 @@ class AccountManager(context: Context) {
     fun getGuardSettings(): GuardSettings {
         val jsonStr = sharedPreferences.getString("guard_settings", null) ?: return GuardSettings()
         return try {
-            json.decodeFromString<GuardSettings>(jsonStr)
+            json.decodeFromString<GuardSettings>(jsonStr).validated()
         } catch (e: Exception) {
             GuardSettings()
         }
@@ -222,6 +224,28 @@ class AccountManager(context: Context) {
     fun saveGuardState(state: GuardState) {
         sharedPreferences.edit().putString("guard_state", json.encodeToString(state)).commit()
     }
+
+    /** Lista „Do przeczytania" (guard/WatchlistLogic). Wspólna dla kont, działa też bez żadnego. */
+    fun getWatchlist(): List<WatchedTitle> {
+        val jsonStr = sharedPreferences.getString("watchlist", null) ?: return emptyList()
+        return try {
+            json.decodeFromString<List<WatchedTitle>>(jsonStr)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    /**
+     * Odczyt-zmiana-zapis pod blokadą wspólną dla wszystkich instancji (UI i worker mają własne
+     * AccountManager): dodanie/usunięcie w aplikacji nie ginie w czasie sprawdzania w tle i
+     * odwrotnie. commit(), nie apply(): worker kończy się zaraz po zapisie.
+     */
+    fun updateWatchlist(transform: (List<WatchedTitle>) -> List<WatchedTitle>): List<WatchedTitle> =
+        synchronized(WATCHLIST_LOCK) {
+            val updated = transform(getWatchlist())
+            sharedPreferences.edit().putString("watchlist", json.encodeToString(updated)).commit()
+            updated
+        }
 
     fun addAccount(account: Account) {
         val accounts = getAccounts().toMutableList()
@@ -256,5 +280,9 @@ class AccountManager(context: Context) {
     fun saveAccounts(accounts: List<Account>) {
         val jsonStr = json.encodeToString(accounts)
         sharedPreferences.edit().putString("accounts", jsonStr).apply()
+    }
+
+    private companion object {
+        val WATCHLIST_LOCK = Any()
     }
 }

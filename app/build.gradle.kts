@@ -128,6 +128,11 @@ dependencies {
     // Strażnik terminów w tle. 2.10.x, bo 2.11+ wymaga kotlin-stdlib 2.1 (projekt: Kotlin 2.0).
     implementation("androidx.work:work-runtime-ktx:2.10.5")
 
+    // Widżet „Terminy zwrotu". Glance 1.1.1 (stabilny, zgodny z Kotlin 2.0 / Compose z BOM); 1.2.x
+    // celuje w nowszy Kotlin.
+    implementation("androidx.glance:glance-appwidget:1.1.1")
+    implementation("androidx.glance:glance-material3:1.1.1")
+
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 

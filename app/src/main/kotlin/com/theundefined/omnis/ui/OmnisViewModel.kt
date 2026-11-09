@@ -1,6 +1,7 @@
 package com.theundefined.omnis.ui
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -24,17 +25,29 @@ import com.theundefined.omnis.data.model.SearchHistoryEntry
 import com.theundefined.omnis.data.model.SearchPage
 import com.theundefined.omnis.data.model.SearchResult
 import com.theundefined.omnis.data.model.Tenant
+import com.theundefined.omnis.data.model.displayTitle
 import com.theundefined.omnis.data.model.pickHoldableItem
 import com.theundefined.omnis.data.model.searchKey
 import com.theundefined.omnis.data.model.seriesSearchTerm
 import com.theundefined.omnis.data.model.seriesVolume
 import com.theundefined.omnis.data.remote.PlaceGeocoder
 import com.theundefined.omnis.data.repository.OmnisRepository
+import com.theundefined.omnis.guard.AddOutcome
 import com.theundefined.omnis.guard.GuardScheduler
 import com.theundefined.omnis.guard.GuardSettings
+import com.theundefined.omnis.guard.WatchRow
+import com.theundefined.omnis.guard.WatchedTitle
+import com.theundefined.omnis.guard.addWatched
+import com.theundefined.omnis.guard.applyChecks
 import com.theundefined.omnis.guard.isPaused
+import com.theundefined.omnis.guard.newWatchedTitle
+import com.theundefined.omnis.guard.removeWatched
+import com.theundefined.omnis.guard.watchIdOf
+import com.theundefined.omnis.guard.watchRows
+import com.theundefined.omnis.widget.requestLoansWidgetUpdate
 import java.text.Collator
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -53,6 +66,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 data class UiState(
@@ -94,6 +108,8 @@ data class HistoryUiState(
     val hasLoadedOnce: Boolean = false,
     val canLoadMore: Boolean = false,
     val filter: String = "", // tytuł/autor — patrz filterLoans
+    val isExporting: Boolean = false, // eksport CSV w toku (w tym dociąganie całej historii)
+    val exportMessage: String? = null, // jednorazowy wynik eksportu do snackbara
     val error: String? = null
 )
 
@@ -118,6 +134,18 @@ data class GuardUiState(
     val lastRunAt: Long? = null,
     val pausedAccountIds: Set<String> = emptySet(),
     val isChecking: Boolean = false
+)
+
+/**
+ * Ekran „Do przeczytania". `libraries`/`failedLibraries` — wynik ostatniego ręcznego odświeżenia
+ * (ile bibliotek odpytano i ile nie odpowiedziało; ich tytuły zostały bez zmian).
+ */
+data class WatchlistUiState(
+    val rows: List<WatchRow> = emptyList(),
+    val watchedIds: Set<String> = emptySet(),
+    val isRefreshing: Boolean = false,
+    val libraries: Int = 0,
+    val failedLibraries: Int = 0
 )
 
 /**
@@ -210,9 +238,13 @@ data class SearchLibrariesState(
 internal fun buildSearchLibrariesState(
     accounts: List<Account>,
     override: Set<String>?,
-    demoOverride: Set<String>? = null
+    demoOverride: Set<String>? = null,
+    // Biblioteki obserwowanych tytułów (np. własna, której konto usunięto) — żeby dotknięcie
+    // tytułu na liście mogło go znaleźć.
+    extraTenants: List<Tenant> = emptyList()
 ): SearchLibrariesState {
-    val available = (KNOWN_TENANTS + accounts.map { it.tenant }).distinctBy { it.searchKey() }
+    val available =
+        (KNOWN_TENANTS + accounts.map { it.tenant } + extraTenants).distinctBy { it.searchKey() }
     val keys = available.map { it.searchKey() }.toSet()
     val effectiveOverride = if (isDemoModeActive(accounts)) demoOverride else override
     val selected =
@@ -430,6 +462,27 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         )
     val searchUiState: StateFlow<SearchUiState> = _searchUiState.asStateFlow()
 
+    // Indeks „już wypożyczone" (ReadBefore.kt) — z lokalnych cache'ów, bez sieci. Przebudowywany
+    // poza głównym wątkiem (odczyt szyfrowanych preferencji + JSON), nie przy rekompozycji.
+    private val _readBeforeIndex = MutableStateFlow(ReadBeforeIndex.EMPTY)
+    val readBeforeIndex: StateFlow<ReadBeforeIndex> = _readBeforeIndex.asStateFlow()
+    private var readBeforeJob: Job? = null
+
+    fun refreshReadBeforeIndex() {
+        val accounts = _uiState.value.accounts.filter { it.isEnabled }
+        // Tryb demo i zwykły się nie mieszają — jak w wyborze bibliotek wyszukiwarki.
+        val scoped =
+            if (isDemoModeActive(_uiState.value.accounts)) accounts
+            else accounts.filter { !it.isDemo }
+        readBeforeJob?.cancel()
+        readBeforeJob =
+            viewModelScope.launch(Dispatchers.IO) {
+                val active = scoped.flatMap { repository.getCachedLoans(it.id) }
+                val history = scoped.flatMap { repository.getCachedHistory(it.id).loans }
+                _readBeforeIndex.value = buildReadBeforeIndex(active, history)
+            }
+    }
+
     // Biblioteki OSTATNIEGO wyszukania — loadMoreResults() doładowuje kolejne strony z tej samej
     // biblioteki, nawet jeśli w międzyczasie zmienił się wybór bibliotek.
     private var searchTargets: Map<String, Tenant> = emptyMap()
@@ -463,14 +516,21 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
             }
     }
 
+    // Lista „Do przeczytania" (guard/WatchlistLogic) — źródło dla bibliotek wyszukiwarki i ekranu.
+    private val _watchlistTitles = MutableStateFlow(repository.getWatchlist())
+
     private val _searchTenantOverride = MutableStateFlow(repository.getSearchTenantKeys())
     // Wybór bibliotek zmieniony w trybie demo — tylko w pamięci, żeby nie nadpisać zwykłego
     // (zapisanego) wyboru. Czyszczony przy wejściu do trybu demo i przy każdym jego opuszczeniu
     // (refreshAccounts), także przez ręczne wyłączenie konta demo.
     private val _demoSearchTenantOverride = MutableStateFlow<Set<String>?>(null)
     val searchLibraries: StateFlow<SearchLibrariesState> =
-        combine(_uiState, _searchTenantOverride, _demoSearchTenantOverride) { ui, override, demo ->
-                buildSearchLibrariesState(ui.accounts, override, demo)
+        combine(_uiState, _searchTenantOverride, _demoSearchTenantOverride, _watchlistTitles) {
+                ui,
+                override,
+                demo,
+                watched ->
+                buildSearchLibrariesState(ui.accounts, override, demo, watched.map { it.tenant })
             }
             .stateIn(viewModelScope, SharingStarted.Eagerly, currentSearchLibraries())
 
@@ -480,7 +540,8 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         buildSearchLibrariesState(
             _uiState.value.accounts,
             _searchTenantOverride.value,
-            _demoSearchTenantOverride.value
+            _demoSearchTenantOverride.value,
+            _watchlistTitles.value.map { it.tenant }
         )
 
     private fun saveSearchTenantSelection(keys: Set<String>) {
@@ -525,7 +586,14 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
 
         data class BulkRenewFinished(val succeeded: Int, val failedTitles: List<String>) :
             UiEvent()
+
+        object WatchlistFull : UiEvent()
+
+        object CannotWatch : UiEvent()
     }
+
+    private val _watchlistUiState = MutableStateFlow(WatchlistUiState())
+    val watchlistUiState: StateFlow<WatchlistUiState> = _watchlistUiState.asStateFlow()
 
     private val _guardUiState = MutableStateFlow(GuardUiState())
     val guardUiState: StateFlow<GuardUiState> = _guardUiState.asStateFlow()
@@ -539,6 +607,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         refreshAllLoans(isManual = false)
         loadGuardState()
         shownGuardRunAt = _guardUiState.value.lastRunAt
+        loadWatchlist()
     }
 
     fun loadGuardState() {
@@ -560,6 +629,8 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
      */
     fun onAppForeground() {
         loadGuardState()
+        // Strażnik mógł w tle zmienić stan obserwowanych tytułów.
+        loadWatchlist()
         val lastRun = _guardUiState.value.lastRunAt
         if (lastRun != shownGuardRunAt && !_uiState.value.isLoading) {
             shownGuardRunAt = lastRun
@@ -570,13 +641,35 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
 
     fun setGuardEnabled(enabled: Boolean) {
         val app = getApplication<Application>()
-        repository.saveGuardSettings(repository.getGuardSettings().copy(enabled = enabled))
-        if (enabled) GuardScheduler.schedule(app, replace = true) else GuardScheduler.cancel(app)
+        val settings = repository.getGuardSettings().copy(enabled = enabled)
+        repository.saveGuardSettings(settings)
+        if (enabled) GuardScheduler.schedule(app, settings.runHour, replace = true)
+        else GuardScheduler.cancel(app)
+        loadGuardState()
+    }
+
+    /** Zmiana godziny przesuwa pracę okresową (UPDATE) bez przerywania trwającego przebiegu. */
+    fun setGuardRunHour(hour: Int) {
+        val settings = repository.getGuardSettings().copy(runHour = hour)
+        repository.saveGuardSettings(settings)
+        if (settings.enabled) {
+            GuardScheduler.updateRunHour(getApplication<Application>(), hour)
+        }
+        loadGuardState()
+    }
+
+    fun setGuardAutoRenewDays(days: Int) {
+        repository.saveGuardSettings(repository.getGuardSettings().copy(autoRenewDays = days))
         loadGuardState()
     }
 
     fun setGuardThreshold(days: Int) {
         repository.saveGuardSettings(repository.getGuardSettings().copy(thresholdDays = days))
+        loadGuardState()
+    }
+
+    fun setWatchlistNotify(enabled: Boolean) {
+        repository.saveGuardSettings(repository.getGuardSettings().copy(watchlistNotify = enabled))
         loadGuardState()
     }
 
@@ -611,6 +704,8 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         val accounts = repository.getAccounts()
         if (!isDemoModeActive(accounts)) _demoSearchTenantOverride.value = null
         _uiState.update { it.copy(accounts = accounts) }
+        // Zmiana zestawu kont (dodanie/usunięcie/wyłączenie/demo) zmienia też to, co widzi widżet.
+        requestLoansWidgetUpdate(getApplication())
     }
 
     fun loadCachedLoans() {
@@ -634,6 +729,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
             val allLoansList = mutableListOf<Pair<Account, Loan>>()
             var hasError = false
             var errorMessage: String? = null
+            var cacheChanged = false
 
             currentAccounts.forEachIndexed { index, account ->
                 val progress =
@@ -665,6 +761,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
                             }
                         repository.saveCachedLoans(account.id, loans)
                         loans.forEach { allLoansList.add(account to it) }
+                        cacheChanged = true
                     }
                     .onFailure {
                         hasError = true
@@ -677,6 +774,9 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
 
             val updatedAccounts = repository.getAccounts()
             _uiState.update { it.copy(accounts = updatedAccounts, refreshProgress = null) }
+
+            // Widżet czyta ten sam cache — odśwież go raz po całej pętli kont.
+            if (cacheChanged) requestLoansWidgetUpdate(getApplication())
 
             updateGroupedLoans(allLoansList, false)
 
@@ -1143,35 +1243,10 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
                 _statsUiState.update {
                     it.copy(progress = RefreshProgress(index + 1, currentAccounts.size, name))
                 }
-                val cached = repository.getCachedHistory(account.id)
-                val fresh =
-                    !forceRefresh &&
-                        !cached.hasMore &&
-                        cached.fullFetchedAtMillis?.let { now - it < STATS_CACHE_TTL_MILLIS } ==
-                            true
-                val history =
-                    if (fresh) {
-                        successCount++
-                        cached.loans
-                    } else {
-                        repository
-                            .getLoansForAccount(account, type = "history")
-                            .onSuccess { loans ->
-                                repository.saveCachedHistory(
-                                    account.id,
-                                    HistoryCacheEntry(
-                                        loans = loans,
-                                        nextOffset = 1 + loans.size,
-                                        hasMore = false,
-                                        fullFetchedAtMillis = now
-                                    )
-                                )
-                                historyCacheChanged = true
-                                successCount++
-                            }
-                            .onFailure { failedAccountNames.add(name) }
-                            .getOrElse { cached.loans }
-                    }
+                val full = fullHistoryFor(account, forceRefresh, now)
+                if (full.ok) successCount++ else failedAccountNames.add(name)
+                if (full.cacheChanged) historyCacheChanged = true
+                val history = full.loans
                 collected += mergeStatsLoans(history, repository.getCachedLoans(account.id))
             }
 
@@ -1201,13 +1276,147 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         }
     }
 
+    /** Wynik [fullHistoryFor]: `ok` = historia aktualna (z cache'u lub z sieci), inaczej stara. */
+    private class FullHistory(val loans: List<Loan>, val ok: Boolean, val cacheChanged: Boolean)
+
+    /**
+     * Cała historia jednego konta — wspólny mechanizm statystyk i eksportu CSV, żeby nie dublować
+     * zapytań: kompletny cache młodszy niż [STATS_CACHE_TTL_MILLIS] jest używany bez sieci, inaczej
+     * pobieramy wszystko jednym `getLoansForAccount` (jedno logowanie) i zapisujemy do cache'u. Gdy
+     * pobranie się nie uda, zostaje to, co jest w cache'u (`ok = false`).
+     */
+    private suspend fun fullHistoryFor(
+        account: Account,
+        forceRefresh: Boolean,
+        now: Long
+    ): FullHistory {
+        val cached = repository.getCachedHistory(account.id)
+        val fresh =
+            !forceRefresh &&
+                !cached.hasMore &&
+                cached.fullFetchedAtMillis?.let { now - it < STATS_CACHE_TTL_MILLIS } == true
+        if (fresh) return FullHistory(cached.loans, ok = true, cacheChanged = false)
+        return repository
+            .getLoansForAccount(account, type = "history")
+            .fold(
+                onSuccess = { loans ->
+                    repository.saveCachedHistory(
+                        account.id,
+                        HistoryCacheEntry(
+                            loans = loans,
+                            nextOffset = 1 + loans.size,
+                            hasMore = false,
+                            fullFetchedAtMillis = now
+                        )
+                    )
+                    FullHistory(loans, ok = true, cacheChanged = true)
+                },
+                onFailure = { FullHistory(cached.loans, ok = false, cacheChanged = false) }
+            )
+    }
+
+    /**
+     * Eksport CAŁEJ historii do pliku CSV wybranego przez użytkownika (SAF, [uri] z
+     * `CreateDocument`). Niekompletny cache najpierw dociąga [fullHistoryFor] (jak statystyki).
+     * Aktywny filtr tytuł/autor zawęża eksport. Gdy dociągnięcie zmieniło cache, a ekran historii
+     * nie jest akurat w trakcie ładowania, pokazujemy od razu kompletną historię.
+     */
+    fun exportHistoryCsv(uri: Uri) {
+        if (_historyUiState.value.isExporting) return
+        val generation = historyGeneration
+        val filter = _historyUiState.value.filter
+        val app = getApplication<Application>()
+        viewModelScope.launch {
+            _historyUiState.update { it.copy(isExporting = true, exportMessage = null) }
+            val accounts = _uiState.value.accounts.filter { it.isEnabled }
+            val now = System.currentTimeMillis()
+            val all = mutableListOf<Loan>()
+            val newCursors = mutableMapOf<String, HistoryCursor>()
+            val failedNames = mutableListOf<String>()
+            var cacheChanged = false
+            accounts.forEach { account ->
+                val full = fullHistoryFor(account, forceRefresh = false, now = now)
+                all += full.loans
+                if (full.ok) newCursors[account.id] = HistoryCursor(1 + full.loans.size, false)
+                else failedNames.add(account.displayName ?: account.username)
+                if (full.cacheChanged) cacheChanged = true
+            }
+            if (
+                cacheChanged &&
+                    generation == historyGeneration &&
+                    !_historyUiState.value.isLoading &&
+                    !_historyUiState.value.isLoadingMore
+            ) {
+                historyFlatLoans = all
+                historyCursors = historyCursors + newCursors
+                finishHistoryUpdate(failedNames)
+            }
+
+            val header =
+                HistoryCsvHeader(
+                    title = app.getString(R.string.csv_title),
+                    author = app.getString(R.string.csv_author),
+                    loanDate = app.getString(R.string.csv_loan_date),
+                    dueDate = app.getString(R.string.csv_due_date),
+                    returnDate = app.getString(R.string.csv_return_date),
+                    library = app.getString(R.string.csv_library),
+                    branch = app.getString(R.string.csv_branch),
+                    person = app.getString(R.string.csv_person),
+                    barcode = app.getString(R.string.csv_barcode)
+                )
+            // Filtrowanie, sortowanie i składanie CSV przy dużej historii nie na wątku głównym.
+            val (rows, csv) =
+                withContext(Dispatchers.Default) {
+                    val sorted = sortForExport(filterLoans(all, filter))
+                    sorted to historyToCsv(sorted, header)
+                }
+            val written =
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        // "wt": SAF potrafi zostawić resztki starszej, dłuższej zawartości.
+                        val out =
+                            app.contentResolver.openOutputStream(uri, "wt")
+                                ?: error("no output stream")
+                        out.use { it.write(csv.toByteArray(Charsets.UTF_8)) }
+                    }
+                }
+            val message =
+                if (written.isSuccess) {
+                    val done =
+                        if (filter.isBlank()) app.getString(R.string.history_export_done, rows.size)
+                        else
+                            app.getString(
+                                R.string.history_export_done_filtered,
+                                rows.size,
+                                filter.trim()
+                            )
+                    if (failedNames.isEmpty()) done
+                    else
+                        done +
+                            "\n" +
+                            app.getString(
+                                R.string.history_partial_error,
+                                failedNames.joinToString(", ")
+                            )
+                } else app.getString(R.string.history_export_failed)
+            _historyUiState.update { it.copy(isExporting = false, exportMessage = message) }
+        }
+    }
+
+    fun consumeExportMessage() {
+        _historyUiState.update { it.copy(exportMessage = null) }
+    }
+
     /** Doładowuje kolejną stronę historii dla każdego konta, które jeszcze ma co doładować. */
     fun loadMoreHistory() {
         // isLoading (nie tylko isLoadingMore/canLoadMore) blokuje doładowanie w trakcie pełnego
         // (force)refreshu — inaczej "Załaduj więcej" kliknięte w tym oknie odpytałoby o tę samą
         // stronę (offset=1), którą loadHistory() właśnie pobiera, i wygenerowało duplikaty
         // (a duplikaty to złamany klucz w LazyColumn — patrz `LoanList`).
+        // Eksport dociąga i zapisuje całą historię — równoległe doładowanie dopisałoby strony do
+        // już kompletnego cache'u (duplikaty).
         if (_historyUiState.value.isLoading || _historyUiState.value.isLoadingMore) return
+        if (_historyUiState.value.isExporting) return
         if (!_historyUiState.value.canLoadMore) return
         val generation = historyGeneration
         viewModelScope.launch {
@@ -1230,14 +1439,18 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
                         val nextOffset = cursor.nextOffset + OmnisRepository.HISTORY_PAGE_SIZE
                         collectedCursors[account.id] = HistoryCursor(nextOffset, hasMore)
                         val existingCache = repository.getCachedHistory(account.id)
-                        repository.saveCachedHistory(
-                            account.id,
-                            HistoryCacheEntry(
-                                loans = existingCache.loans + loans,
-                                nextOffset = nextOffset,
-                                hasMore = hasMore
+                        // Cache kompletny w międzyczasie (pełne pobranie) — dopisanie strony
+                        // zapisałoby duplikaty.
+                        if (existingCache.hasMore && existingCache.fullFetchedAtMillis == null) {
+                            repository.saveCachedHistory(
+                                account.id,
+                                HistoryCacheEntry(
+                                    loans = existingCache.loans + loans,
+                                    nextOffset = nextOffset,
+                                    hasMore = hasMore
+                                )
                             )
-                        )
+                        }
                     }
                     .onFailure { failedAccountNames.add(account.displayName ?: account.username) }
             }
@@ -1853,6 +2066,108 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
      * Wyszukanie autora/serii kliknięte na wypożyczeniu — w bibliotece, z której ono jest. Wybór
      * bibliotek zmienia się na stałe, tak jak przy ręcznej zmianie w wyszukiwarce.
      */
+    // --- Lista „Do przeczytania" ---
+
+    private fun watchPrefs(titles: List<WatchedTitle>): Map<String, SearchBranchPrefs> =
+        titles
+            .map { it.tenant.searchKey() }
+            .distinct()
+            .associateWith { repository.getSearchBranchPrefs(it) }
+
+    /** Wczytuje listę z dysku i przelicza wiersze (stan z uwzględnieniem preferowanych filii). */
+    fun loadWatchlist() {
+        val titles = repository.getWatchlist()
+        _watchlistTitles.value = titles
+        _watchlistUiState.update {
+            it.copy(
+                rows = watchRows(titles, watchPrefs(titles)),
+                watchedIds = titles.map { t -> t.id }.toSet(),
+                libraries = 0,
+                failedLibraries = 0
+            )
+        }
+    }
+
+    /**
+     * Przełącznik przy wyniku wyszukiwania: dodaje tytuł (na poziomie dzieła, z pełnego wyniku
+     * sekcji, nie z przefiltrowanej karty) albo go usuwa. Limit i duplikaty — [addWatched].
+     */
+    fun toggleWatch(tenantKey: String, result: SearchResult) {
+        val tenant = searchTargets[tenantKey] ?: return
+        val full =
+            _searchUiState.value.tenantSections
+                .find { it.tenantKey == tenantKey }
+                ?.results
+                ?.firstOrNull { watchIdOf(tenantKey, it) == watchIdOf(tenantKey, result) } ?: result
+        val mediaTypes = _searchUiState.value.effectiveMediaTypes()
+        val id = watchIdOf(tenantKey, full)
+        viewModelScope.launch(Dispatchers.IO) {
+            val prefs = repository.getSearchBranchPrefs(tenantKey)
+            var event: UiEvent? = null
+            repository.updateWatchlist { current ->
+                if (current.any { it.id == id }) return@updateWatchlist removeWatched(current, id)
+                val item =
+                    newWatchedTitle(tenant, full, mediaTypes, System.currentTimeMillis(), prefs)
+                if (item == null) {
+                    event = UiEvent.CannotWatch
+                    return@updateWatchlist current
+                }
+                val (updated, outcome) = addWatched(current, item)
+                if (outcome == AddOutcome.LIMIT_REACHED) event = UiEvent.WatchlistFull
+                updated
+            }
+            loadWatchlist()
+            event?.let { _events.emit(it) }
+        }
+    }
+
+    fun unwatch(id: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.updateWatchlist { removeWatched(it, id) }
+            loadWatchlist()
+        }
+    }
+
+    /**
+     * Ręczne odświeżenie: jedno zapytanie o dostępność na bibliotekę (anonimowo). Wynik nakładany
+     * na świeżo odczytaną listę; biblioteka, która nie odpowiedziała, zostawia swoje tytuły bez
+     * zmian. Nie wysyła powiadomień — użytkownik od razu widzi stan.
+     */
+    fun refreshWatchlist() {
+        if (_watchlistUiState.value.isRefreshing) return
+        val titles = repository.getWatchlist()
+        if (titles.isEmpty()) return
+        _watchlistUiState.update { it.copy(isRefreshing = true) }
+        viewModelScope.launch {
+            val fetch = repository.fetchWatchlistDeliveries(titles)
+            withContext(Dispatchers.IO) {
+                val prefs = watchPrefs(titles)
+                val now = System.currentTimeMillis()
+                repository.updateWatchlist {
+                    applyChecks(it, fetch.deliveries, prefs, now, notify = false).titles
+                }
+                loadWatchlist()
+            }
+            _watchlistUiState.update {
+                it.copy(
+                    isRefreshing = false,
+                    libraries = fetch.libraries,
+                    failedLibraries = fetch.failedLibraries
+                )
+            }
+        }
+    }
+
+    /**
+     * Dotknięcie tytułu na liście: wyszukiwarka z jego tytułem w jego bibliotece (tam jest
+     * „Zarezerwuj"). Sam tytuł, bez autora — Primo `contains` wymaga wszystkich słów, a zapis
+     * autora bywa niejednolity ("Prus, Bolesław (1847-1912)").
+     */
+    fun searchWatched(title: WatchedTitle) {
+        saveSearchTenantSelection(setOf(title.tenant.searchKey()))
+        runSearch(displayTitle(title.title))
+    }
+
     fun searchFromLoan(loan: Loan, query: String, field: SearchField) {
         val tenant = _uiState.value.accounts.find { it.id == loan.accountId }?.tenant
         if (tenant != null) {

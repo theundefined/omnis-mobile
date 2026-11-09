@@ -31,7 +31,11 @@ import com.theundefined.omnis.data.model.SearchResult
 import com.theundefined.omnis.data.model.Tenant
 import com.theundefined.omnis.data.model.searchKey
 import com.theundefined.omnis.data.model.seriesSearchTerm
+import com.theundefined.omnis.guard.MAX_WATCHED
+import com.theundefined.omnis.guard.watchIdOf
 import com.theundefined.omnis.ui.OmnisViewModel
+import com.theundefined.omnis.ui.ReadBeforeEntry
+import com.theundefined.omnis.ui.ReadBeforeIndex
 import com.theundefined.omnis.ui.SearchLibrariesState
 import com.theundefined.omnis.ui.SearchSortMode
 import com.theundefined.omnis.ui.SearchTenantSection
@@ -67,10 +71,36 @@ fun SearchScreen(
     // Pole wyszukiwania dla NASTĘPNEGO wyszukania. Kliknięcie autora/serii ustawia AUTHOR/SERIES;
     // ręczna edycja tekstu albo zamknięcie chipa pola wraca do ANY (szukanie we wszystkich polach).
     var searchField by remember { mutableStateOf(state.field) }
+    // Zapytanie uruchomione z zewnątrz przy otwartym ekranie („Szukaj w Omnis" → onNewIntent →
+    // runSearch) zmienia state.query/field — pole tekstowe ma to odzwierciedlić. Klucze zmieniają
+    // się tylko przy faktycznym wyszukaniu, więc zwykłe pisanie nie jest nadpisywane.
+    LaunchedEffect(state.query, state.field) {
+        queryInput = state.query
+        searchField = state.field
+    }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val noLibraries = libraries.selectedKeys.isEmpty()
+    val readBeforeIndex by viewModel.readBeforeIndex.collectAsStateWithLifecycle()
+    // Indeks z lokalnych cache'ów — przebudowa przy wejściu i gdy zmieni się cache wypożyczeń.
+    LaunchedEffect(uiState.accounts, uiState.loans) { viewModel.refreshReadBeforeIndex() }
+
+    // Odmowa dodania do „Do przeczytania" (limit / brak id rekordu) — komunikat tutaj, bo tu jest
+    // przycisk.
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { event ->
+            val message =
+                when (event) {
+                    is OmnisViewModel.UiEvent.WatchlistFull ->
+                        context.getString(R.string.watch_limit_reached, MAX_WATCHED)
+                    is OmnisViewModel.UiEvent.CannotWatch ->
+                        context.getString(R.string.watch_cannot_add)
+                    else -> null
+                }
+            message?.let { snackbarHostState.showSnackbar(it) }
+        }
+    }
 
     fun triggerSearch() {
         viewModel.runSearch(queryInput, searchField)
@@ -313,6 +343,9 @@ fun SearchScreen(
                                 SearchTenantSectionView(
                                     section = section,
                                     mediaTypes = mediaTypes,
+                                    readBeforeIndex = readBeforeIndex,
+                                    showReadBeforeOwner =
+                                        uiState.accounts.count { it.isEnabled } > 1,
                                     viewModel = viewModel,
                                     onAuthorClick = { searchFor(it, SearchField.AUTHOR) },
                                     onSeriesClick = { searchFor(it, SearchField.SERIES) }
@@ -514,6 +547,8 @@ private fun SearchHistoryList(
 private fun SearchTenantSectionView(
     section: SearchTenantSection,
     mediaTypes: Set<String>,
+    readBeforeIndex: ReadBeforeIndex,
+    showReadBeforeOwner: Boolean,
     viewModel: OmnisViewModel,
     onAuthorClick: (String) -> Unit,
     onSeriesClick: (String) -> Unit
@@ -579,6 +614,7 @@ private fun SearchTenantSectionView(
             remember(uiState.accounts, section.tenantKey) {
                 holdAccounts(uiState.accounts, section.tenantKey).isNotEmpty()
             }
+        val watchlist by viewModel.watchlistUiState.collectAsStateWithLifecycle()
         section.filteredResults(mediaTypes).forEach { result ->
             SearchResultCard(
                 result,
@@ -589,6 +625,10 @@ private fun SearchTenantSectionView(
                         }
                     else null,
                 onShowMap = { viewModel.showBranchMap(result, section.tenantLabel) },
+                readBefore = remember(readBeforeIndex, result) { readBeforeIndex.find(result) },
+                showReadBeforeOwner = showReadBeforeOwner,
+                watched = watchIdOf(section.tenantKey, result) in watchlist.watchedIds,
+                onToggleWatch = { viewModel.toggleWatch(section.tenantKey, result) },
                 onAuthorClick = onAuthorClick,
                 onSeriesClick = onSeriesClick
             )
@@ -664,6 +704,10 @@ private fun SearchResultCard(
     // null = w tej bibliotece nie ma włączonego konta, więc nie ma czym zarezerwować.
     onPlaceHold: ((BookVersion) -> Unit)?,
     onShowMap: () -> Unit,
+    readBefore: ReadBeforeEntry?,
+    showReadBeforeOwner: Boolean,
+    watched: Boolean,
+    onToggleWatch: () -> Unit,
     onAuthorClick: (String) -> Unit,
     onSeriesClick: (String) -> Unit
 ) {
@@ -672,6 +716,26 @@ private fun SearchResultCard(
     Card(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(result.title, style = MaterialTheme.typography.titleMedium)
+            readBefore?.let { entry ->
+                val owner = entry.ownerName?.takeIf { showReadBeforeOwner && it.isNotBlank() }
+                val label =
+                    when {
+                        entry.currentlyBorrowed && owner != null ->
+                            stringResource(R.string.read_before_current_owner, owner)
+                        entry.currentlyBorrowed -> stringResource(R.string.read_before_current)
+                        entry.year != null && owner != null ->
+                            stringResource(R.string.read_before_year_owner, entry.year, owner)
+                        entry.year != null -> stringResource(R.string.read_before_year, entry.year)
+                        owner != null -> stringResource(R.string.read_before_owner, owner)
+                        else -> stringResource(R.string.read_before)
+                    }
+                Text(
+                    "📖 $label",
+                    modifier = Modifier.padding(vertical = 2.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+            }
             result.author?.let { author ->
                 val authorClickLabel = stringResource(R.string.cd_search_by_author)
                 Text(
@@ -698,6 +762,15 @@ private fun SearchResultCard(
                         color = MaterialTheme.colorScheme.tertiary
                     )
                 }
+
+            // Obserwacja na poziomie dzieła (nie wydania): powiadomienie, gdy tytuł będzie na
+            // półce.
+            FilterChip(
+                selected = watched,
+                onClick = onToggleWatch,
+                label = { Text(stringResource(R.string.watch_chip)) },
+                modifier = Modifier.padding(top = 4.dp)
+            )
 
             result.versions.forEach { version ->
                 // key() na mmsid — bez tego `remember` niżej wiąże się z pozycją w forEach, nie z

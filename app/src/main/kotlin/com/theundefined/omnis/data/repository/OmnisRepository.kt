@@ -3,8 +3,13 @@ package com.theundefined.omnis.data.repository
 import com.theundefined.omnis.data.local.AccountManager
 import com.theundefined.omnis.data.model.*
 import com.theundefined.omnis.data.remote.OmnisApi
+import com.theundefined.omnis.guard.BranchStatus
 import com.theundefined.omnis.guard.GuardSettings
 import com.theundefined.omnis.guard.GuardState
+import com.theundefined.omnis.guard.LibraryDelivery
+import com.theundefined.omnis.guard.LibraryRequest
+import com.theundefined.omnis.guard.WatchedTitle
+import com.theundefined.omnis.guard.libraryRequests
 import java.net.URI
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -41,6 +46,13 @@ class OmnisRepository(private val accountManager: AccountManager) {
         const val BRANCH_INFO_TTL_MILLIS = 30L * 24 * 60 * 60 * 1000
 
         const val BRANCH_COORDINATES_TTL_MILLIS = 180L * 24 * 60 * 60 * 1000
+
+        // Tyle rekordów w jednym `pub/delivery` — przy limicie 30 tytułów zwykle mieści się całość.
+        const val DELIVERY_CHUNK = 50
+
+        // `delivery` zwraca holdingi niezależnie od `q` (sprawdzone: obce tytuły w jednym zapytaniu
+        // z niepasującym `q`), ale wymaga pełnego zestawu parametrów wyszukiwania.
+        private const val WATCHLIST_QUERY = "a"
     }
 
     // Osobny, goły klient do rozwijania skróconych linków do Map: bez logowania ciał i bez
@@ -680,9 +692,11 @@ class OmnisRepository(private val accountManager: AccountManager) {
      * przedłużenia wybranych pozycji i ponowne pobranie, liczniki (kary), rezerwacje. Jedno
      * logowanie dziennie na konto zamiast osobnego przy każdej operacji — strażnik działa bez
      * udziału użytkownika, więc nie może obciążać serwera bardziej niż wizyta na stronie.
+     * `pickRenewals` dostaje świeżo pobrane wypożyczenia (przed przedłużeniem).
      */
     suspend fun guardCheck(
         account: Account,
+        withExtras: Boolean = true,
         pickRenewals: (List<Loan>) -> List<Loan>
     ): Result<GuardFetch> {
         return try {
@@ -713,6 +727,11 @@ class OmnisRepository(private val accountManager: AccountManager) {
                 val after = fetchAllLoans(api, token, account).getOrNull()
                 refetched = after != null
                 if (after != null) loans = after
+            }
+            // Akcja „Przedłuż" z powiadomienia chce tylko wypożyczeń — bez zbędnych żądań o kary i
+            // rezerwacje (withExtras = false).
+            if (!withExtras) {
+                return Result.success(GuardFetch(loans, toRenew, refetched, null, null))
             }
             val fines =
                 try {
@@ -973,6 +992,56 @@ class OmnisRepository(private val accountManager: AccountManager) {
     }
 
     /**
+     * Parametry zapytań `pub/pnxs` i `pub/delivery` — te same dla obu, bo `delivery` bez pełnego
+     * zestawu odpowiada 500 (sprawdzone na żywo).
+     */
+    private fun primoSearchParams(
+        tenant: Tenant,
+        field: SearchField,
+        q: String,
+        offset: Int = 0,
+        qInclude: String = "",
+        sort: String = "rank",
+        limit: Int,
+        cameFrom: String? = null
+    ): Map<String, String> {
+        val params =
+            mutableMapOf(
+                "acTriggered" to "false",
+                "blendFacetsSeparately" to "false",
+                "citationTrailFilterByAvailability" to "true",
+                "disableCache" to "false",
+                "getMore" to "0",
+                "inst" to tenant.institution,
+                "isCDSearch" to "false",
+                "lang" to "pl",
+                "limit" to limit.toString(),
+                "newspapersActive" to "false",
+                "newspapersSearch" to "false",
+                "offset" to offset.toString(),
+                "otbRanking" to "false",
+                "pcAvailability" to "true",
+                "q" to "${field.primoField},contains,$q",
+                "qExclude" to "",
+                "qInclude" to qInclude,
+                "rapido" to "false",
+                "refEntryActive" to "false",
+                "rtaLinks" to "true",
+                // MyInstitution (lokalny katalog instytucji) istnieje we wszystkich
+                // KNOWN_TENANTS; wcześniejsze MyInstitution2 miały tylko Raczyńscy, a
+                // reszta zwracała 400. `tab` Primo ignoruje (sprawdzone na żywo).
+                "scope" to "MyInstitution",
+                "searchInFulltextUserSelection" to "true",
+                "skipDelivery" to "Y",
+                "sort" to sort,
+                "tab" to "LibraryCatalog",
+                "vid" to tenant.view
+            )
+        cameFrom?.let { params["came_from"] = it }
+        return params
+    }
+
+    /**
      * Wyszukiwanie katalogu — port `client.py::search_books` (omnis-py). Zawsze zwraca WSZYSTKIE
      * filie dla wszystkich wydań (bez branch_filter po stronie serwera) — filtrowanie po
      * zaznaczonych filiach dzieje się po stronie klienta w ViewModelu (patrz
@@ -1010,42 +1079,8 @@ class OmnisRepository(private val accountManager: AccountManager) {
                 sort: String = "rank",
                 limit: Int,
                 cameFrom: String? = null
-            ): Map<String, String> {
-                val params =
-                    mutableMapOf(
-                        "acTriggered" to "false",
-                        "blendFacetsSeparately" to "false",
-                        "citationTrailFilterByAvailability" to "true",
-                        "disableCache" to "false",
-                        "getMore" to "0",
-                        "inst" to tenant.institution,
-                        "isCDSearch" to "false",
-                        "lang" to "pl",
-                        "limit" to limit.toString(),
-                        "newspapersActive" to "false",
-                        "newspapersSearch" to "false",
-                        "offset" to offset.toString(),
-                        "otbRanking" to "false",
-                        "pcAvailability" to "true",
-                        "q" to "${field.primoField},contains,$q",
-                        "qExclude" to "",
-                        "qInclude" to qInclude,
-                        "rapido" to "false",
-                        "refEntryActive" to "false",
-                        "rtaLinks" to "true",
-                        // MyInstitution (lokalny katalog instytucji) istnieje we wszystkich
-                        // KNOWN_TENANTS; wcześniejsze MyInstitution2 miały tylko Raczyńscy, a
-                        // reszta zwracała 400. `tab` Primo ignoruje (sprawdzone na żywo).
-                        "scope" to "MyInstitution",
-                        "searchInFulltextUserSelection" to "true",
-                        "skipDelivery" to "Y",
-                        "sort" to sort,
-                        "tab" to "LibraryCatalog",
-                        "vid" to tenant.view
-                    )
-                cameFrom?.let { params["came_from"] = it }
-                return params
-            }
+            ): Map<String, String> =
+                primoSearchParams(tenant, field, q, offset, qInclude, sort, limit, cameFrom)
 
             val topParams = buildParams(query, offset = offset, limit = limit)
             val topHttpResponse = api.searchPnxs(topParams, bearer)
@@ -1162,7 +1197,8 @@ class OmnisRepository(private val accountManager: AccountManager) {
                                 language = v.pnx.displayFirst("language"),
                                 physicalDescription = v.pnx.displayFirst("format"),
                                 description = v.pnx.addataFirst("abstract"),
-                                networkMmsid = v.pnx.control["originalsourceid"]?.firstOrNull()
+                                networkMmsid = v.pnx.control["originalsourceid"]?.firstOrNull(),
+                                almaId = v.pnx.almaId()
                             )
                         }
                     SearchResult(frbrgroupid, title, author, versions)
@@ -1280,6 +1316,80 @@ class OmnisRepository(private val accountManager: AccountManager) {
                 ),
             locations = listOf(holding)
         )
+
+    /**
+     * Dostępność wszystkich rekordów jednej biblioteki: JEDEN token gościa i `pub/delivery` z listą
+     * id (po [DELIVERY_CHUNK] naraz, sekwencyjnie). Bez logowania, bez terminów zwrotu. Każdy błąd
+     * (token, HTTP) to porażka CAŁEJ biblioteki — wołający zostawia wtedy stan jej tytułów bez
+     * zmian, zamiast brać brak danych za „niedostępne".
+     */
+    suspend fun fetchLibraryDelivery(request: LibraryRequest): Result<LibraryDelivery> {
+        return try {
+            val tenant = request.tenant
+            val api =
+                createClient(
+                    tenant.baseUrl,
+                    tenant.defaultTimeoutSeconds ?: DEFAULT_TIMEOUT_SECONDS
+                )
+            val bearer =
+                "Bearer " +
+                    guestToken(api, tenant).getOrElse {
+                        return Result.failure(it)
+                    }
+            val params =
+                primoSearchParams(tenant, SearchField.ANY, WATCHLIST_QUERY, limit = DELIVERY_CHUNK)
+            val delivery = mutableMapOf<String, List<BranchStatus>>()
+            for (chunk in request.recordIds.chunked(DELIVERY_CHUNK)) {
+                val response = api.getDelivery(params, bearer, chunk)
+                val items = response.body()
+                if (!response.isSuccessful) {
+                    return Result.failure(
+                        Exception("Błąd sprawdzania dostępności: ${response.code()}")
+                    )
+                }
+                // Pusta odpowiedź na paczkę = brak danych dla tych id (zostają ze starym stanem),
+                // nie porażka całej biblioteki.
+                for (item in items.orEmpty()) {
+                    val id = item.pnx.almaId() ?: continue
+                    delivery[id] =
+                        item.delivery?.holding.orEmpty().map {
+                            BranchStatus(it.mainLocation, it.availabilityStatus == "available")
+                        }
+                }
+            }
+            Result.success(delivery)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Wynik sprawdzenia listy: odpowiedzi bibliotek, które odpowiedziały, i liczba tych, które nie.
+     */
+    data class WatchlistFetch(
+        val deliveries: Map<String, LibraryDelivery>,
+        val failedLibraries: Int,
+        val libraries: Int
+    )
+
+    /**
+     * Biblioteki po kolei (bez równoległych zapytań), po jednym żądaniu `delivery` na bibliotekę.
+     */
+    suspend fun fetchWatchlistDeliveries(titles: List<WatchedTitle>): WatchlistFetch {
+        val requests = libraryRequests(titles)
+        val deliveries = mutableMapOf<String, LibraryDelivery>()
+        for (request in requests) {
+            fetchLibraryDelivery(request).onSuccess { deliveries[request.tenantKey] = it }
+        }
+        return WatchlistFetch(deliveries, requests.size - deliveries.size, requests.size)
+    }
+
+    fun getWatchlist(): List<WatchedTitle> = accountManager.getWatchlist()
+
+    fun updateWatchlist(transform: (List<WatchedTitle>) -> List<WatchedTitle>) =
+        accountManager.updateWatchlist(transform)
 
     fun getAccounts() = accountManager.getAccounts()
 

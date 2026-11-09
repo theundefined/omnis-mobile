@@ -342,7 +342,10 @@ data class BookVersion(
     val description: String? = null,
     // Id rekordu w strefie sieciowej (pnx.control.originalsourceid) — pod nim myaccount/requests
     // potrafi zgłaszać rezerwacje, więc potrzebne do wykrycia, że konto już ma ten tytuł.
-    val networkMmsid: String? = null
+    val networkMmsid: String? = null,
+    // Id rekordu Primo (pnx.control.recordid, np. "alma99…") — wejście do pub/delivery; lista
+    // „Do przeczytania" zapisuje je, żeby sprawdzać dostępność bez ponownego wyszukiwania.
+    val almaId: String? = null
 ) {
     /**
      * Znormalizowany typ nośnika (małe litery) — klucz filtra typów w wyszukiwarce. Brak typu to

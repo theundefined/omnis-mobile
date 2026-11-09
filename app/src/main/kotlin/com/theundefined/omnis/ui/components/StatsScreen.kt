@@ -1,5 +1,6 @@
 package com.theundefined.omnis.ui.components
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -15,8 +16,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -33,12 +39,15 @@ import com.theundefined.omnis.ui.CountEntry
 import com.theundefined.omnis.ui.LoanDurationStats
 import com.theundefined.omnis.ui.OmnisViewModel
 import com.theundefined.omnis.ui.ReadingStats
+import com.theundefined.omnis.ui.buildStatsSummary
 import com.theundefined.omnis.ui.computeReadingStats
+import com.theundefined.omnis.ui.formatDelta
+import com.theundefined.omnis.ui.formatYearMonth
 import java.time.LocalDate
 import java.time.Month
-import java.time.YearMonth
 import java.time.format.TextStyle
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 // Paleta kategoryczna (kolejność sprawdzona pod kątem daltonizmu dla sąsiednich par) — osobne
 // stopnie dla jasnego i ciemnego motywu. Kolor przypisany do konta wg jego pozycji na liście
@@ -288,7 +297,7 @@ private fun StatsContent(
             }
         }
 
-        item { SummaryTiles(stats, selectedYear, today, locale) }
+        item { SummaryCard(stats, selectedYear, today, locale) }
 
         item {
             // Porównanie lat: okno lat z danymi kończące się na wybranym roku (albo najnowszym);
@@ -392,6 +401,78 @@ private fun StatsContent(
                 StatsCard(title = stringResource(R.string.stats_duration)) {
                     DurationSummary(duration, locale)
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Kafelki podsumowania + udostępnianie: tekst zawsze, obraz karty przechwycony przez GraphicsLayer
+ * (wzorzec z dokumentacji Compose: drawWithContent + record + drawLayer, toImageBitmap w
+ * korutynie). Karta jest na ekranie w chwili kliknięcia, więc warstwa ma aktualną zawartość.
+ */
+@Composable
+private fun SummaryCard(stats: ReadingStats, selectedYear: Int?, today: LocalDate, locale: Locale) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val layer = rememberGraphicsLayer()
+    var menuOpen by remember { mutableStateOf(false) }
+    val heading = statsSummaryLabels(context).heading(selectedYear)
+    Column {
+        Box(
+            Modifier.drawWithContent {
+                    layer.record { this@drawWithContent.drawContent() }
+                    drawLayer(layer)
+                }
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(vertical = 4.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(heading, style = MaterialTheme.typography.titleMedium)
+                SummaryTiles(stats, selectedYear, today, locale)
+            }
+        }
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+            IconButton(onClick = { menuOpen = true }) {
+                Icon(painterResource(R.drawable.ic_share), stringResource(R.string.cd_stats_share))
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.stats_share_text)) },
+                    onClick = {
+                        menuOpen = false
+                        shareStatsText(context, stats, selectedYear)
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.stats_share_image)) },
+                    onClick = {
+                        menuOpen = false
+                        scope.launch {
+                            val bitmap =
+                                runCatching { layer.toImageBitmap().asAndroidBitmap() }.getOrNull()
+                            if (bitmap == null) {
+                                Toast.makeText(
+                                        context,
+                                        R.string.stats_share_image_failed,
+                                        Toast.LENGTH_SHORT
+                                    )
+                                    .show()
+                            } else {
+                                shareStatsImage(
+                                    context,
+                                    bitmap,
+                                    buildStatsSummary(
+                                        stats,
+                                        selectedYear,
+                                        statsSummaryLabels(context),
+                                        locale
+                                    )
+                                )
+                            }
+                        }
+                    }
+                )
             }
         }
     }
@@ -837,13 +918,3 @@ private fun DurationSummary(duration: LoanDurationStats, locale: Locale) {
 private fun ColorDot(color: Color) {
     Box(Modifier.size(10.dp).background(color, CircleShape))
 }
-
-private fun formatDelta(delta: Int): String =
-    when {
-        delta > 0 -> "+$delta"
-        delta < 0 -> "−${-delta}"
-        else -> "0"
-    }
-
-private fun formatYearMonth(yearMonth: YearMonth, locale: Locale): String =
-    "${yearMonth.month.getDisplayName(TextStyle.FULL_STANDALONE, locale)} ${yearMonth.year}"

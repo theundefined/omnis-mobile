@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -31,7 +32,10 @@ import com.theundefined.omnis.data.model.Account
 import com.theundefined.omnis.data.model.CatalogLink
 import com.theundefined.omnis.data.model.Tenant
 import com.theundefined.omnis.data.model.sortedForSettings
+import com.theundefined.omnis.guard.AUTO_RENEW_CHOICES
+import com.theundefined.omnis.guard.DEFAULT_AUTO_RENEW_DAYS
 import com.theundefined.omnis.guard.GuardNotifier
+import com.theundefined.omnis.guard.RUN_HOUR_CHOICES
 import com.theundefined.omnis.guard.THRESHOLD_CHOICES
 import com.theundefined.omnis.ui.GuardUiState
 import com.theundefined.omnis.ui.OmnisViewModel
@@ -132,6 +136,7 @@ fun SettingsScreen(
                             onRemove = { accountToRemove = account },
                             showAutoRenew =
                                 guardState.settings.enabled && account.isEnabled && !account.isDemo,
+                            autoRenewDays = guardState.settings.autoRenewDays,
                             onAutoRenewChange = { viewModel.setAutoRenew(account, it) },
                             guardPaused = account.id in guardState.pausedAccountIds
                         )
@@ -141,6 +146,9 @@ fun SettingsScreen(
                             state = guardState,
                             onEnabledChange = { viewModel.setGuardEnabled(it) },
                             onThresholdChange = { viewModel.setGuardThreshold(it) },
+                            onRunHourChange = { viewModel.setGuardRunHour(it) },
+                            onAutoRenewDaysChange = { viewModel.setGuardAutoRenewDays(it) },
+                            onWatchlistNotifyChange = { viewModel.setWatchlistNotify(it) },
                             onCheckNow = { viewModel.checkGuardNow() }
                         )
                     }
@@ -217,6 +225,8 @@ fun SettingsScreen(
     }
 }
 
+private fun formatRunHour(hour: Int): String = "%d:00".format(hour)
+
 private const val PRIVACY_POLICY_URL = "https://theundefined.github.io/omnis-mobile/privacy.html"
 
 @Composable
@@ -225,6 +235,7 @@ fun AccountSettingsItem(
     onToggle: () -> Unit,
     onRemove: () -> Unit,
     showAutoRenew: Boolean = false,
+    autoRenewDays: Int = DEFAULT_AUTO_RENEW_DAYS,
     onAutoRenewChange: (Boolean) -> Unit = {},
     guardPaused: Boolean = false
 ) {
@@ -287,7 +298,7 @@ fun AccountSettingsItem(
             ) {
                 Checkbox(checked = account.autoRenew, onCheckedChange = null)
                 Text(
-                    stringResource(R.string.guard_auto_renew),
+                    pluralStringResource(R.plurals.guard_auto_renew, autoRenewDays, autoRenewDays),
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
@@ -305,6 +316,9 @@ private fun GuardSettingsCard(
     state: GuardUiState,
     onEnabledChange: (Boolean) -> Unit,
     onThresholdChange: (Int) -> Unit,
+    onRunHourChange: (Int) -> Unit,
+    onAutoRenewDaysChange: (Int) -> Unit,
+    onWatchlistNotifyChange: (Boolean) -> Unit,
     onCheckNow: () -> Unit
 ) {
     val context = LocalContext.current
@@ -385,6 +399,64 @@ private fun GuardSettingsCard(
                         )
                     }
                 }
+                Text(
+                    stringResource(R.string.guard_auto_renew_days),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 12.dp)
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AUTO_RENEW_CHOICES.forEach { days ->
+                        FilterChip(
+                            selected = state.settings.autoRenewDays == days,
+                            onClick = { onAutoRenewDaysChange(days) },
+                            label = { Text(days.toString()) }
+                        )
+                    }
+                }
+                var hourMenuOpen by remember { mutableStateOf(false) }
+                Box(modifier = Modifier.padding(top = 4.dp)) {
+                    TextButton(onClick = { hourMenuOpen = true }) {
+                        Text(
+                            stringResource(
+                                R.string.guard_run_hour,
+                                formatRunHour(state.settings.runHour)
+                            )
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = hourMenuOpen,
+                        onDismissRequest = { hourMenuOpen = false }
+                    ) {
+                        RUN_HOUR_CHOICES.forEach { hour ->
+                            DropdownMenuItem(
+                                text = { Text(formatRunHour(hour)) },
+                                onClick = {
+                                    hourMenuOpen = false
+                                    onRunHourChange(hour)
+                                }
+                            )
+                        }
+                    }
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 12.dp)
+                ) {
+                    Text(
+                        stringResource(R.string.watch_notify),
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Switch(
+                        checked = state.settings.watchlistNotify,
+                        onCheckedChange = onWatchlistNotifyChange
+                    )
+                }
+                Text(
+                    stringResource(R.string.watch_notify_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(top = 8.dp)

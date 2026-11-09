@@ -8,11 +8,14 @@ import com.theundefined.omnis.data.model.Account
 import com.theundefined.omnis.data.model.Hold
 import com.theundefined.omnis.data.model.Loan
 import com.theundefined.omnis.data.model.parseFlexibleDate
+import com.theundefined.omnis.data.model.searchKey
 import com.theundefined.omnis.data.repository.LoginRejectedException
 import com.theundefined.omnis.data.repository.OmnisRepository
 import com.theundefined.omnis.ui.holdDeadline
 import com.theundefined.omnis.ui.isHoldDeadlineUrgent
+import com.theundefined.omnis.widget.updateLoansWidgets
 import java.time.LocalDate
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -53,6 +56,7 @@ class DueDateWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         val paused = state.paused.toMutableMap()
 
         val dueNotices = mutableListOf<DueNotice>()
+        var cacheWritten = false
         val renewed = mutableListOf<GuardNotifier.Renewed>()
         val renewFailed = mutableListOf<Loan>()
         val renewKeys = mutableSetOf<String>()
@@ -67,7 +71,9 @@ class DueDateWorker(context: Context, params: WorkerParameters) : CoroutineWorke
             checked++
             val result =
                 repository.guardCheck(account) { loans ->
-                    if (account.autoRenew) renewCandidates(loans, today, sent) else emptyList()
+                    if (account.autoRenew)
+                        renewCandidates(loans, today, sent, settings.autoRenewDays)
+                    else emptyList()
                 }
             val fetch =
                 result.getOrElse { error ->
@@ -108,6 +114,7 @@ class DueDateWorker(context: Context, params: WorkerParameters) : CoroutineWorke
                     accountManager.getCachedLoans(account.id)
                 )
             accountManager.saveCachedLoans(account.id, loans)
+            cacheWritten = true
             // Wszystkie bieżące (do treści) — powiadomienie zastępuje poprzednie, więc nie może
             // gubić pozycji zgłoszonych wcześniej; wysyłamy je tylko, gdy jest coś nowego.
             dueNotices += newDueNotices(loans, today, settings.thresholdDays, emptySet())
@@ -140,9 +147,24 @@ class DueDateWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         // Powiadomienia; klucze zapamiętujemy tylko dla tego, co faktycznie wysłano — po
         // ponownym włączeniu powiadomień w systemie nic nie przepadnie.
         val anyNewDue = dueNotices.any { it.key !in sent }
+        // Przycisk „Przedłuż" dotyczy przedłużalnych pozycji widocznych w tym powiadomieniu.
+        val actionTargets =
+            renewActionTargets(
+                dueNotices,
+                leadingLines = renewed.size + renewFailed.size,
+                maxLines = GuardNotifier.MAX_LINES,
+                attempted = sent + renewKeys
+            )
         if (
             (anyNewDue || renewed.isNotEmpty() || renewFailed.isNotEmpty()) &&
-                notifier.notifyLoans(dueNotices, renewed, renewFailed, showOwner, today)
+                notifier.notifyLoans(
+                    dueNotices,
+                    renewed,
+                    renewFailed,
+                    showOwner,
+                    today,
+                    actionTargets = actionTargets
+                )
         ) {
             newKeys += dueNotices.map { it.key }
         }
@@ -173,15 +195,83 @@ class DueDateWorker(context: Context, params: WorkerParameters) : CoroutineWorke
             )
         accountManager.saveGuardState(state)
 
-        // Żadne konto nie odpowiedziało z powodu sieci/serwera — spróbuj później (backoff).
-        if (checked > 0 && networkFailures == checked && runAttemptCount < MAX_ATTEMPTS) {
+        // Lista „Do przeczytania": anonimowo, więc działa też bez żadnego konta. Po zapisie stanu
+        // kont — błąd tutaj nie może zmarnować wyniku logowań.
+        var watchLibraries = 0
+        var watchFailed = 0
+        // Wszystkie konta padły na sieci i będzie powtórka — lista „Do przeczytania" poczeka na nią
+        // (bez kont, checked == 0, sprawdzamy ją zawsze).
+        val accountsFailed = checked > 0 && networkFailures == checked
+        val willRetry = accountsFailed && runAttemptCount < MAX_ATTEMPTS
+        if (settings.watchlistNotify && !willRetry) {
+            try {
+                val (libraries, failed) = checkWatchlist(repository, notifier)
+                watchLibraries = libraries
+                watchFailed = failed
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Nieoczekiwany błąd listy nie psuje przebiegu; jutro spróbujemy znowu.
+            }
+        }
+
+        // Widżet „Terminy zwrotu" czyta ten sam cache — odśwież raz po zapisach z całego przebiegu.
+        if (cacheWritten) updateLoansWidgets(applicationContext)
+
+        // Sieć/serwer nie odpowiedziały — spróbuj później (backoff). Konta: jak dotąd, tylko gdy
+        // żadne się nie zalogowało (powtórka nie zmarnuje logowań). Lista „Do przeczytania" sama
+        // wyzwala powtórkę tylko wtedy, gdy nie było kont do sprawdzenia.
+        val watchlistOnlyFailed =
+            checked == 0 && watchLibraries > 0 && watchFailed == watchLibraries
+        if ((accountsFailed || watchlistOnlyFailed) && runAttemptCount < MAX_ATTEMPTS) {
             return Result.retry()
         }
         return Result.success()
     }
 
+    /**
+     * Sprawdza listę „Do przeczytania" (jedno zapytanie o dostępność na bibliotekę, bez logowania)
+     * i powiadamia o tytułach, które pojawiły się na półce. Zwraca (biblioteki sprawdzane, z
+     * błędem). Błąd biblioteki zostawia jej tytuły bez zmian. Zapis idzie przez
+     * [OmnisRepository.updateWatchlist] na świeżo odczytanej liście, więc zmiany z aplikacji w
+     * międzyczasie nie przepadają.
+     */
+    private suspend fun checkWatchlist(
+        repository: OmnisRepository,
+        notifier: GuardNotifier
+    ): Pair<Int, Int> {
+        val titles = repository.getWatchlist()
+        if (titles.isEmpty()) return 0 to 0
+        val fetch = repository.fetchWatchlistDeliveries(titles)
+        if (fetch.deliveries.isEmpty()) return fetch.libraries to fetch.failedLibraries
+
+        val prefs =
+            titles
+                .map { it.tenant.searchKey() }
+                .distinct()
+                .associateWith { repository.getSearchBranchPrefs(it) }
+        var lines = emptyList<Pair<WatchedTitle, List<String>>>()
+        val now = System.currentTimeMillis()
+        repository.updateWatchlist { current ->
+            val outcome = applyChecks(current, fetch.deliveries, prefs, now, notify = true)
+            lines = outcome.toNotify.map { it to outcome.notifyBranches[it.id].orEmpty() }
+            outcome.titles
+        }
+        if (lines.isNotEmpty()) {
+            // Flaga „czekamy na dostępność" gaśnie tylko po wysłanym powiadomieniu — bez zgody na
+            // powiadomienia ponowimy przy następnym przebiegu.
+            if (notifier.notifyWatchlist(lines)) {
+                val ids = lines.map { it.first.id }.toSet()
+                repository.updateWatchlist { markNotified(it, ids) }
+            }
+        }
+        return fetch.libraries to fetch.failedLibraries
+    }
+
     companion object {
         private const val MAX_ATTEMPTS = 3
-        private val runLock = Mutex()
+        // Wspólna z RenewActionWorker: przebieg dzienny i akcja z powiadomienia nie przedłużą tej
+        // samej pozycji naraz.
+        internal val runLock = Mutex()
     }
 }

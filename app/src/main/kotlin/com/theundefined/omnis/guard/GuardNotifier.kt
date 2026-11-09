@@ -16,6 +16,7 @@ import com.theundefined.omnis.R
 import com.theundefined.omnis.data.model.Account
 import com.theundefined.omnis.data.model.Hold
 import com.theundefined.omnis.data.model.Loan
+import com.theundefined.omnis.data.model.displayTitle
 import com.theundefined.omnis.ui.holdDeadline
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -59,6 +60,11 @@ class GuardNotifier(private val context: Context) {
                     NotificationManager.IMPORTANCE_DEFAULT
                 ),
                 NotificationChannel(
+                    CHANNEL_WATCHLIST,
+                    context.getString(R.string.guard_channel_watchlist),
+                    NotificationManager.IMPORTANCE_DEFAULT
+                ),
+                NotificationChannel(
                     CHANNEL_ACCOUNT,
                     context.getString(R.string.guard_channel_account),
                     NotificationManager.IMPORTANCE_DEFAULT
@@ -73,9 +79,20 @@ class GuardNotifier(private val context: Context) {
         renewed: List<Renewed>,
         renewFailed: List<Loan>,
         showOwner: Boolean,
-        today: LocalDate
+        today: LocalDate,
+        /** Przedłużenie wysłane, ale bez potwierdzenia (nie udało się ponownie pobrać listy). */
+        renewUnknown: List<Loan> = emptyList(),
+        /** Niepusta = przycisk „Przedłuż" w powiadomieniu (tylko dla powiadomień o terminach). */
+        actionTargets: List<RenewTarget> = emptyList()
     ): Boolean {
-        if (notices.isEmpty() && renewed.isEmpty() && renewFailed.isEmpty()) return false
+        if (
+            notices.isEmpty() &&
+                renewed.isEmpty() &&
+                renewFailed.isEmpty() &&
+                renewUnknown.isEmpty()
+        ) {
+            return false
+        }
         fun owner(loan: Loan) = if (showOwner) loan.ownerName?.let { " ($it)" } ?: "" else ""
 
         val lines =
@@ -88,6 +105,9 @@ class GuardNotifier(private val context: Context) {
             } +
                 renewFailed.map {
                     context.getString(R.string.guard_line_renew_failed, it.title) + owner(it)
+                } +
+                renewUnknown.map {
+                    context.getString(R.string.guard_line_renew_unknown, it.title) + owner(it)
                 } +
                 notices.map { notice ->
                     val days = ChronoUnit.DAYS.between(today, notice.due).toInt()
@@ -117,11 +137,72 @@ class GuardNotifier(private val context: Context) {
             when {
                 notices.any { it.tier == DueTier.OVERDUE } ->
                     context.getString(R.string.guard_title_overdue)
-                notices.isNotEmpty() || renewFailed.isNotEmpty() ->
+                notices.isNotEmpty() || renewFailed.isNotEmpty() || renewUnknown.isNotEmpty() ->
                     context.getString(R.string.guard_title_due)
                 else -> context.getString(R.string.guard_title_renewed)
             }
-        return post(ID_LOANS, CHANNEL_DUE, title, lines, MainActivity.ACTION_OPEN_LOANS)
+        return post(ID_LOANS, CHANNEL_DUE, title, lines, MainActivity.ACTION_OPEN_LOANS) {
+            if (actionTargets.isNotEmpty()) {
+                it.addAction(
+                    R.drawable.ic_notification,
+                    context.getString(R.string.guard_action_renew),
+                    renewActionIntent(actionTargets)
+                )
+            }
+        }
+    }
+
+    /**
+     * Przycisk „Przedłuż": rozgłoszenie do niewyeksportowanego [RenewActionReceiver]. Stały kod
+     * żądania + FLAG_UPDATE_CURRENT — kolejne powiadomienie zastępuje extras poprzedniego (inaczej
+     * stary PendingIntent zachowałby listę z dawnego powiadomienia); FLAG_IMMUTABLE, bo nikt poza
+     * nami nie ma zmieniać intentu.
+     */
+    private fun renewActionIntent(targets: List<RenewTarget>): PendingIntent {
+        val intent =
+            Intent(context, RenewActionReceiver::class.java).apply {
+                action = RenewActionReceiver.ACTION_RENEW
+                putExtra(
+                    RenewActionReceiver.EXTRA_TARGETS,
+                    targets.map { it.encode() }.toTypedArray()
+                )
+            }
+        return PendingIntent.getBroadcast(
+            context,
+            REQUEST_RENEW,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    /**
+     * Po dotknięciu „Przedłuż": zdejmuje powiadomienie o terminach (nie da się dotknąć dwa razy) i
+     * pokazuje, że praca trwa — bez tego przy braku sieci użytkownik nie miałby żadnego śladu.
+     * Znika samo po wyniku ([clearRenewPending]) lub po upływie czasu.
+     */
+    fun showRenewPending() {
+        NotificationManagerCompat.from(context).cancel(ID_LOANS)
+        post(
+            ID_RENEW_PENDING,
+            CHANNEL_DUE,
+            context.getString(R.string.guard_renew_pending),
+            listOf(context.getString(R.string.guard_renew_pending_text)),
+            MainActivity.ACTION_OPEN_LOANS
+        ) {
+            it.setTimeoutAfter(PENDING_TIMEOUT_MILLIS).setOnlyAlertOnce(true).setSilent(true)
+        }
+    }
+
+    /**
+     * Wynik akcji „Przedłuż", gdy nie było czego przedłużać — powiadomienie nie znika bez śladu.
+     */
+    fun notifyNothingToRenew() {
+        val text = context.getString(R.string.guard_renew_nothing)
+        post(ID_LOANS, CHANNEL_DUE, text, listOf(text), MainActivity.ACTION_OPEN_LOANS)
+    }
+
+    fun clearRenewPending() {
+        NotificationManagerCompat.from(context).cancel(ID_RENEW_PENDING)
     }
 
     fun notifyHolds(holds: List<Hold>, showOwner: Boolean): Boolean {
@@ -143,6 +224,32 @@ class GuardNotifier(private val context: Context) {
         val title =
             context.resources.getQuantityString(R.plurals.holds_ready, holds.size, holds.size)
         return post(ID_HOLDS, CHANNEL_HOLDS, title, lines, MainActivity.ACTION_OPEN_HOLDS)
+    }
+
+    /** Tytuły z listy „Do przeczytania", które pojawiły się na półce (z filiami, w których są). */
+    fun notifyWatchlist(available: List<Pair<WatchedTitle, List<String>>>): Boolean {
+        if (available.isEmpty()) return false
+        val lines =
+            available.map { (title, branches) ->
+                context.getString(
+                    R.string.watch_notify_line,
+                    displayTitle(title.title),
+                    branches.joinToString(", ")
+                )
+            }
+        val title =
+            context.resources.getQuantityString(
+                R.plurals.watch_notify_title,
+                available.size,
+                available.size
+            )
+        return post(
+            ID_WATCHLIST,
+            CHANNEL_WATCHLIST,
+            title,
+            lines,
+            MainActivity.ACTION_OPEN_WATCHLIST
+        )
     }
 
     fun notifyFines(increased: List<Pair<Account, Double>>): Boolean {
@@ -189,7 +296,8 @@ class GuardNotifier(private val context: Context) {
         channel: String,
         title: String,
         lines: List<String>,
-        action: String
+        action: String,
+        customize: (NotificationCompat.Builder) -> Unit = {}
     ): Boolean {
         if (!canNotify()) return false
         val intent =
@@ -215,7 +323,7 @@ class GuardNotifier(private val context: Context) {
                 context.getString(R.string.guard_more_lines, lines.size - MAX_LINES)
             )
         }
-        val notification =
+        val builder =
             NotificationCompat.Builder(context, channel)
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle(title)
@@ -224,7 +332,8 @@ class GuardNotifier(private val context: Context) {
                 .setNumber(lines.size)
                 .setContentIntent(pending)
                 .setAutoCancel(true)
-                .build()
+        customize(builder)
+        val notification = builder.build()
         return try {
             NotificationManagerCompat.from(context).notify(id, notification)
             true
@@ -238,11 +347,18 @@ class GuardNotifier(private val context: Context) {
         const val CHANNEL_DUE = "guard_due"
         const val CHANNEL_HOLDS = "guard_holds"
         const val CHANNEL_ACCOUNT = "guard_account"
+        const val CHANNEL_WATCHLIST = "guard_watchlist"
         private const val ID_LOANS = 1001
         private const val ID_HOLDS = 1002
         private const val ID_FINES = 1003
         private const val ID_LOGIN = 1004
-        private const val MAX_LINES = 6
+        private const val ID_WATCHLIST = 1005
+        private const val ID_RENEW_PENDING = 1006
+        private const val REQUEST_RENEW = 2001
+        private const val PENDING_TIMEOUT_MILLIS = 30 * 60 * 1000L
+
+        /** Tyle linii pokazuje powiadomienie; reszta to „i N więcej". */
+        const val MAX_LINES = 6
         private val DATE = DateTimeFormatter.ofPattern("dd.MM")
     }
 }
