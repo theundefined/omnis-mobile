@@ -51,6 +51,12 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
+
+        <!-- Przycisk „Przedłuż" w powiadomieniu o terminach (guard/). Nie eksportowany: intent
+             wysyła wyłącznie nasze niezmienne PendingIntent. -->
+        <receiver
+            android:name=".guard.RenewActionReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

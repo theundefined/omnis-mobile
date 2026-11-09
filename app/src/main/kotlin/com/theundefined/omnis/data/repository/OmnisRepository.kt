@@ -692,9 +692,11 @@ class OmnisRepository(private val accountManager: AccountManager) {
      * przedłużenia wybranych pozycji i ponowne pobranie, liczniki (kary), rezerwacje. Jedno
      * logowanie dziennie na konto zamiast osobnego przy każdej operacji — strażnik działa bez
      * udziału użytkownika, więc nie może obciążać serwera bardziej niż wizyta na stronie.
+     * `pickRenewals` dostaje świeżo pobrane wypożyczenia (przed przedłużeniem).
      */
     suspend fun guardCheck(
         account: Account,
+        withExtras: Boolean = true,
         pickRenewals: (List<Loan>) -> List<Loan>
     ): Result<GuardFetch> {
         return try {
@@ -725,6 +727,11 @@ class OmnisRepository(private val accountManager: AccountManager) {
                 val after = fetchAllLoans(api, token, account).getOrNull()
                 refetched = after != null
                 if (after != null) loans = after
+            }
+            // Akcja „Przedłuż" z powiadomienia chce tylko wypożyczeń — bez zbędnych żądań o kary i
+            // rezerwacje (withExtras = false).
+            if (!withExtras) {
+                return Result.success(GuardFetch(loans, toRenew, refetched, null, null))
             }
             val fines =
                 try {

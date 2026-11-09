@@ -30,7 +30,8 @@ z serwerem wybranej biblioteki — autor nie prowadzi żadnego serwera pośredni
 - Historia wypożyczeń doczytywana stronami i zapamiętywana na telefonie.
 - Przypomnienia w tle (opcjonalne): raz dziennie powiadomienie o zbliżającym się lub minionym
   terminie zwrotu, rezerwacjach do odbioru i nowych karach; automatyczne przedłużanie na wybranych
-  kontach.
+  kontach. Godzina sprawdzania i liczba dni przed terminem do auto-przedłużenia są do wyboru;
+  powiadomienie o terminach ma przycisk „Przedłuż".
 
 **Wyszukiwarka** — anonimowa, działa bez konta w danej bibliotece
 - Dowolna z 55 obsługiwanych bibliotek, także kilka naraz.

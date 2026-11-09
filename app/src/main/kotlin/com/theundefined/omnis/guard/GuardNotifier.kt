@@ -79,9 +79,20 @@ class GuardNotifier(private val context: Context) {
         renewed: List<Renewed>,
         renewFailed: List<Loan>,
         showOwner: Boolean,
-        today: LocalDate
+        today: LocalDate,
+        /** Przedłużenie wysłane, ale bez potwierdzenia (nie udało się ponownie pobrać listy). */
+        renewUnknown: List<Loan> = emptyList(),
+        /** Niepusta = przycisk „Przedłuż" w powiadomieniu (tylko dla powiadomień o terminach). */
+        actionTargets: List<RenewTarget> = emptyList()
     ): Boolean {
-        if (notices.isEmpty() && renewed.isEmpty() && renewFailed.isEmpty()) return false
+        if (
+            notices.isEmpty() &&
+                renewed.isEmpty() &&
+                renewFailed.isEmpty() &&
+                renewUnknown.isEmpty()
+        ) {
+            return false
+        }
         fun owner(loan: Loan) = if (showOwner) loan.ownerName?.let { " ($it)" } ?: "" else ""
 
         val lines =
@@ -94,6 +105,9 @@ class GuardNotifier(private val context: Context) {
             } +
                 renewFailed.map {
                     context.getString(R.string.guard_line_renew_failed, it.title) + owner(it)
+                } +
+                renewUnknown.map {
+                    context.getString(R.string.guard_line_renew_unknown, it.title) + owner(it)
                 } +
                 notices.map { notice ->
                     val days = ChronoUnit.DAYS.between(today, notice.due).toInt()
@@ -123,11 +137,64 @@ class GuardNotifier(private val context: Context) {
             when {
                 notices.any { it.tier == DueTier.OVERDUE } ->
                     context.getString(R.string.guard_title_overdue)
-                notices.isNotEmpty() || renewFailed.isNotEmpty() ->
+                notices.isNotEmpty() || renewFailed.isNotEmpty() || renewUnknown.isNotEmpty() ->
                     context.getString(R.string.guard_title_due)
                 else -> context.getString(R.string.guard_title_renewed)
             }
-        return post(ID_LOANS, CHANNEL_DUE, title, lines, MainActivity.ACTION_OPEN_LOANS)
+        return post(ID_LOANS, CHANNEL_DUE, title, lines, MainActivity.ACTION_OPEN_LOANS) {
+            if (actionTargets.isNotEmpty()) {
+                it.addAction(
+                    R.drawable.ic_notification,
+                    context.getString(R.string.guard_action_renew),
+                    renewActionIntent(actionTargets)
+                )
+            }
+        }
+    }
+
+    /**
+     * Przycisk „Przedłuż": rozgłoszenie do niewyeksportowanego [RenewActionReceiver]. Stały kod
+     * żądania + FLAG_UPDATE_CURRENT — kolejne powiadomienie zastępuje extras poprzedniego (inaczej
+     * stary PendingIntent zachowałby listę z dawnego powiadomienia); FLAG_IMMUTABLE, bo nikt poza
+     * nami nie ma zmieniać intentu.
+     */
+    private fun renewActionIntent(targets: List<RenewTarget>): PendingIntent {
+        val intent =
+            Intent(context, RenewActionReceiver::class.java).apply {
+                action = RenewActionReceiver.ACTION_RENEW
+                putExtra(
+                    RenewActionReceiver.EXTRA_TARGETS,
+                    targets.map { it.encode() }.toTypedArray()
+                )
+            }
+        return PendingIntent.getBroadcast(
+            context,
+            REQUEST_RENEW,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    /**
+     * Po dotknięciu „Przedłuż": zdejmuje powiadomienie o terminach (nie da się dotknąć dwa razy) i
+     * pokazuje, że praca trwa — bez tego przy braku sieci użytkownik nie miałby żadnego śladu.
+     * Znika samo po wyniku ([clearRenewPending]) lub po upływie czasu.
+     */
+    fun showRenewPending() {
+        NotificationManagerCompat.from(context).cancel(ID_LOANS)
+        post(
+            ID_RENEW_PENDING,
+            CHANNEL_DUE,
+            context.getString(R.string.guard_renew_pending),
+            listOf(context.getString(R.string.guard_renew_pending_text)),
+            MainActivity.ACTION_OPEN_LOANS
+        ) {
+            it.setTimeoutAfter(PENDING_TIMEOUT_MILLIS).setOnlyAlertOnce(true)
+        }
+    }
+
+    fun clearRenewPending() {
+        NotificationManagerCompat.from(context).cancel(ID_RENEW_PENDING)
     }
 
     fun notifyHolds(holds: List<Hold>, showOwner: Boolean): Boolean {
@@ -221,7 +288,8 @@ class GuardNotifier(private val context: Context) {
         channel: String,
         title: String,
         lines: List<String>,
-        action: String
+        action: String,
+        customize: (NotificationCompat.Builder) -> Unit = {}
     ): Boolean {
         if (!canNotify()) return false
         val intent =
@@ -247,7 +315,7 @@ class GuardNotifier(private val context: Context) {
                 context.getString(R.string.guard_more_lines, lines.size - MAX_LINES)
             )
         }
-        val notification =
+        val builder =
             NotificationCompat.Builder(context, channel)
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle(title)
@@ -256,7 +324,8 @@ class GuardNotifier(private val context: Context) {
                 .setNumber(lines.size)
                 .setContentIntent(pending)
                 .setAutoCancel(true)
-                .build()
+        customize(builder)
+        val notification = builder.build()
         return try {
             NotificationManagerCompat.from(context).notify(id, notification)
             true
@@ -276,7 +345,12 @@ class GuardNotifier(private val context: Context) {
         private const val ID_FINES = 1003
         private const val ID_LOGIN = 1004
         private const val ID_WATCHLIST = 1005
-        private const val MAX_LINES = 6
+        private const val ID_RENEW_PENDING = 1006
+        private const val REQUEST_RENEW = 2001
+        private const val PENDING_TIMEOUT_MILLIS = 30 * 60 * 1000L
+
+        /** Tyle linii pokazuje powiadomienie; reszta to „i N więcej". */
+        const val MAX_LINES = 6
         private val DATE = DateTimeFormatter.ofPattern("dd.MM")
     }
 }

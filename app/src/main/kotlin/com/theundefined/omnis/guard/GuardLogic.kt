@@ -24,7 +24,14 @@ data class GuardSettings(
      * Powiadamiaj, gdy tytuł z listy „Do przeczytania" pojawi się na półce (działa przy włączonym
      * strażniku).
      */
-    val watchlistNotify: Boolean = true
+    val watchlistNotify: Boolean = true,
+    /**
+     * Godzina (pełna) codziennego przebiegu. Pola dopisane później mają domyślne wartości =
+     * dotychczasowe zachowanie, więc stary zapis wczytuje się bez zmian (9:00, 2 dni).
+     */
+    val runHour: Int = DEFAULT_RUN_HOUR,
+    /** Auto-przedłużanie na tyle dni przed terminem (dla kont z włączonym auto-przedłużaniem). */
+    val autoRenewDays: Int = DEFAULT_AUTO_RENEW_DAYS
 )
 
 const val DEFAULT_THRESHOLD = 3
@@ -33,16 +40,28 @@ const val DEFAULT_THRESHOLD = 3
 val THRESHOLD_CHOICES = listOf(1, 2, 3, 5, 7)
 
 /**
- * Auto-przedłużanie dopiero na tyle dni przed terminem: część bibliotek liczy nowy termin od dnia
- * przedłużenia, więc za wczesne przedłużenie skraca wypożyczenie albo marnuje limit prolongat.
+ * Auto-przedłużanie dopiero na tyle dni przed terminem (domyślnie): część bibliotek liczy nowy
+ * termin od dnia przedłużenia, więc za wczesne przedłużenie skraca wypożyczenie albo marnuje limit
+ * prolongat. Użytkownik może zmienić w Ustawieniach ([AUTO_RENEW_CHOICES]).
  */
-const val AUTO_RENEW_DAYS = 2
+const val DEFAULT_AUTO_RENEW_DAYS = 2
 
-/** Godzina codziennego przebiegu (pierwszego; dalej co 24 h, z dokładnością WorkManagera). */
-val GUARD_RUN_AT: LocalTime = LocalTime.of(9, 0)
+/** Wybór „ile dni przed terminem przedłużać" w Ustawieniach. */
+val AUTO_RENEW_CHOICES = listOf(1, 2, 3, 5)
 
-fun delayUntilNextRun(now: LocalDateTime): Duration {
-    var next = now.toLocalDate().atTime(GUARD_RUN_AT)
+/**
+ * Domyślna godzina codziennego przebiegu (pierwszego; dalej co 24 h, z dokładnością WorkManagera).
+ */
+const val DEFAULT_RUN_HOUR = 9
+
+/** Wybór godziny przebiegu w Ustawieniach — w ciągu dnia, żeby powiadomienie nie budziło. */
+val RUN_HOUR_CHOICES = (6..21).toList()
+
+/** Godzina z zapisu może być spoza zakresu (uszkodzony zapis) — nie wywalamy planowania. */
+fun normalizedRunHour(hour: Int): Int = if (hour in 0..23) hour else DEFAULT_RUN_HOUR
+
+fun delayUntilNextRun(now: LocalDateTime, runHour: Int = DEFAULT_RUN_HOUR): Duration {
+    var next = now.toLocalDate().atTime(LocalTime.of(normalizedRunHour(runHour), 0))
     if (!next.isAfter(now)) next = next.plusDays(1)
     return Duration.between(now, next)
 }
@@ -144,11 +163,16 @@ fun newDueNotices(
         .sortedBy { it.due }
 
 /** Przedłużalne pozycje konta z włączonym auto-przedłużaniem, których jeszcze nie próbowaliśmy. */
-fun renewCandidates(loans: List<Loan>, today: LocalDate, sent: Set<String>): List<Loan> =
+fun renewCandidates(
+    loans: List<Loan>,
+    today: LocalDate,
+    sent: Set<String>,
+    autoRenewDays: Int = DEFAULT_AUTO_RENEW_DAYS
+): List<Loan> =
     loans.filter { loan ->
         val due = parseFlexibleDate(loan.dueDate) ?: return@filter false
         loan.renewable &&
-            ChronoUnit.DAYS.between(today, due) <= AUTO_RENEW_DAYS &&
+            ChronoUnit.DAYS.between(today, due) <= autoRenewDays &&
             GuardKeys.renew(loan) !in sent
     }
 
@@ -177,3 +201,110 @@ fun pruneSent(sent: Set<String>, live: Map<String, Set<String>>, today: LocalDat
             GuardKeys.item(key) in items
         }
         .toSet()
+
+// --- Akcja „Przedłuż" w powiadomieniu o terminach ---
+
+/**
+ * Pozycja do przedłużenia z powiadomienia. Termin z chwili powiadomienia pozwala wykryć, że
+ * użytkownik przedłużył ją w międzyczasie w aplikacji (termin się zmienił) — wtedy nie przedłużamy
+ * drugi raz i nie zgłaszamy porażki.
+ */
+data class RenewTarget(val accountId: String, val loanId: String, val dueDate: String) {
+    /** Jedna linia do extras/Data; separator spoza zbioru znaków identyfikatorów i dat. */
+    fun encode(): String = listOf(accountId, loanId, dueDate).joinToString(TARGET_SEPARATOR)
+
+    companion object {
+        private const val TARGET_SEPARATOR = "\u001F"
+
+        fun decode(text: String): RenewTarget? {
+            val parts = text.split(TARGET_SEPARATOR)
+            if (parts.size != 3 || parts.any { it.isEmpty() }) return null
+            return RenewTarget(parts[0], parts[1], parts[2])
+        }
+    }
+}
+
+/** Górny limit pozycji w jednym zleceniu (powiadomienie pokazuje i tak kilka linii). */
+const val MAX_RENEW_TARGETS = 20
+
+/**
+ * Pozycje, które przedłuży przycisk „Przedłuż": przedłużalne spośród linii faktycznie widocznych w
+ * powiadomieniu (przed nimi idą linie wyniku auto-przedłużania — [leadingLines]; powiadomienie
+ * ucina listę na [maxLines]). Bez pozycji, których przedłużenie już próbowaliśmy w tym terminie
+ * ([attempted] to klucze z [GuardKeys.renew]) — ponawianie odmowy tylko obciąża serwer.
+ */
+fun renewActionTargets(
+    notices: List<DueNotice>,
+    leadingLines: Int,
+    maxLines: Int,
+    attempted: Set<String>
+): List<RenewTarget> =
+    notices
+        .take((maxLines - leadingLines).coerceAtLeast(0))
+        .map { it.loan }
+        .filter { it.renewable && GuardKeys.renew(it) !in attempted }
+        .mapNotNull { loan -> loan.accountId?.let { RenewTarget(it, loan.id, loan.dueDate) } }
+        .distinct()
+        .take(MAX_RENEW_TARGETS)
+
+/** Co zrobić z celami akcji po świeżym pobraniu wypożyczeń konta (przed jakimkolwiek żądaniem). */
+data class ActionPlan(
+    /** Wciąż z tym samym terminem i przedłużalne — to jedyne, które wysyłamy do biblioteki. */
+    val toRenew: List<Loan>,
+    /**
+     * Termin się zmienił (przedłużone w aplikacji lub przez auto-przedłużanie) — nic do zrobienia.
+     */
+    val alreadyDone: List<RenewTarget>,
+    /** Zwrócone / zniknęły z listy — nic do zrobienia. */
+    val gone: List<RenewTarget>,
+    /** Wciąż z tym samym terminem, ale już nieprzedłużalne (np. limit) — zgłaszamy jako porażkę. */
+    val blocked: List<Loan>
+)
+
+fun planActionRenewals(targets: List<RenewTarget>, current: List<Loan>): ActionPlan {
+    val toRenew = mutableListOf<Loan>()
+    val alreadyDone = mutableListOf<RenewTarget>()
+    val gone = mutableListOf<RenewTarget>()
+    val blocked = mutableListOf<Loan>()
+    targets.forEach { target ->
+        val loan = current.firstOrNull { it.id == target.loanId }
+        when {
+            loan == null -> gone += target
+            !sameDueDate(loan.dueDate, target.dueDate) -> alreadyDone += target
+            !loan.renewable -> blocked += loan
+            else -> toRenew += loan
+        }
+    }
+    return ActionPlan(toRenew, alreadyDone, gone, blocked)
+}
+
+private fun sameDueDate(a: String, b: String): Boolean {
+    val da = parseFlexibleDate(a)
+    val db = parseFlexibleDate(b)
+    return if (da != null && db != null) da == db else a == b
+}
+
+/** Wynik akcji do zgłoszenia użytkownikowi. */
+data class ActionOutcome(
+    val renewed: List<Pair<Loan, LocalDate>>,
+    val failed: List<Loan>,
+    /** Nie udało się ponownie pobrać listy — nie wiadomo, czy przedłużenie przeszło. */
+    val unknown: List<Loan>
+)
+
+/**
+ * Ocena po przedłużeniach: sukces tylko, gdy po ponownym pobraniu ([after], null = nie pobrano)
+ * termin się przesunął ([renewalSucceeded]) — status HTTP renew_loans nic nie dowodzi.
+ */
+fun actionOutcome(plan: ActionPlan, after: List<Loan>?): ActionOutcome {
+    if (after == null) return ActionOutcome(emptyList(), plan.blocked, plan.toRenew)
+    val renewed = mutableListOf<Pair<Loan, LocalDate>>()
+    val failed = plan.blocked.toMutableList()
+    plan.toRenew.forEach { before ->
+        val renewedLoan = renewalSucceeded(before, after)
+        val newDue = renewedLoan?.let { parseFlexibleDate(it.dueDate) }
+        if (renewedLoan != null && newDue != null) renewed += renewedLoan to newDue
+        else failed += before
+    }
+    return ActionOutcome(renewed, failed, emptyList())
+}

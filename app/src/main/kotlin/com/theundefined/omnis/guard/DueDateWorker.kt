@@ -69,7 +69,9 @@ class DueDateWorker(context: Context, params: WorkerParameters) : CoroutineWorke
             checked++
             val result =
                 repository.guardCheck(account) { loans ->
-                    if (account.autoRenew) renewCandidates(loans, today, sent) else emptyList()
+                    if (account.autoRenew)
+                        renewCandidates(loans, today, sent, settings.autoRenewDays)
+                    else emptyList()
                 }
             val fetch =
                 result.getOrElse { error ->
@@ -142,9 +144,24 @@ class DueDateWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         // Powiadomienia; klucze zapamiętujemy tylko dla tego, co faktycznie wysłano — po
         // ponownym włączeniu powiadomień w systemie nic nie przepadnie.
         val anyNewDue = dueNotices.any { it.key !in sent }
+        // Przycisk „Przedłuż" dotyczy przedłużalnych pozycji widocznych w tym powiadomieniu.
+        val actionTargets =
+            renewActionTargets(
+                dueNotices,
+                leadingLines = renewed.size + renewFailed.size,
+                maxLines = GuardNotifier.MAX_LINES,
+                attempted = sent + renewKeys
+            )
         if (
             (anyNewDue || renewed.isNotEmpty() || renewFailed.isNotEmpty()) &&
-                notifier.notifyLoans(dueNotices, renewed, renewFailed, showOwner, today)
+                notifier.notifyLoans(
+                    dueNotices,
+                    renewed,
+                    renewFailed,
+                    showOwner,
+                    today,
+                    actionTargets = actionTargets
+                )
         ) {
             newKeys += dueNotices.map { it.key }
         }
@@ -245,6 +262,8 @@ class DueDateWorker(context: Context, params: WorkerParameters) : CoroutineWorke
 
     companion object {
         private const val MAX_ATTEMPTS = 3
-        private val runLock = Mutex()
+        // Wspólna z RenewActionWorker: przebieg dzienny i akcja z powiadomienia nie przedłużą tej
+        // samej pozycji naraz.
+        internal val runLock = Mutex()
     }
 }

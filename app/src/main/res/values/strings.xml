@@ -290,14 +290,19 @@
     <!-- Strażnik terminów (przypomnienia w tle) -->
     <string name="guard_section_title">Przypomnienia</string>
     <string name="guard_enable">Przypominaj o terminach</string>
-    <string name="guard_enable_desc">Raz dziennie (około 9:00) aplikacja sprawdza w tle włączone konta: terminy zwrotu, rezerwacje do odbioru i nowe kary. Jedno logowanie na konto dziennie.</string>
+    <string name="guard_enable_desc">Raz dziennie (o wybranej godzinie) aplikacja sprawdza w tle włączone konta: terminy zwrotu, rezerwacje do odbioru i nowe kary. Jedno logowanie na konto dziennie.</string>
     <string name="guard_threshold">Przypominaj tyle dni przed terminem:</string>
     <string name="guard_last_run">Ostatnie sprawdzenie: %1$s</string>
     <string name="guard_never_run">Jeszcze nie sprawdzano</string>
     <string name="guard_check_now">Sprawdź teraz</string>
     <string name="guard_permission_denied">Powiadomienia są zablokowane — bez nich przypomnienia nie działają.</string>
     <string name="guard_open_notification_settings">Ustawienia powiadomień</string>
-    <string name="guard_auto_renew">Przedłużaj automatycznie (2 dni przed terminem)</string>
+    <plurals name="guard_auto_renew">
+        <item quantity="one">Przedłużaj automatycznie (%1$d dzień przed terminem)</item>
+        <item quantity="few">Przedłużaj automatycznie (%1$d dni przed terminem)</item>
+        <item quantity="many">Przedłużaj automatycznie (%1$d dni przed terminem)</item>
+        <item quantity="other">Przedłużaj automatycznie (%1$d dnia przed terminem)</item>
+    </plurals>
     <string name="guard_paused">Biblioteka odrzuca hasło — sprawdzanie w tle wstrzymane. Dodaj konto ponownie z aktualnym hasłem.</string>
     <string name="guard_channel_due">Terminy zwrotu</string>
     <string name="guard_channel_holds">Rezerwacje do odbioru</string>
@@ -352,4 +357,10 @@
         <item quantity="other">%d obserwowanych tytułów jest na półce</item>
     </plurals>
     <string name="watch_notify_line">%1$s — %2$s</string>
+    <string name="guard_run_hour">Sprawdzaj o godzinie: %1$s</string>
+    <string name="guard_auto_renew_days">Przedłużaj automatycznie tyle dni przed terminem:</string>
+    <string name="guard_action_renew">Przedłuż</string>
+    <string name="guard_renew_pending">Przedłużanie wypożyczeń…</string>
+    <string name="guard_renew_pending_text">Wynik pojawi się tutaj, gdy będzie połączenie z biblioteką.</string>
+    <string name="guard_line_renew_unknown">Nie udało się potwierdzić przedłużenia: %1$s</string>
 </resources>

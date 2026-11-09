@@ -637,8 +637,25 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
 
     fun setGuardEnabled(enabled: Boolean) {
         val app = getApplication<Application>()
-        repository.saveGuardSettings(repository.getGuardSettings().copy(enabled = enabled))
-        if (enabled) GuardScheduler.schedule(app, replace = true) else GuardScheduler.cancel(app)
+        val settings = repository.getGuardSettings().copy(enabled = enabled)
+        repository.saveGuardSettings(settings)
+        if (enabled) GuardScheduler.schedule(app, settings.runHour, replace = true)
+        else GuardScheduler.cancel(app)
+        loadGuardState()
+    }
+
+    /** Zmiana godziny przeplanowuje pracę okresową (replace) od najbliższej wybranej godziny. */
+    fun setGuardRunHour(hour: Int) {
+        val settings = repository.getGuardSettings().copy(runHour = hour)
+        repository.saveGuardSettings(settings)
+        if (settings.enabled) {
+            GuardScheduler.schedule(getApplication<Application>(), hour, replace = true)
+        }
+        loadGuardState()
+    }
+
+    fun setGuardAutoRenewDays(days: Int) {
+        repository.saveGuardSettings(repository.getGuardSettings().copy(autoRenewDays = days))
         loadGuardState()
     }
 

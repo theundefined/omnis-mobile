@@ -51,7 +51,9 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) handleShortcutIntent(intent)
         // KEEP — nie przesuwa już zaplanowanego przebiegu; odtwarza go np. po wyczyszczeniu
         // danych WorkManagera.
-        if (repository.getGuardSettings().enabled) GuardScheduler.schedule(applicationContext)
+        repository.getGuardSettings().let { guard ->
+            if (guard.enabled) GuardScheduler.schedule(applicationContext, guard.runHour)
+        }
         setContent {
             OmnisTheme {
                 Surface(

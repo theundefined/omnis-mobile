@@ -278,14 +278,17 @@
     <!-- Due-date guard (background reminders) -->
     <string name="guard_section_title">Reminders</string>
     <string name="guard_enable">Remind me about due dates</string>
-    <string name="guard_enable_desc">Once a day (around 9:00) the app checks enabled accounts in the background: due dates, holds ready for pickup and new fines. One login per account per day.</string>
+    <string name="guard_enable_desc">Once a day (at the chosen time) the app checks enabled accounts in the background: due dates, holds ready for pickup and new fines. One login per account per day.</string>
     <string name="guard_threshold">Remind this many days before the due date:</string>
     <string name="guard_last_run">Last check: %1$s</string>
     <string name="guard_never_run">Not checked yet</string>
     <string name="guard_check_now">Check now</string>
     <string name="guard_permission_denied">Notifications are blocked — reminders can\'t work without them.</string>
     <string name="guard_open_notification_settings">Notification settings</string>
-    <string name="guard_auto_renew">Renew automatically (2 days before due)</string>
+    <plurals name="guard_auto_renew">
+        <item quantity="one">Renew automatically (%1$d day before due)</item>
+        <item quantity="other">Renew automatically (%1$d days before due)</item>
+    </plurals>
     <string name="guard_paused">The library rejects the password — background checks are paused. Add the account again with the current password.</string>
     <string name="guard_channel_due">Due dates</string>
     <string name="guard_channel_holds">Holds ready for pickup</string>
@@ -336,4 +339,10 @@
         <item quantity="other">%d watched titles are on the shelf</item>
     </plurals>
     <string name="watch_notify_line">%1$s — %2$s</string>
+    <string name="guard_run_hour">Check at: %1$s</string>
+    <string name="guard_auto_renew_days">Renew automatically this many days before the due date:</string>
+    <string name="guard_action_renew">Renew</string>
+    <string name="guard_renew_pending">Renewing loans…</string>
+    <string name="guard_renew_pending_text">The result will appear here once the library is reachable.</string>
+    <string name="guard_line_renew_unknown">Could not confirm the renewal: %1$s</string>
 </resources>

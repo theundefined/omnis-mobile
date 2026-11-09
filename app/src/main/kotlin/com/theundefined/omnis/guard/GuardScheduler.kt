@@ -2,6 +2,7 @@ package com.theundefined.omnis.guard
 
 import android.content.Context
 import androidx.work.Constraints
+import androidx.work.Data
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
@@ -13,9 +14,9 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 /**
- * Planowanie strażnika: raz na dobę, pierwszy przebieg o [GUARD_RUN_AT]. WorkManager nie gwarantuje
- * dokładnej godziny (Doze), ale terminy liczymy w dniach, więc to wystarcza — bez exact alarms i
- * dodatkowych uprawnień.
+ * Planowanie strażnika: raz na dobę, pierwszy przebieg o wybranej w Ustawieniach godzinie
+ * ([GuardSettings.runHour], domyślnie 9:00). WorkManager nie gwarantuje dokładnej godziny (Doze),
+ * ale terminy liczymy w dniach, więc to wystarcza — bez exact alarms i dodatkowych uprawnień.
  */
 object GuardScheduler {
     private const val PERIODIC = "due_date_guard"
@@ -26,14 +27,15 @@ object GuardScheduler {
 
     /**
      * Przy starcie aplikacji: KEEP, żeby nie przesuwać zaplanowanego przebiegu przy każdym
-     * otwarciu. Po włączeniu w Ustawieniach — `replace`, żeby od razu liczyć od najbliższej 9:00.
+     * otwarciu. Po włączeniu lub zmianie godziny w Ustawieniach — `replace`, żeby od razu liczyć od
+     * najbliższej wybranej godziny.
      */
-    fun schedule(context: Context, replace: Boolean = false) {
+    fun schedule(context: Context, runHour: Int, replace: Boolean = false) {
         val request =
             PeriodicWorkRequestBuilder<DueDateWorker>(24, TimeUnit.HOURS)
                 .setConstraints(constraints)
                 .setInitialDelay(
-                    delayUntilNextRun(LocalDateTime.now()).toMinutes(),
+                    delayUntilNextRun(LocalDateTime.now(), runHour).toMinutes(),
                     TimeUnit.MINUTES
                 )
                 .build()
@@ -59,5 +61,26 @@ object GuardScheduler {
         WorkManager.getInstance(context)
             .enqueueUniqueWork(CHECK_NOW, ExistingWorkPolicy.KEEP, request)
         return request.id
+    }
+
+    /**
+     * Akcja „Przedłuż" z powiadomienia: jednorazowa praca (wymaga sieci). Bez unikalnej nazwy —
+     * kolejne zlecenia i tak serializuje wspólna blokada, a plan ([planActionRenewals]) pomija
+     * pozycje przedłużone w międzyczasie, więc powtórka nie przedłuży dwa razy.
+     */
+    fun renewFromNotification(context: Context, targets: List<RenewTarget>) {
+        val request =
+            OneTimeWorkRequestBuilder<RenewActionWorker>()
+                .setConstraints(constraints)
+                .setInputData(
+                    Data.Builder()
+                        .putStringArray(
+                            RenewActionWorker.KEY_TARGETS,
+                            targets.map { it.encode() }.toTypedArray()
+                        )
+                        .build()
+                )
+                .build()
+        WorkManager.getInstance(context).enqueue(request)
     }
 }
