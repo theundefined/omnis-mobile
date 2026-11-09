@@ -57,6 +57,18 @@
         <receiver
             android:name=".guard.RenewActionReceiver"
             android:exported="false" />
+
+        <!-- Udostępnianie obrazu podsumowania statystyk: tylko cacheDir/shared, prawo odczytu
+             nadawane per URI w intencie (grantUriPermissions). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

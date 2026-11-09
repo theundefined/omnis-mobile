@@ -363,4 +363,39 @@
     <string name="guard_renew_pending">Przedłużanie wypożyczeń…</string>
     <string name="guard_renew_pending_text">Wynik pojawi się tutaj, gdy będzie połączenie z biblioteką.</string>
     <string name="guard_line_renew_unknown">Nie udało się potwierdzić przedłużenia: %1$s</string>
+
+    <!-- Kalendarz i eksport -->
+    <string name="calendar_add">Dodaj do kalendarza</string>
+    <string name="calendar_event_single">Zwrot: %1$s</string>
+    <string name="calendar_event_several">Zwrot książek (%1$d)</string>
+    <string name="calendar_event_line">%1$s — termin: %2$s</string>
+    <string name="calendar_unavailable">Nie znaleziono aplikacji kalendarza</string>
+    <string name="calendar_no_date">Nie można odczytać terminu zwrotu</string>
+    <string name="cd_history_export">Eksportuj historię do CSV</string>
+    <string name="history_export_filter_note">Eksport obejmie tylko pozycje pasujące do filtra.</string>
+    <string name="history_export_done">Wyeksportowano pozycji: %1$d</string>
+    <string name="history_export_done_filtered">Wyeksportowano pozycji: %1$d (filtr: „%2$s”)</string>
+    <string name="history_export_failed">Nie udało się zapisać pliku.</string>
+    <string name="history_export_progress">Pobieranie całej historii do eksportu…</string>
+    <string name="csv_title">Tytuł</string>
+    <string name="csv_author">Autor</string>
+    <string name="csv_loan_date">Data wypożyczenia</string>
+    <string name="csv_due_date">Termin zwrotu</string>
+    <string name="csv_return_date">Data zwrotu</string>
+    <string name="csv_library">Biblioteka</string>
+    <string name="csv_branch">Filia</string>
+    <string name="csv_person">Osoba</string>
+    <string name="csv_barcode">Kod kreskowy</string>
+    <string name="cd_stats_share">Udostępnij podsumowanie</string>
+    <string name="stats_share_text">Jako tekst</string>
+    <string name="stats_share_image">Jako obraz</string>
+    <string name="stats_share_image_failed">Nie udało się przygotować obrazu.</string>
+    <string name="stats_summary_heading_year">📚 Moje wypożyczenia w %1$d</string>
+    <string name="stats_summary_heading_all">📚 Moje wypożyczenia — łącznie</string>
+    <string name="stats_summary_total">Wypożyczone książki: %1$d</string>
+    <string name="stats_summary_average">Średnio na miesiąc: %1$s</string>
+    <string name="stats_summary_best_month">Najlepszy miesiąc: %1$s (%2$d)</string>
+    <string name="stats_summary_authors">Najczęściej: %1$s</string>
+    <string name="stats_summary_duration">Średni czas wypożyczenia: %1$s</string>
+    <string name="stats_summary_footer">Z aplikacji Omnis Mobile</string>
 </resources>

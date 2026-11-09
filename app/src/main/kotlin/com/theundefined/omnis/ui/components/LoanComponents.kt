@@ -101,6 +101,7 @@ fun LoanList(
                             if (onHeaderClick != null) {
                                 BranchButton { onHeaderClick(accountLoans) }
                             }
+                            if (!isHistory) AddToCalendarButton { accountLoans }
                             ShareButton { groupShareText }
                             if (!isHistory && renewableLoans.isNotEmpty()) {
                                 IconButton(
@@ -513,7 +514,20 @@ private fun LoanDetailsDialog(
                 DetailRow(stringResource(R.string.detail_owner), loan.ownerName)
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } }
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
+        },
+        // Termin zwrotu ma sens tylko dla bieżących wypożyczeń.
+        dismissButton =
+            if (isHistory) null
+            else {
+                {
+                    val context = LocalContext.current
+                    TextButton(onClick = { addReturnToCalendar(context, listOf(loan)) }) {
+                        Text(stringResource(R.string.calendar_add))
+                    }
+                }
+            }
     )
 }
 

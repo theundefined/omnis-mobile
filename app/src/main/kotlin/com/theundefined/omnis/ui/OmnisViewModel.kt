@@ -1,6 +1,7 @@
 package com.theundefined.omnis.ui
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -106,6 +107,8 @@ data class HistoryUiState(
     val hasLoadedOnce: Boolean = false,
     val canLoadMore: Boolean = false,
     val filter: String = "", // tytuł/autor — patrz filterLoans
+    val isExporting: Boolean = false, // eksport CSV w toku (w tym dociąganie całej historii)
+    val exportMessage: String? = null, // jednorazowy wynik eksportu do snackbara
     val error: String? = null
 )
 
@@ -1232,35 +1235,10 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
                 _statsUiState.update {
                     it.copy(progress = RefreshProgress(index + 1, currentAccounts.size, name))
                 }
-                val cached = repository.getCachedHistory(account.id)
-                val fresh =
-                    !forceRefresh &&
-                        !cached.hasMore &&
-                        cached.fullFetchedAtMillis?.let { now - it < STATS_CACHE_TTL_MILLIS } ==
-                            true
-                val history =
-                    if (fresh) {
-                        successCount++
-                        cached.loans
-                    } else {
-                        repository
-                            .getLoansForAccount(account, type = "history")
-                            .onSuccess { loans ->
-                                repository.saveCachedHistory(
-                                    account.id,
-                                    HistoryCacheEntry(
-                                        loans = loans,
-                                        nextOffset = 1 + loans.size,
-                                        hasMore = false,
-                                        fullFetchedAtMillis = now
-                                    )
-                                )
-                                historyCacheChanged = true
-                                successCount++
-                            }
-                            .onFailure { failedAccountNames.add(name) }
-                            .getOrElse { cached.loans }
-                    }
+                val full = fullHistoryFor(account, forceRefresh, now)
+                if (full.ok) successCount++ else failedAccountNames.add(name)
+                if (full.cacheChanged) historyCacheChanged = true
+                val history = full.loans
                 collected += mergeStatsLoans(history, repository.getCachedLoans(account.id))
             }
 
@@ -1288,6 +1266,133 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
                 )
             }
         }
+    }
+
+    /** Wynik [fullHistoryFor]: `ok` = historia aktualna (z cache'u lub z sieci), inaczej stara. */
+    private class FullHistory(val loans: List<Loan>, val ok: Boolean, val cacheChanged: Boolean)
+
+    /**
+     * Cała historia jednego konta — wspólny mechanizm statystyk i eksportu CSV, żeby nie dublować
+     * zapytań: kompletny cache młodszy niż [STATS_CACHE_TTL_MILLIS] jest używany bez sieci, inaczej
+     * pobieramy wszystko jednym `getLoansForAccount` (jedno logowanie) i zapisujemy do cache'u. Gdy
+     * pobranie się nie uda, zostaje to, co jest w cache'u (`ok = false`).
+     */
+    private suspend fun fullHistoryFor(
+        account: Account,
+        forceRefresh: Boolean,
+        now: Long
+    ): FullHistory {
+        val cached = repository.getCachedHistory(account.id)
+        val fresh =
+            !forceRefresh &&
+                !cached.hasMore &&
+                cached.fullFetchedAtMillis?.let { now - it < STATS_CACHE_TTL_MILLIS } == true
+        if (fresh) return FullHistory(cached.loans, ok = true, cacheChanged = false)
+        return repository
+            .getLoansForAccount(account, type = "history")
+            .fold(
+                onSuccess = { loans ->
+                    repository.saveCachedHistory(
+                        account.id,
+                        HistoryCacheEntry(
+                            loans = loans,
+                            nextOffset = 1 + loans.size,
+                            hasMore = false,
+                            fullFetchedAtMillis = now
+                        )
+                    )
+                    FullHistory(loans, ok = true, cacheChanged = true)
+                },
+                onFailure = { FullHistory(cached.loans, ok = false, cacheChanged = false) }
+            )
+    }
+
+    /**
+     * Eksport CAŁEJ historii do pliku CSV wybranego przez użytkownika (SAF, [uri] z
+     * `CreateDocument`). Niekompletny cache najpierw dociąga [fullHistoryFor] (jak statystyki).
+     * Aktywny filtr tytuł/autor zawęża eksport. Gdy dociągnięcie zmieniło cache, a ekran historii
+     * nie jest akurat w trakcie ładowania, pokazujemy od razu kompletną historię.
+     */
+    fun exportHistoryCsv(uri: Uri) {
+        if (_historyUiState.value.isExporting) return
+        val generation = historyGeneration
+        val filter = _historyUiState.value.filter
+        val app = getApplication<Application>()
+        viewModelScope.launch {
+            _historyUiState.update { it.copy(isExporting = true, exportMessage = null) }
+            val accounts = _uiState.value.accounts.filter { it.isEnabled }
+            val now = System.currentTimeMillis()
+            val all = mutableListOf<Loan>()
+            val newCursors = mutableMapOf<String, HistoryCursor>()
+            val failedNames = mutableListOf<String>()
+            var cacheChanged = false
+            accounts.forEach { account ->
+                val full = fullHistoryFor(account, forceRefresh = false, now = now)
+                all += full.loans
+                if (full.ok) newCursors[account.id] = HistoryCursor(1 + full.loans.size, false)
+                else failedNames.add(account.displayName ?: account.username)
+                if (full.cacheChanged) cacheChanged = true
+            }
+            if (
+                cacheChanged &&
+                    generation == historyGeneration &&
+                    !_historyUiState.value.isLoading &&
+                    !_historyUiState.value.isLoadingMore
+            ) {
+                historyFlatLoans = all
+                historyCursors = historyCursors + newCursors
+                finishHistoryUpdate(emptyList())
+            }
+
+            val rows = sortForExport(filterLoans(all, filter))
+            val header =
+                HistoryCsvHeader(
+                    title = app.getString(R.string.csv_title),
+                    author = app.getString(R.string.csv_author),
+                    loanDate = app.getString(R.string.csv_loan_date),
+                    dueDate = app.getString(R.string.csv_due_date),
+                    returnDate = app.getString(R.string.csv_return_date),
+                    library = app.getString(R.string.csv_library),
+                    branch = app.getString(R.string.csv_branch),
+                    person = app.getString(R.string.csv_person),
+                    barcode = app.getString(R.string.csv_barcode)
+                )
+            val csv = historyToCsv(rows, header)
+            val written =
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        // "wt": SAF potrafi zostawić resztki starszej, dłuższej zawartości.
+                        val out =
+                            app.contentResolver.openOutputStream(uri, "wt")
+                                ?: error("no output stream")
+                        out.use { it.write(csv.toByteArray(Charsets.UTF_8)) }
+                    }
+                }
+            val message =
+                if (written.isSuccess) {
+                    val done =
+                        if (filter.isBlank()) app.getString(R.string.history_export_done, rows.size)
+                        else
+                            app.getString(
+                                R.string.history_export_done_filtered,
+                                rows.size,
+                                filter.trim()
+                            )
+                    if (failedNames.isEmpty()) done
+                    else
+                        done +
+                            "\n" +
+                            app.getString(
+                                R.string.history_partial_error,
+                                failedNames.joinToString(", ")
+                            )
+                } else app.getString(R.string.history_export_failed)
+            _historyUiState.update { it.copy(isExporting = false, exportMessage = message) }
+        }
+    }
+
+    fun consumeExportMessage() {
+        _historyUiState.update { it.copy(exportMessage = null) }
     }
 
     /** Doładowuje kolejną stronę historii dla każdego konta, które jeszcze ma co doładować. */

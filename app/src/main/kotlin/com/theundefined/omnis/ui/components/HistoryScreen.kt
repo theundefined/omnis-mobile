@@ -1,5 +1,7 @@
 package com.theundefined.omnis.ui.components
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -20,6 +22,7 @@ import com.theundefined.omnis.data.model.SearchField
 import com.theundefined.omnis.ui.GroupingMode
 import com.theundefined.omnis.ui.HistoryUiState
 import com.theundefined.omnis.ui.OmnisViewModel
+import java.time.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,6 +38,18 @@ fun HistoryScreen(
     // ponownego fetchu/re-loginu, dopóki użytkownik sam nie zażąda odświeżenia.
     LaunchedEffect(Unit) { viewModel.loadHistory() }
     LaunchedEffect(state.error) { state.error?.let { snackbarHostState.showSnackbar(it) } }
+    LaunchedEffect(state.exportMessage) {
+        state.exportMessage?.let {
+            viewModel.consumeExportMessage()
+            snackbarHostState.showSnackbar(it)
+        }
+    }
+    // SAF: użytkownik wybiera miejsce i nazwę pliku, aplikacja nie potrzebuje żadnych uprawnień.
+    val exportLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri
+            ->
+            if (uri != null) viewModel.exportHistoryCsv(uri)
+        }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -51,6 +66,16 @@ fun HistoryScreen(
                     }
                 },
                 actions = {
+                    val exportDescription = stringResource(R.string.cd_history_export)
+                    IconButton(
+                        onClick = {
+                            exportLauncher.launch("omnis-historia-${LocalDate.now()}.csv")
+                        },
+                        enabled = state.hasLoadedOnce && !state.isLoading && !state.isExporting,
+                        modifier = Modifier.semantics { contentDescription = exportDescription }
+                    ) {
+                        Icon(painterResource(R.drawable.ic_download), contentDescription = null)
+                    }
                     val refreshDescription = stringResource(R.string.cd_refresh)
                     IconButton(
                         onClick = { viewModel.loadHistory(forceRefresh = true) },
@@ -108,6 +133,26 @@ fun HistoryScreen(
                             state.filter,
                             onChange = { viewModel.setHistoryFilter(it) }
                         )
+                        if (state.filter.isNotBlank()) {
+                            Text(
+                                stringResource(R.string.history_export_filter_note),
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (state.isExporting) {
+                            Column(
+                                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    stringResource(R.string.history_export_progress),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 4.dp))
+                            }
+                        }
                         PullToRefreshBox(
                             isRefreshing = state.isLoading,
                             onRefresh = { viewModel.loadHistory(forceRefresh = true) },

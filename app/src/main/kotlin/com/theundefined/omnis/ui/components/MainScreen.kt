@@ -251,6 +251,7 @@ fun MainScreen(
                         ) {
                             Text(stringResource(R.string.cd_select_all))
                         }
+                        AddToCalendarButton { selectedLoans }
                         ShareButton { shareText }
                     }
                 )
