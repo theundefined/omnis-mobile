@@ -13,6 +13,7 @@ import com.theundefined.omnis.data.repository.LoginRejectedException
 import com.theundefined.omnis.data.repository.OmnisRepository
 import com.theundefined.omnis.ui.holdDeadline
 import com.theundefined.omnis.ui.isHoldDeadlineUrgent
+import com.theundefined.omnis.widget.updateLoansWidgets
 import java.time.LocalDate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
@@ -55,6 +56,7 @@ class DueDateWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         val paused = state.paused.toMutableMap()
 
         val dueNotices = mutableListOf<DueNotice>()
+        var cacheWritten = false
         val renewed = mutableListOf<GuardNotifier.Renewed>()
         val renewFailed = mutableListOf<Loan>()
         val renewKeys = mutableSetOf<String>()
@@ -112,6 +114,7 @@ class DueDateWorker(context: Context, params: WorkerParameters) : CoroutineWorke
                     accountManager.getCachedLoans(account.id)
                 )
             accountManager.saveCachedLoans(account.id, loans)
+            cacheWritten = true
             // Wszystkie bieżące (do treści) — powiadomienie zastępuje poprzednie, więc nie może
             // gubić pozycji zgłoszonych wcześniej; wysyłamy je tylko, gdy jest coś nowego.
             dueNotices += newDueNotices(loans, today, settings.thresholdDays, emptySet())
@@ -207,6 +210,9 @@ class DueDateWorker(context: Context, params: WorkerParameters) : CoroutineWorke
                 // Nieoczekiwany błąd listy nie psuje przebiegu; jutro spróbujemy znowu.
             }
         }
+
+        // Widżet „Terminy zwrotu" czyta ten sam cache — odśwież raz po zapisach z całego przebiegu.
+        if (cacheWritten) updateLoansWidgets(applicationContext)
 
         // Sieć/serwer nie odpowiedziały — spróbuj później (backoff). Konta: jak dotąd, tylko gdy
         // żadne się nie zalogowało (powtórka nie zmarnuje logowań). Lista „Do przeczytania" sama

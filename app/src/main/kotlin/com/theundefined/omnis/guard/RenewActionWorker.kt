@@ -7,6 +7,7 @@ import com.theundefined.omnis.data.local.AccountManager
 import com.theundefined.omnis.data.model.Loan
 import com.theundefined.omnis.data.repository.LoginRejectedException
 import com.theundefined.omnis.data.repository.OmnisRepository
+import com.theundefined.omnis.widget.updateLoansWidgets
 import java.time.LocalDate
 import kotlinx.coroutines.sync.withLock
 
@@ -51,6 +52,7 @@ class RenewActionWorker(context: Context, params: WorkerParameters) :
         val failed = mutableListOf<Loan>()
         val unknown = mutableListOf<Loan>()
         val renewKeys = mutableSetOf<String>()
+        var cacheWritten = false
         // Cele kont, do których nie udało się dotrzeć przez sieć (patrz niżej).
         val unreachable = mutableListOf<Pair<String, List<RenewTarget>>>()
         var checked = 0
@@ -86,6 +88,7 @@ class RenewActionWorker(context: Context, params: WorkerParameters) :
             failed += outcome.failed
             unknown += outcome.unknown
 
+            cacheWritten = true
             accountManager.saveCachedLoans(
                 account.id,
                 repository.withCachedCatalogDetails(
@@ -94,6 +97,8 @@ class RenewActionWorker(context: Context, params: WorkerParameters) :
                 )
             )
         }
+
+        if (cacheWritten) updateLoansWidgets(applicationContext)
 
         // Nikt nie odpowiedział (sieć/serwer) — spróbuj później; plan i tak odfiltruje to, co w
         // międzyczasie się zmieniło. Po wyczerpaniu prób zgłaszamy porażkę.

@@ -380,4 +380,15 @@
     <string name="stats_summary_authors">Most often: %1$s</string>
     <string name="stats_summary_duration">Average loan length: %1$s</string>
     <string name="stats_summary_footer">From the Omnis Mobile app</string>
+    <string name="shortcut_card_short">Library card</string>
+    <string name="shortcut_card_long">Show the library card with barcode</string>
+    <string name="widget_title">Due dates</string>
+    <string name="widget_description">Number of loans and the nearest return dates</string>
+    <string name="widget_open_app">Open the app</string>
+    <string name="widget_no_loans">No loans</string>
+    <string name="widget_nearest">Nearest return: %1$s</string>
+    <plurals name="widget_loans_count">
+        <item quantity="one">loan</item>
+        <item quantity="other">loans</item>
+    </plurals>
 </resources>

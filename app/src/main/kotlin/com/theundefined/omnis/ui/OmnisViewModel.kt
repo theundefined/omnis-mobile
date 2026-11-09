@@ -44,6 +44,7 @@ import com.theundefined.omnis.guard.newWatchedTitle
 import com.theundefined.omnis.guard.removeWatched
 import com.theundefined.omnis.guard.watchIdOf
 import com.theundefined.omnis.guard.watchRows
+import com.theundefined.omnis.widget.requestLoansWidgetUpdate
 import java.text.Collator
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
@@ -703,6 +704,8 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         val accounts = repository.getAccounts()
         if (!isDemoModeActive(accounts)) _demoSearchTenantOverride.value = null
         _uiState.update { it.copy(accounts = accounts) }
+        // Zmiana zestawu kont (dodanie/usunięcie/wyłączenie/demo) zmienia też to, co widzi widżet.
+        requestLoansWidgetUpdate(getApplication())
     }
 
     fun loadCachedLoans() {
@@ -726,6 +729,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
             val allLoansList = mutableListOf<Pair<Account, Loan>>()
             var hasError = false
             var errorMessage: String? = null
+            var cacheChanged = false
 
             currentAccounts.forEachIndexed { index, account ->
                 val progress =
@@ -757,6 +761,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
                             }
                         repository.saveCachedLoans(account.id, loans)
                         loans.forEach { allLoansList.add(account to it) }
+                        cacheChanged = true
                     }
                     .onFailure {
                         hasError = true
@@ -769,6 +774,9 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
 
             val updatedAccounts = repository.getAccounts()
             _uiState.update { it.copy(accounts = updatedAccounts, refreshProgress = null) }
+
+            // Widżet czyta ten sam cache — odśwież go raz po całej pętli kont.
+            if (cacheChanged) requestLoansWidgetUpdate(getApplication())
 
             updateGroupedLoans(allLoansList, false)
 

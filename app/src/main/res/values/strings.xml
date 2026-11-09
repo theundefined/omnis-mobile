@@ -398,4 +398,17 @@
     <string name="stats_summary_authors">Najczęściej: %1$s</string>
     <string name="stats_summary_duration">Średni czas wypożyczenia: %1$s</string>
     <string name="stats_summary_footer">Z aplikacji Omnis Mobile</string>
+    <string name="shortcut_card_short">Karta biblioteczna</string>
+    <string name="shortcut_card_long">Pokaż kartę biblioteczną z kodem kreskowym</string>
+    <string name="widget_title">Terminy zwrotu</string>
+    <string name="widget_description">Liczba wypożyczeń i najbliższe terminy zwrotu</string>
+    <string name="widget_open_app">Otwórz aplikację</string>
+    <string name="widget_no_loans">Brak wypożyczeń</string>
+    <string name="widget_nearest">Najbliższy zwrot: %1$s</string>
+    <plurals name="widget_loans_count">
+        <item quantity="one">wypożyczenie</item>
+        <item quantity="few">wypożyczenia</item>
+        <item quantity="many">wypożyczeń</item>
+        <item quantity="other">wypożyczenia</item>
+    </plurals>
 </resources>

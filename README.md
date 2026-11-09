@@ -42,6 +42,7 @@ z serwerem wybranej biblioteki — autor nie prowadzi żadnego serwera pośredni
 - Znaczek „Wypożyczone teraz / Czytane: rok" przy wynikach wyszukiwania (z lokalnej historii, bez zapytań do serwera) oraz „Szukaj w Omnis" z menu Udostępnij i zaznaczonego tekstu w innych aplikacjach.
 - „Dodaj do kalendarza": wydarzenie całodniowe w dniu zwrotu dla jednej książki, grupy lub zaznaczenia (bez uprawnień, zapis robi aplikacja kalendarza). Eksport historii do CSV (cała historia, z uwzględnieniem filtra) oraz udostępnianie podsumowania roku ze statystyk jako tekst lub obraz.
 - Lista „Do przeczytania”: obserwuj tytuł z wyszukiwarki, a aplikacja (przy włączonych przypomnieniach) powie, gdy pojawi się na półce w wybranych filiach — sprawdzanie anonimowe, raz dziennie.
+- Widżet „Terminy zwrotu” na ekran główny (liczba wypożyczeń, najbliższe terminy w kolorach jak w aplikacji; dane tylko z lokalnej pamięci, bez sieci) oraz skrót aplikacji „Karta biblioteczna”.
 
 **Rezerwacje i karta**
 - Rezerwacja z wyników wyszukiwania z wyborem filii i miejsca odbioru.

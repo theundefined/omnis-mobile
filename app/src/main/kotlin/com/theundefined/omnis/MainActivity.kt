@@ -89,6 +89,7 @@ class MainActivity : ComponentActivity() {
             ACTION_OPEN_HOLDS -> navRequest = NavRequest("holds", ++navSeq)
             ACTION_OPEN_WATCHLIST -> navRequest = NavRequest("watchlist", ++navSeq)
             ACTION_OPEN_SETTINGS -> navRequest = NavRequest("settings", ++navSeq)
+            ACTION_OPEN_CARD -> navRequest = NavRequest("card", ++navSeq)
             // Zapytanie to wyłącznie tekst — ShareReceiverActivity już je oczyściła, ale ta akcja
             // jest osiągalna dla każdej aplikacji, więc traktujemy je jak dane, nie polecenie.
             ACTION_SEARCH_TEXT ->
@@ -103,6 +104,9 @@ class MainActivity : ComponentActivity() {
     companion object {
         // Musi odpowiadać akcji w res/xml/shortcuts.xml.
         const val ACTION_SCAN_ISBN = "com.theundefined.omnis.action.SCAN_ISBN"
+
+        // Skrót „Karta biblioteczna" — musi odpowiadać akcji w res/xml/shortcuts.xml.
+        const val ACTION_OPEN_CARD = "com.theundefined.omnis.action.OPEN_CARD"
 
         // Kliknięcia powiadomień strażnika terminów (guard/GuardNotifier).
         const val ACTION_OPEN_LOANS = "com.theundefined.omnis.action.OPEN_LOANS"

@@ -58,6 +58,20 @@
             android:name=".guard.RenewActionReceiver"
             android:exported="false" />
 
+        <!-- Widżet „Terminy zwrotu" (Glance): czyta wyłącznie lokalny cache, bez sieci. exported=true
+             wymagane przez system dla odbiornika widżetu; klik otwiera MainActivity jawnym intentem. -->
+        <receiver
+            android:name=".widget.LoansWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/loans_widget_info" />
+        </receiver>
+
         <!-- Udostępnianie obrazu podsumowania statystyk: tylko cacheDir/shared, prawo odczytu
              nadawane per URI w intencie (grantUriPermissions). -->
         <provider
