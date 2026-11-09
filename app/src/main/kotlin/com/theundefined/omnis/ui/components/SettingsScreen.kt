@@ -141,6 +141,7 @@ fun SettingsScreen(
                             state = guardState,
                             onEnabledChange = { viewModel.setGuardEnabled(it) },
                             onThresholdChange = { viewModel.setGuardThreshold(it) },
+                            onWatchlistNotifyChange = { viewModel.setWatchlistNotify(it) },
                             onCheckNow = { viewModel.checkGuardNow() }
                         )
                     }
@@ -305,6 +306,7 @@ private fun GuardSettingsCard(
     state: GuardUiState,
     onEnabledChange: (Boolean) -> Unit,
     onThresholdChange: (Int) -> Unit,
+    onWatchlistNotifyChange: (Boolean) -> Unit,
     onCheckNow: () -> Unit
 ) {
     val context = LocalContext.current
@@ -385,6 +387,25 @@ private fun GuardSettingsCard(
                         )
                     }
                 }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 12.dp)
+                ) {
+                    Text(
+                        stringResource(R.string.watch_notify),
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Switch(
+                        checked = state.settings.watchlistNotify,
+                        onCheckedChange = onWatchlistNotifyChange
+                    )
+                }
+                Text(
+                    stringResource(R.string.watch_notify_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(top = 8.dp)

@@ -127,4 +127,23 @@ class SearchLibrariesTest {
         // Z kontem: E (wybrana), potem C, D; bez konta: B (wybrana), potem A.
         assertEquals(listOf(e, c, d, b, a), order)
     }
+
+    @Test
+    fun `watched libraries outside the known list can be searched`() {
+        val custom = Tenant(name = "Własna", baseUrl = "https://c", institution = "C", view = "C:V")
+
+        val without = buildSearchLibrariesState(emptyList(), override = setOf(custom.searchKey()))
+        val with =
+            buildSearchLibrariesState(
+                emptyList(),
+                override = setOf(custom.searchKey()),
+                extraTenants = listOf(custom, realTenant)
+            )
+
+        assertFalse(custom in without.available)
+        assertTrue(custom in with.available)
+        assertEquals(setOf(custom.searchKey()), with.selectedKeys)
+        // Biblioteka z KNOWN_TENANTS nie dubluje się.
+        assertEquals(1, with.available.count { it.searchKey() == realTenant.searchKey() })
+    }
 }

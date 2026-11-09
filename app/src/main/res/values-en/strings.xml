@@ -315,4 +315,25 @@
     <string name="read_before_year_owner">Read: %1$d (%2$s)</string>
     <string name="read_before_owner">Read (%1$s)</string>
     <string name="read_before">Read before</string>
+    <string name="watchlist_title">To read</string>
+    <string name="watch_chip">🔖 To read</string>
+    <string name="watch_limit_reached">The To read list is full (%1$d titles) — remove one to add a new title.</string>
+    <string name="watch_cannot_add">This title cannot be watched — the catalog gave no record identifier.</string>
+    <string name="watch_empty">The list is empty. Add a title with the To read button on a search result — the app will tell you when it is on the shelf.</string>
+    <string name="watch_status_available">Available: %1$s</string>
+    <string name="watch_status_unavailable">Checked out</string>
+    <string name="watch_status_no_copies">No copies in the catalog</string>
+    <string name="watch_status_not_checked">Not checked yet</string>
+    <string name="watch_checked_at">Checked: %1$s</string>
+    <string name="cd_watch_remove">Remove from the To read list</string>
+    <string name="watch_refresh_failed">Could not check %1$d of %2$d libraries — the state of their titles is unchanged.</string>
+    <string name="watch_hint_notifications">Availability notifications need reminders turned on in Settings.</string>
+    <string name="watch_notify">Notify when watched titles are available</string>
+    <string name="watch_notify_desc">During the daily check the app looks up the To read titles in the catalog anonymously (no login) and notifies you when one appears on the shelf.</string>
+    <string name="guard_channel_watchlist">Watched titles availability</string>
+    <plurals name="watch_notify_title">
+        <item quantity="one">%d watched title is on the shelf</item>
+        <item quantity="other">%d watched titles are on the shelf</item>
+    </plurals>
+    <string name="watch_notify_line">%1$s — %2$s</string>
 </resources>

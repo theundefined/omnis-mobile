@@ -17,7 +17,15 @@ import kotlinx.serialization.Serializable
 
 /** Ustawienia przypomnień. Domyślnie wyłączone — użytkownik włącza je sam w Ustawieniach. */
 @Serializable
-data class GuardSettings(val enabled: Boolean = false, val thresholdDays: Int = DEFAULT_THRESHOLD)
+data class GuardSettings(
+    val enabled: Boolean = false,
+    val thresholdDays: Int = DEFAULT_THRESHOLD,
+    /**
+     * Powiadamiaj, gdy tytuł z listy „Do przeczytania" pojawi się na półce (działa przy włączonym
+     * strażniku).
+     */
+    val watchlistNotify: Boolean = true
+)
 
 const val DEFAULT_THRESHOLD = 3
 

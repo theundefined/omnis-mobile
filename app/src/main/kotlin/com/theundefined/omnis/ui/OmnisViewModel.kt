@@ -24,15 +24,25 @@ import com.theundefined.omnis.data.model.SearchHistoryEntry
 import com.theundefined.omnis.data.model.SearchPage
 import com.theundefined.omnis.data.model.SearchResult
 import com.theundefined.omnis.data.model.Tenant
+import com.theundefined.omnis.data.model.displayTitle
 import com.theundefined.omnis.data.model.pickHoldableItem
 import com.theundefined.omnis.data.model.searchKey
 import com.theundefined.omnis.data.model.seriesSearchTerm
 import com.theundefined.omnis.data.model.seriesVolume
 import com.theundefined.omnis.data.remote.PlaceGeocoder
 import com.theundefined.omnis.data.repository.OmnisRepository
+import com.theundefined.omnis.guard.AddOutcome
 import com.theundefined.omnis.guard.GuardScheduler
 import com.theundefined.omnis.guard.GuardSettings
+import com.theundefined.omnis.guard.WatchRow
+import com.theundefined.omnis.guard.WatchedTitle
+import com.theundefined.omnis.guard.addWatched
+import com.theundefined.omnis.guard.applyChecks
 import com.theundefined.omnis.guard.isPaused
+import com.theundefined.omnis.guard.newWatchedTitle
+import com.theundefined.omnis.guard.removeWatched
+import com.theundefined.omnis.guard.watchIdOf
+import com.theundefined.omnis.guard.watchRows
 import java.text.Collator
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
@@ -54,6 +64,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 data class UiState(
@@ -119,6 +130,18 @@ data class GuardUiState(
     val lastRunAt: Long? = null,
     val pausedAccountIds: Set<String> = emptySet(),
     val isChecking: Boolean = false
+)
+
+/**
+ * Ekran „Do przeczytania". `libraries`/`failedLibraries` — wynik ostatniego ręcznego odświeżenia
+ * (ile bibliotek odpytano i ile nie odpowiedziało; ich tytuły zostały bez zmian).
+ */
+data class WatchlistUiState(
+    val rows: List<WatchRow> = emptyList(),
+    val watchedIds: Set<String> = emptySet(),
+    val isRefreshing: Boolean = false,
+    val libraries: Int = 0,
+    val failedLibraries: Int = 0
 )
 
 /**
@@ -211,9 +234,13 @@ data class SearchLibrariesState(
 internal fun buildSearchLibrariesState(
     accounts: List<Account>,
     override: Set<String>?,
-    demoOverride: Set<String>? = null
+    demoOverride: Set<String>? = null,
+    // Biblioteki obserwowanych tytułów (np. własna, której konto usunięto) — żeby dotknięcie
+    // tytułu na liście mogło go znaleźć.
+    extraTenants: List<Tenant> = emptyList()
 ): SearchLibrariesState {
-    val available = (KNOWN_TENANTS + accounts.map { it.tenant }).distinctBy { it.searchKey() }
+    val available =
+        (KNOWN_TENANTS + accounts.map { it.tenant } + extraTenants).distinctBy { it.searchKey() }
     val keys = available.map { it.searchKey() }.toSet()
     val effectiveOverride = if (isDemoModeActive(accounts)) demoOverride else override
     val selected =
@@ -441,7 +468,8 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         val accounts = _uiState.value.accounts.filter { it.isEnabled }
         // Tryb demo i zwykły się nie mieszają — jak w wyborze bibliotek wyszukiwarki.
         val scoped =
-            if (isDemoModeActive(_uiState.value.accounts)) accounts else accounts.filter { !it.isDemo }
+            if (isDemoModeActive(_uiState.value.accounts)) accounts
+            else accounts.filter { !it.isDemo }
         readBeforeJob?.cancel()
         readBeforeJob =
             viewModelScope.launch(Dispatchers.IO) {
@@ -484,14 +512,21 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
             }
     }
 
+    // Lista „Do przeczytania" (guard/WatchlistLogic) — źródło dla bibliotek wyszukiwarki i ekranu.
+    private val _watchlistTitles = MutableStateFlow(repository.getWatchlist())
+
     private val _searchTenantOverride = MutableStateFlow(repository.getSearchTenantKeys())
     // Wybór bibliotek zmieniony w trybie demo — tylko w pamięci, żeby nie nadpisać zwykłego
     // (zapisanego) wyboru. Czyszczony przy wejściu do trybu demo i przy każdym jego opuszczeniu
     // (refreshAccounts), także przez ręczne wyłączenie konta demo.
     private val _demoSearchTenantOverride = MutableStateFlow<Set<String>?>(null)
     val searchLibraries: StateFlow<SearchLibrariesState> =
-        combine(_uiState, _searchTenantOverride, _demoSearchTenantOverride) { ui, override, demo ->
-                buildSearchLibrariesState(ui.accounts, override, demo)
+        combine(_uiState, _searchTenantOverride, _demoSearchTenantOverride, _watchlistTitles) {
+                ui,
+                override,
+                demo,
+                watched ->
+                buildSearchLibrariesState(ui.accounts, override, demo, watched.map { it.tenant })
             }
             .stateIn(viewModelScope, SharingStarted.Eagerly, currentSearchLibraries())
 
@@ -501,7 +536,8 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         buildSearchLibrariesState(
             _uiState.value.accounts,
             _searchTenantOverride.value,
-            _demoSearchTenantOverride.value
+            _demoSearchTenantOverride.value,
+            _watchlistTitles.value.map { it.tenant }
         )
 
     private fun saveSearchTenantSelection(keys: Set<String>) {
@@ -546,7 +582,14 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
 
         data class BulkRenewFinished(val succeeded: Int, val failedTitles: List<String>) :
             UiEvent()
+
+        object WatchlistFull : UiEvent()
+
+        object CannotWatch : UiEvent()
     }
+
+    private val _watchlistUiState = MutableStateFlow(WatchlistUiState())
+    val watchlistUiState: StateFlow<WatchlistUiState> = _watchlistUiState.asStateFlow()
 
     private val _guardUiState = MutableStateFlow(GuardUiState())
     val guardUiState: StateFlow<GuardUiState> = _guardUiState.asStateFlow()
@@ -560,6 +603,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         refreshAllLoans(isManual = false)
         loadGuardState()
         shownGuardRunAt = _guardUiState.value.lastRunAt
+        loadWatchlist()
     }
 
     fun loadGuardState() {
@@ -581,6 +625,8 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
      */
     fun onAppForeground() {
         loadGuardState()
+        // Strażnik mógł w tle zmienić stan obserwowanych tytułów.
+        loadWatchlist()
         val lastRun = _guardUiState.value.lastRunAt
         if (lastRun != shownGuardRunAt && !_uiState.value.isLoading) {
             shownGuardRunAt = lastRun
@@ -598,6 +644,11 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
 
     fun setGuardThreshold(days: Int) {
         repository.saveGuardSettings(repository.getGuardSettings().copy(thresholdDays = days))
+        loadGuardState()
+    }
+
+    fun setWatchlistNotify(enabled: Boolean) {
+        repository.saveGuardSettings(repository.getGuardSettings().copy(watchlistNotify = enabled))
         loadGuardState()
     }
 
@@ -1874,6 +1925,108 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
      * Wyszukanie autora/serii kliknięte na wypożyczeniu — w bibliotece, z której ono jest. Wybór
      * bibliotek zmienia się na stałe, tak jak przy ręcznej zmianie w wyszukiwarce.
      */
+    // --- Lista „Do przeczytania" ---
+
+    private fun watchPrefs(titles: List<WatchedTitle>): Map<String, SearchBranchPrefs> =
+        titles
+            .map { it.tenant.searchKey() }
+            .distinct()
+            .associateWith { repository.getSearchBranchPrefs(it) }
+
+    /** Wczytuje listę z dysku i przelicza wiersze (stan z uwzględnieniem preferowanych filii). */
+    fun loadWatchlist() {
+        val titles = repository.getWatchlist()
+        _watchlistTitles.value = titles
+        _watchlistUiState.update {
+            it.copy(
+                rows = watchRows(titles, watchPrefs(titles)),
+                watchedIds = titles.map { t -> t.id }.toSet(),
+                libraries = 0,
+                failedLibraries = 0
+            )
+        }
+    }
+
+    /**
+     * Przełącznik przy wyniku wyszukiwania: dodaje tytuł (na poziomie dzieła, z pełnego wyniku
+     * sekcji, nie z przefiltrowanej karty) albo go usuwa. Limit i duplikaty — [addWatched].
+     */
+    fun toggleWatch(tenantKey: String, result: SearchResult) {
+        val tenant = searchTargets[tenantKey] ?: return
+        val full =
+            _searchUiState.value.tenantSections
+                .find { it.tenantKey == tenantKey }
+                ?.results
+                ?.firstOrNull { watchIdOf(tenantKey, it) == watchIdOf(tenantKey, result) } ?: result
+        val mediaTypes = _searchUiState.value.effectiveMediaTypes()
+        val id = watchIdOf(tenantKey, full)
+        viewModelScope.launch(Dispatchers.IO) {
+            val prefs = repository.getSearchBranchPrefs(tenantKey)
+            var event: UiEvent? = null
+            repository.updateWatchlist { current ->
+                if (current.any { it.id == id }) return@updateWatchlist removeWatched(current, id)
+                val item =
+                    newWatchedTitle(tenant, full, mediaTypes, System.currentTimeMillis(), prefs)
+                if (item == null) {
+                    event = UiEvent.CannotWatch
+                    return@updateWatchlist current
+                }
+                val (updated, outcome) = addWatched(current, item)
+                if (outcome == AddOutcome.LIMIT_REACHED) event = UiEvent.WatchlistFull
+                updated
+            }
+            loadWatchlist()
+            event?.let { _events.emit(it) }
+        }
+    }
+
+    fun unwatch(id: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.updateWatchlist { removeWatched(it, id) }
+            loadWatchlist()
+        }
+    }
+
+    /**
+     * Ręczne odświeżenie: jedno zapytanie o dostępność na bibliotekę (anonimowo). Wynik nakładany
+     * na świeżo odczytaną listę; biblioteka, która nie odpowiedziała, zostawia swoje tytuły bez
+     * zmian. Nie wysyła powiadomień — użytkownik od razu widzi stan.
+     */
+    fun refreshWatchlist() {
+        if (_watchlistUiState.value.isRefreshing) return
+        val titles = repository.getWatchlist()
+        if (titles.isEmpty()) return
+        _watchlistUiState.update { it.copy(isRefreshing = true) }
+        viewModelScope.launch {
+            val fetch = repository.fetchWatchlistDeliveries(titles)
+            withContext(Dispatchers.IO) {
+                val prefs = watchPrefs(titles)
+                val now = System.currentTimeMillis()
+                repository.updateWatchlist {
+                    applyChecks(it, fetch.deliveries, prefs, now, notify = false).titles
+                }
+                loadWatchlist()
+            }
+            _watchlistUiState.update {
+                it.copy(
+                    isRefreshing = false,
+                    libraries = fetch.libraries,
+                    failedLibraries = fetch.failedLibraries
+                )
+            }
+        }
+    }
+
+    /**
+     * Dotknięcie tytułu na liście: wyszukiwarka z jego tytułem w jego bibliotece (tam jest
+     * „Zarezerwuj"). Sam tytuł, bez autora — Primo `contains` wymaga wszystkich słów, a zapis
+     * autora bywa niejednolity ("Prus, Bolesław (1847-1912)").
+     */
+    fun searchWatched(title: WatchedTitle) {
+        saveSearchTenantSelection(setOf(title.tenant.searchKey()))
+        runSearch(displayTitle(title.title))
+    }
+
     fun searchFromLoan(loan: Loan, query: String, field: SearchField) {
         val tenant = _uiState.value.accounts.find { it.id == loan.accountId }?.tenant
         if (tenant != null) {

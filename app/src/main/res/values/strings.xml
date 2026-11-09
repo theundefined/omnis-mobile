@@ -329,4 +329,27 @@
     <string name="read_before_year_owner">Czytane: %1$d (%2$s)</string>
     <string name="read_before_owner">Czytane (%1$s)</string>
     <string name="read_before">Czytane wcześniej</string>
+    <string name="watchlist_title">Do przeczytania</string>
+    <string name="watch_chip">🔖 Do przeczytania</string>
+    <string name="watch_limit_reached">Lista „Do przeczytania” jest pełna (%1$d tytułów) — usuń jakiś, żeby dodać nowy.</string>
+    <string name="watch_cannot_add">Tego tytułu nie da się obserwować — katalog nie podał identyfikatora rekordu.</string>
+    <string name="watch_empty">Lista jest pusta. Dodaj tytuł przyciskiem „Do przeczytania” przy wyniku wyszukiwania — aplikacja powie, gdy będzie na półce.</string>
+    <string name="watch_status_available">Dostępna: %1$s</string>
+    <string name="watch_status_unavailable">Wypożyczona</string>
+    <string name="watch_status_no_copies">Brak egzemplarzy w katalogu</string>
+    <string name="watch_status_not_checked">Nie sprawdzano</string>
+    <string name="watch_checked_at">Sprawdzono: %1$s</string>
+    <string name="cd_watch_remove">Usuń z listy „Do przeczytania”</string>
+    <string name="watch_refresh_failed">Nie udało się sprawdzić %1$d z %2$d bibliotek — stan ich tytułów bez zmian.</string>
+    <string name="watch_hint_notifications">Powiadomienia o dostępności wymagają włączonych przypomnień w Ustawieniach.</string>
+    <string name="watch_notify">Powiadamiaj o dostępności obserwowanych</string>
+    <string name="watch_notify_desc">Przy codziennym sprawdzeniu aplikacja zagląda anonimowo (bez logowania) do katalogu po tytuły z listy „Do przeczytania” i powiadamia, gdy któryś pojawi się na półce.</string>
+    <string name="guard_channel_watchlist">Dostępność obserwowanych</string>
+    <plurals name="watch_notify_title">
+        <item quantity="one">%d obserwowany tytuł jest na półce</item>
+        <item quantity="few">%d obserwowane tytuły są na półce</item>
+        <item quantity="many">%d obserwowanych tytułów jest na półce</item>
+        <item quantity="other">%d obserwowanych tytułów jest na półce</item>
+    </plurals>
+    <string name="watch_notify_line">%1$s — %2$s</string>
 </resources>

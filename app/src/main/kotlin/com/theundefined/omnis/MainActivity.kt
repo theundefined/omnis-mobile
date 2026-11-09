@@ -18,10 +18,10 @@ import com.theundefined.omnis.data.local.AccountManager
 import com.theundefined.omnis.data.repository.OmnisRepository
 import com.theundefined.omnis.guard.GuardScheduler
 import com.theundefined.omnis.ui.OmnisViewModel
-import com.theundefined.omnis.ui.queryFromSharedText
 import com.theundefined.omnis.ui.components.MainScreen
 import com.theundefined.omnis.ui.components.NavRequest
 import com.theundefined.omnis.ui.components.SearchRequest
+import com.theundefined.omnis.ui.queryFromSharedText
 import com.theundefined.omnis.ui.theme.OmnisTheme
 
 class MainActivity : ComponentActivity() {
@@ -85,6 +85,7 @@ class MainActivity : ComponentActivity() {
             ACTION_SCAN_ISBN -> scanRequests++
             ACTION_OPEN_LOANS -> navRequest = NavRequest("main", ++navSeq)
             ACTION_OPEN_HOLDS -> navRequest = NavRequest("holds", ++navSeq)
+            ACTION_OPEN_WATCHLIST -> navRequest = NavRequest("watchlist", ++navSeq)
             ACTION_OPEN_SETTINGS -> navRequest = NavRequest("settings", ++navSeq)
             // Zapytanie to wyłącznie tekst — ShareReceiverActivity już je oczyściła, ale ta akcja
             // jest osiągalna dla każdej aplikacji, więc traktujemy je jak dane, nie polecenie.
@@ -104,6 +105,7 @@ class MainActivity : ComponentActivity() {
         // Kliknięcia powiadomień strażnika terminów (guard/GuardNotifier).
         const val ACTION_OPEN_LOANS = "com.theundefined.omnis.action.OPEN_LOANS"
         const val ACTION_OPEN_HOLDS = "com.theundefined.omnis.action.OPEN_HOLDS"
+        const val ACTION_OPEN_WATCHLIST = "com.theundefined.omnis.action.OPEN_WATCHLIST"
         const val ACTION_OPEN_SETTINGS = "com.theundefined.omnis.action.OPEN_SETTINGS"
 
         // „Szukaj w Omnis" z innych aplikacji (ShareReceiverActivity → MainActivity).

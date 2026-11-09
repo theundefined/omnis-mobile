@@ -8,11 +8,13 @@ import com.theundefined.omnis.data.model.Account
 import com.theundefined.omnis.data.model.Hold
 import com.theundefined.omnis.data.model.Loan
 import com.theundefined.omnis.data.model.parseFlexibleDate
+import com.theundefined.omnis.data.model.searchKey
 import com.theundefined.omnis.data.repository.LoginRejectedException
 import com.theundefined.omnis.data.repository.OmnisRepository
 import com.theundefined.omnis.ui.holdDeadline
 import com.theundefined.omnis.ui.isHoldDeadlineUrgent
 import java.time.LocalDate
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -173,11 +175,72 @@ class DueDateWorker(context: Context, params: WorkerParameters) : CoroutineWorke
             )
         accountManager.saveGuardState(state)
 
-        // Żadne konto nie odpowiedziało z powodu sieci/serwera — spróbuj później (backoff).
-        if (checked > 0 && networkFailures == checked && runAttemptCount < MAX_ATTEMPTS) {
+        // Lista „Do przeczytania": anonimowo, więc działa też bez żadnego konta. Po zapisie stanu
+        // kont — błąd tutaj nie może zmarnować wyniku logowań.
+        var watchLibraries = 0
+        var watchFailed = 0
+        if (settings.watchlistNotify) {
+            try {
+                val (libraries, failed) = checkWatchlist(repository, notifier)
+                watchLibraries = libraries
+                watchFailed = failed
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Nieoczekiwany błąd listy nie psuje przebiegu; jutro spróbujemy znowu.
+            }
+        }
+
+        // Sieć/serwer nie odpowiedziały — spróbuj później (backoff). Konta: jak dotąd, tylko gdy
+        // żadne się nie zalogowało (powtórka nie zmarnuje logowań). Lista „Do przeczytania" sama
+        // wyzwala powtórkę tylko wtedy, gdy nie było kont do sprawdzenia.
+        val accountsFailed = checked > 0 && networkFailures == checked
+        val watchlistOnlyFailed =
+            checked == 0 && watchLibraries > 0 && watchFailed == watchLibraries
+        if ((accountsFailed || watchlistOnlyFailed) && runAttemptCount < MAX_ATTEMPTS) {
             return Result.retry()
         }
         return Result.success()
+    }
+
+    /**
+     * Sprawdza listę „Do przeczytania" (jedno zapytanie o dostępność na bibliotekę, bez logowania)
+     * i powiadamia o tytułach, które pojawiły się na półce. Zwraca (biblioteki sprawdzane, z
+     * błędem). Błąd biblioteki zostawia jej tytuły bez zmian. Zapis idzie przez
+     * [OmnisRepository.updateWatchlist] na świeżo odczytanej liście, więc zmiany z aplikacji w
+     * międzyczasie nie przepadają.
+     */
+    private suspend fun checkWatchlist(
+        repository: OmnisRepository,
+        notifier: GuardNotifier
+    ): Pair<Int, Int> {
+        val titles = repository.getWatchlist()
+        if (titles.isEmpty()) return 0 to 0
+        val fetch = repository.fetchWatchlistDeliveries(titles)
+        if (fetch.deliveries.isEmpty()) return fetch.libraries to fetch.failedLibraries
+
+        val prefs =
+            titles
+                .map { it.tenant.searchKey() }
+                .distinct()
+                .associateWith { repository.getSearchBranchPrefs(it) }
+        var toNotify = emptyList<WatchedTitle>()
+        val now = System.currentTimeMillis()
+        repository.updateWatchlist { current ->
+            val outcome = applyChecks(current, fetch.deliveries, prefs, now, notify = true)
+            toNotify = outcome.toNotify
+            outcome.titles
+        }
+        if (toNotify.isNotEmpty()) {
+            val lines = toNotify.map { it to countedBranchesIn(it, prefs) }
+            // Flaga „czekamy na dostępność" gaśnie tylko po wysłanym powiadomieniu — bez zgody na
+            // powiadomienia ponowimy przy następnym przebiegu.
+            if (notifier.notifyWatchlist(lines)) {
+                val ids = toNotify.map { it.id }.toSet()
+                repository.updateWatchlist { markNotified(it, ids) }
+            }
+        }
+        return fetch.libraries to fetch.failedLibraries
     }
 
     companion object {

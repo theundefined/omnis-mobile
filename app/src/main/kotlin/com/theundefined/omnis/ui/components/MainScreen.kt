@@ -135,6 +135,7 @@ fun MainScreen(
                 currentScreen == "history" ||
                 currentScreen == "stats" ||
                 currentScreen == "holds" ||
+                currentScreen == "watchlist" ||
                 currentScreen == "search" ||
                 currentScreen == "card"
     ) {
@@ -189,6 +190,18 @@ fun MainScreen(
 
     if (currentScreen == "holds") {
         HoldsScreen(viewModel = viewModel, onBack = { currentScreen = "main" })
+        return
+    }
+
+    if (currentScreen == "watchlist") {
+        WatchlistScreen(
+            viewModel = viewModel,
+            onBack = { currentScreen = "main" },
+            onOpen = { title ->
+                viewModel.searchWatched(title)
+                currentScreen = "search"
+            }
+        )
         return
     }
 
@@ -291,6 +304,13 @@ fun MainScreen(
                                     onClick = {
                                         showMoreMenu = false
                                         currentScreen = "holds"
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.watchlist_title)) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        currentScreen = "watchlist"
                                     }
                                 )
                                 DropdownMenuItem(

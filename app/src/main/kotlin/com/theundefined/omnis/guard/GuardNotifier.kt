@@ -16,6 +16,7 @@ import com.theundefined.omnis.R
 import com.theundefined.omnis.data.model.Account
 import com.theundefined.omnis.data.model.Hold
 import com.theundefined.omnis.data.model.Loan
+import com.theundefined.omnis.data.model.displayTitle
 import com.theundefined.omnis.ui.holdDeadline
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -56,6 +57,11 @@ class GuardNotifier(private val context: Context) {
                 NotificationChannel(
                     CHANNEL_HOLDS,
                     context.getString(R.string.guard_channel_holds),
+                    NotificationManager.IMPORTANCE_DEFAULT
+                ),
+                NotificationChannel(
+                    CHANNEL_WATCHLIST,
+                    context.getString(R.string.guard_channel_watchlist),
                     NotificationManager.IMPORTANCE_DEFAULT
                 ),
                 NotificationChannel(
@@ -143,6 +149,32 @@ class GuardNotifier(private val context: Context) {
         val title =
             context.resources.getQuantityString(R.plurals.holds_ready, holds.size, holds.size)
         return post(ID_HOLDS, CHANNEL_HOLDS, title, lines, MainActivity.ACTION_OPEN_HOLDS)
+    }
+
+    /** Tytuły z listy „Do przeczytania", które pojawiły się na półce (z filiami, w których są). */
+    fun notifyWatchlist(available: List<Pair<WatchedTitle, List<String>>>): Boolean {
+        if (available.isEmpty()) return false
+        val lines =
+            available.map { (title, branches) ->
+                context.getString(
+                    R.string.watch_notify_line,
+                    displayTitle(title.title),
+                    branches.joinToString(", ")
+                )
+            }
+        val title =
+            context.resources.getQuantityString(
+                R.plurals.watch_notify_title,
+                available.size,
+                available.size
+            )
+        return post(
+            ID_WATCHLIST,
+            CHANNEL_WATCHLIST,
+            title,
+            lines,
+            MainActivity.ACTION_OPEN_WATCHLIST
+        )
     }
 
     fun notifyFines(increased: List<Pair<Account, Double>>): Boolean {
@@ -238,10 +270,12 @@ class GuardNotifier(private val context: Context) {
         const val CHANNEL_DUE = "guard_due"
         const val CHANNEL_HOLDS = "guard_holds"
         const val CHANNEL_ACCOUNT = "guard_account"
+        const val CHANNEL_WATCHLIST = "guard_watchlist"
         private const val ID_LOANS = 1001
         private const val ID_HOLDS = 1002
         private const val ID_FINES = 1003
         private const val ID_LOGIN = 1004
+        private const val ID_WATCHLIST = 1005
         private const val MAX_LINES = 6
         private val DATE = DateTimeFormatter.ofPattern("dd.MM")
     }

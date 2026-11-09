@@ -31,6 +31,8 @@ import com.theundefined.omnis.data.model.SearchResult
 import com.theundefined.omnis.data.model.Tenant
 import com.theundefined.omnis.data.model.searchKey
 import com.theundefined.omnis.data.model.seriesSearchTerm
+import com.theundefined.omnis.guard.MAX_WATCHED
+import com.theundefined.omnis.guard.watchIdOf
 import com.theundefined.omnis.ui.OmnisViewModel
 import com.theundefined.omnis.ui.ReadBeforeEntry
 import com.theundefined.omnis.ui.ReadBeforeIndex
@@ -76,6 +78,22 @@ fun SearchScreen(
     val readBeforeIndex by viewModel.readBeforeIndex.collectAsStateWithLifecycle()
     // Indeks z lokalnych cache'ów — przebudowa przy wejściu i gdy zmieni się cache wypożyczeń.
     LaunchedEffect(uiState.accounts, uiState.loans) { viewModel.refreshReadBeforeIndex() }
+
+    // Odmowa dodania do „Do przeczytania" (limit / brak id rekordu) — komunikat tutaj, bo tu jest
+    // przycisk.
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { event ->
+            val message =
+                when (event) {
+                    is OmnisViewModel.UiEvent.WatchlistFull ->
+                        context.getString(R.string.watch_limit_reached, MAX_WATCHED)
+                    is OmnisViewModel.UiEvent.CannotWatch ->
+                        context.getString(R.string.watch_cannot_add)
+                    else -> null
+                }
+            message?.let { snackbarHostState.showSnackbar(it) }
+        }
+    }
 
     fun triggerSearch() {
         viewModel.runSearch(queryInput, searchField)
@@ -589,6 +607,7 @@ private fun SearchTenantSectionView(
             remember(uiState.accounts, section.tenantKey) {
                 holdAccounts(uiState.accounts, section.tenantKey).isNotEmpty()
             }
+        val watchlist by viewModel.watchlistUiState.collectAsStateWithLifecycle()
         section.filteredResults(mediaTypes).forEach { result ->
             SearchResultCard(
                 result,
@@ -601,6 +620,8 @@ private fun SearchTenantSectionView(
                 onShowMap = { viewModel.showBranchMap(result, section.tenantLabel) },
                 readBefore = readBeforeIndex.find(result),
                 showReadBeforeOwner = showReadBeforeOwner,
+                watched = watchIdOf(section.tenantKey, result) in watchlist.watchedIds,
+                onToggleWatch = { viewModel.toggleWatch(section.tenantKey, result) },
                 onAuthorClick = onAuthorClick,
                 onSeriesClick = onSeriesClick
             )
@@ -678,6 +699,8 @@ private fun SearchResultCard(
     onShowMap: () -> Unit,
     readBefore: ReadBeforeEntry?,
     showReadBeforeOwner: Boolean,
+    watched: Boolean,
+    onToggleWatch: () -> Unit,
     onAuthorClick: (String) -> Unit,
     onSeriesClick: (String) -> Unit
 ) {
@@ -695,8 +718,7 @@ private fun SearchResultCard(
                         entry.currentlyBorrowed -> stringResource(R.string.read_before_current)
                         entry.year != null && owner != null ->
                             stringResource(R.string.read_before_year_owner, entry.year, owner)
-                        entry.year != null ->
-                            stringResource(R.string.read_before_year, entry.year)
+                        entry.year != null -> stringResource(R.string.read_before_year, entry.year)
                         owner != null -> stringResource(R.string.read_before_owner, owner)
                         else -> stringResource(R.string.read_before)
                     }
@@ -733,6 +755,15 @@ private fun SearchResultCard(
                         color = MaterialTheme.colorScheme.tertiary
                     )
                 }
+
+            // Obserwacja na poziomie dzieła (nie wydania): powiadomienie, gdy tytuł będzie na
+            // półce.
+            FilterChip(
+                selected = watched,
+                onClick = onToggleWatch,
+                label = { Text(stringResource(R.string.watch_chip)) },
+                modifier = Modifier.padding(top = 4.dp)
+            )
 
             result.versions.forEach { version ->
                 // key() na mmsid — bez tego `remember` niżej wiąże się z pozycją w forEach, nie z
