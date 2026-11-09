@@ -71,6 +71,13 @@ fun SearchScreen(
     // Pole wyszukiwania dla NASTĘPNEGO wyszukania. Kliknięcie autora/serii ustawia AUTHOR/SERIES;
     // ręczna edycja tekstu albo zamknięcie chipa pola wraca do ANY (szukanie we wszystkich polach).
     var searchField by remember { mutableStateOf(state.field) }
+    // Zapytanie uruchomione z zewnątrz przy otwartym ekranie („Szukaj w Omnis" → onNewIntent →
+    // runSearch) zmienia state.query/field — pole tekstowe ma to odzwierciedlić. Klucze zmieniają
+    // się tylko przy faktycznym wyszukaniu, więc zwykłe pisanie nie jest nadpisywane.
+    LaunchedEffect(state.query, state.field) {
+        queryInput = state.query
+        searchField = state.field
+    }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -618,7 +625,7 @@ private fun SearchTenantSectionView(
                         }
                     else null,
                 onShowMap = { viewModel.showBranchMap(result, section.tenantLabel) },
-                readBefore = readBeforeIndex.find(result),
+                readBefore = remember(readBeforeIndex, result) { readBeforeIndex.find(result) },
                 showReadBeforeOwner = showReadBeforeOwner,
                 watched = watchIdOf(section.tenantKey, result) in watchlist.watchedIds,
                 onToggleWatch = { viewModel.toggleWatch(section.tenantKey, result) },

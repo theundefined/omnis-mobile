@@ -24,10 +24,10 @@ class RenewActionWorker(context: Context, params: WorkerParameters) :
     override suspend fun doWork(): Result = DueDateWorker.runLock.withLock { run() }
 
     private suspend fun run(): Result {
-        val targets =
+        val decoded =
             inputData.getStringArray(KEY_TARGETS).orEmpty().mapNotNull { RenewTarget.decode(it) }
         val notifier = GuardNotifier(applicationContext)
-        if (targets.isEmpty()) {
+        if (decoded.isEmpty()) {
             notifier.clearRenewPending()
             return Result.success()
         }
@@ -45,6 +45,9 @@ class RenewActionWorker(context: Context, params: WorkerParameters) :
         notifier.ensureChannels()
         val today = LocalDate.now()
         val state = accountManager.getGuardState()
+        // Pod blokadą: cele, których próbę (w tym terminie) już zapisano, odpadają — drugie
+        // dotknięcie przycisku nie wyśle ponownie odmówionego przedłużenia.
+        val targets = notYetAttempted(decoded, state.sent)
         val accounts = guardedAccounts(accountManager.getAccounts())
         val byId = accounts.associateBy { it.id }
 
@@ -112,6 +115,12 @@ class RenewActionWorker(context: Context, params: WorkerParameters) :
             accountManager.saveGuardState(current.copy(sent = current.sent + renewKeys))
         }
         notifier.clearRenewPending()
+        if (renewed.isEmpty() && failed.isEmpty() && unknown.isEmpty()) {
+            // Wszystko już przedłużone / zwrócone / wcześniej próbowane — zamiast zniknąć,
+            // powiadom.
+            notifier.notifyNothingToRenew()
+            return Result.success()
+        }
         notifier.notifyLoans(
             notices = emptyList(),
             renewed = renewed,

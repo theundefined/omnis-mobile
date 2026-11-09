@@ -9,6 +9,7 @@ import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
 import kotlinx.serialization.Serializable
 
@@ -33,6 +34,17 @@ data class GuardSettings(
     /** Auto-przedłużanie na tyle dni przed terminem (dla kont z włączonym auto-przedłużaniem). */
     val autoRenewDays: Int = DEFAULT_AUTO_RENEW_DAYS
 )
+
+/**
+ * Ustawienia z zapisu mogą mieć wartości spoza wyborów z Ustawień (uszkodzony/ręcznie zmieniony
+ * zapis) — wracają wtedy do domyślnych.
+ */
+fun GuardSettings.validated(): GuardSettings =
+    copy(
+        runHour = if (runHour in RUN_HOUR_CHOICES) runHour else DEFAULT_RUN_HOUR,
+        autoRenewDays =
+            if (autoRenewDays in AUTO_RENEW_CHOICES) autoRenewDays else DEFAULT_AUTO_RENEW_DAYS
+    )
 
 const val DEFAULT_THRESHOLD = 3
 
@@ -64,6 +76,16 @@ fun delayUntilNextRun(now: LocalDateTime, runHour: Int = DEFAULT_RUN_HOUR): Dura
     var next = now.toLocalDate().atTime(LocalTime.of(normalizedRunHour(runHour), 0))
     if (!next.isAfter(now)) next = next.plusDays(1)
     return Duration.between(now, next)
+}
+
+/**
+ * Moment (epoch ms) najbliższego przebiegu o [runHour] — z uwzględnieniem strefy i zmiany czasu.
+ */
+fun nextRunMillis(now: ZonedDateTime, runHour: Int = DEFAULT_RUN_HOUR): Long {
+    val time = LocalTime.of(normalizedRunHour(runHour), 0)
+    var next = now.toLocalDate().atTime(time).atZone(now.zone)
+    if (!next.isAfter(now)) next = now.toLocalDate().plusDays(1).atTime(time).atZone(now.zone)
+    return next.toInstant().toEpochMilli()
 }
 
 /** Po tylu kolejnych odrzuceniach logowania (dzień po dniu) — powiadomienie i wstrzymanie konta. */
@@ -131,6 +153,10 @@ object GuardKeys {
 
     /** Próba auto-przedłużenia — jedna na termin, żeby nie ponawiać odmowy codziennie. */
     fun renew(loan: Loan): String = "renew|${loan.accountId}|${loan.id}|${loan.dueDate}"
+
+    /** Ten sam klucz dla celu akcji „Przedłuż" (konto + pozycja + termin z powiadomienia). */
+    fun renew(target: RenewTarget): String =
+        "renew|${target.accountId}|${target.loanId}|${target.dueDate}"
 
     /**
      * Gotowa rezerwacja; wraca, gdy termin odbioru robi się pilny (jak baner na ekranie głównym).
@@ -260,6 +286,10 @@ data class ActionPlan(
     /** Wciąż z tym samym terminem, ale już nieprzedłużalne (np. limit) — zgłaszamy jako porażkę. */
     val blocked: List<Loan>
 )
+
+/** Cele, których próby przedłużenia (w tym terminie) jeszcze nie zapisano w [attempted]. */
+fun notYetAttempted(targets: List<RenewTarget>, attempted: Set<String>): List<RenewTarget> =
+    targets.filter { GuardKeys.renew(it) !in attempted }
 
 fun planActionRenewals(targets: List<RenewTarget>, current: List<Loan>): ActionPlan {
     val toRenew = mutableListOf<Loan>()

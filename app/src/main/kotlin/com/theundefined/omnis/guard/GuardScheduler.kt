@@ -10,6 +10,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import java.time.LocalDateTime
+import java.time.ZonedDateTime
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
@@ -21,14 +22,16 @@ import java.util.concurrent.TimeUnit
 object GuardScheduler {
     private const val PERIODIC = "due_date_guard"
     const val CHECK_NOW = "due_date_guard_now"
+    private const val RENEW_ACTION = "guard_renew_action"
 
     private val constraints =
         Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
 
     /**
      * Przy starcie aplikacji: KEEP, żeby nie przesuwać zaplanowanego przebiegu przy każdym
-     * otwarciu. Po włączeniu lub zmianie godziny w Ustawieniach — `replace`, żeby od razu liczyć od
-     * najbliższej wybranej godziny.
+     * otwarciu. Po włączeniu w Ustawieniach — `replace`, żeby od razu liczyć od najbliższej
+     * wybranej godziny. Zmianę godziny obsługuje [updateRunHour] (bez zabijania trwającego
+     * przebiegu).
      */
     fun schedule(context: Context, runHour: Int, replace: Boolean = false) {
         val request =
@@ -48,6 +51,21 @@ object GuardScheduler {
             )
     }
 
+    /**
+     * Zmiana godziny: UPDATE nie przerywa trwającego przebiegu (CANCEL_AND_REENQUEUE by go zabiło),
+     * ale sam UPDATE zostawia stary harmonogram — dlatego jawnie ustawiamy czas najbliższego
+     * przebiegu ([nextRunMillis]).
+     */
+    fun updateRunHour(context: Context, runHour: Int) {
+        val request =
+            PeriodicWorkRequestBuilder<DueDateWorker>(24, TimeUnit.HOURS)
+                .setConstraints(constraints)
+                .setNextScheduleTimeOverride(nextRunMillis(ZonedDateTime.now(), runHour))
+                .build()
+        WorkManager.getInstance(context)
+            .enqueueUniquePeriodicWork(PERIODIC, ExistingPeriodicWorkPolicy.UPDATE, request)
+    }
+
     fun cancel(context: Context) {
         WorkManager.getInstance(context).cancelUniqueWork(PERIODIC)
     }
@@ -64,9 +82,10 @@ object GuardScheduler {
     }
 
     /**
-     * Akcja „Przedłuż" z powiadomienia: jednorazowa praca (wymaga sieci). Bez unikalnej nazwy —
-     * kolejne zlecenia i tak serializuje wspólna blokada, a plan ([planActionRenewals]) pomija
-     * pozycje przedłużone w międzyczasie, więc powtórka nie przedłuży dwa razy.
+     * Akcja „Przedłuż" z powiadomienia: jednorazowa praca (wymaga sieci), unikalna z
+     * APPEND_OR_REPLACE — kolejne dotknięcia ustawiają się w kolejkę. Plan ([planActionRenewals])
+     * pomija pozycje przedłużone w międzyczasie i te, których próbę już zapisano, więc powtórka nie
+     * przedłuży ani nie ponowi odmowy.
      */
     fun renewFromNotification(context: Context, targets: List<RenewTarget>) {
         val request =
@@ -81,6 +100,7 @@ object GuardScheduler {
                         .build()
                 )
                 .build()
-        WorkManager.getInstance(context).enqueue(request)
+        WorkManager.getInstance(context)
+            .enqueueUniqueWork(RENEW_ACTION, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
     }
 }

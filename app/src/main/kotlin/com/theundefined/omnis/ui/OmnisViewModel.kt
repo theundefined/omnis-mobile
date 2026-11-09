@@ -648,12 +648,12 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         loadGuardState()
     }
 
-    /** Zmiana godziny przeplanowuje pracę okresową (replace) od najbliższej wybranej godziny. */
+    /** Zmiana godziny przesuwa pracę okresową (UPDATE) bez przerywania trwającego przebiegu. */
     fun setGuardRunHour(hour: Int) {
         val settings = repository.getGuardSettings().copy(runHour = hour)
         repository.saveGuardSettings(settings)
         if (settings.enabled) {
-            GuardScheduler.schedule(getApplication<Application>(), hour, replace = true)
+            GuardScheduler.updateRunHour(getApplication<Application>(), hour)
         }
         loadGuardState()
     }
@@ -1349,10 +1349,9 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
             ) {
                 historyFlatLoans = all
                 historyCursors = historyCursors + newCursors
-                finishHistoryUpdate(emptyList())
+                finishHistoryUpdate(failedNames)
             }
 
-            val rows = sortForExport(filterLoans(all, filter))
             val header =
                 HistoryCsvHeader(
                     title = app.getString(R.string.csv_title),
@@ -1365,7 +1364,12 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
                     person = app.getString(R.string.csv_person),
                     barcode = app.getString(R.string.csv_barcode)
                 )
-            val csv = historyToCsv(rows, header)
+            // Filtrowanie, sortowanie i składanie CSV przy dużej historii nie na wątku głównym.
+            val (rows, csv) =
+                withContext(Dispatchers.Default) {
+                    val sorted = sortForExport(filterLoans(all, filter))
+                    sorted to historyToCsv(sorted, header)
+                }
             val written =
                 withContext(Dispatchers.IO) {
                     runCatching {
@@ -1409,7 +1413,10 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
         // (force)refreshu — inaczej "Załaduj więcej" kliknięte w tym oknie odpytałoby o tę samą
         // stronę (offset=1), którą loadHistory() właśnie pobiera, i wygenerowało duplikaty
         // (a duplikaty to złamany klucz w LazyColumn — patrz `LoanList`).
+        // Eksport dociąga i zapisuje całą historię — równoległe doładowanie dopisałoby strony do
+        // już kompletnego cache'u (duplikaty).
         if (_historyUiState.value.isLoading || _historyUiState.value.isLoadingMore) return
+        if (_historyUiState.value.isExporting) return
         if (!_historyUiState.value.canLoadMore) return
         val generation = historyGeneration
         viewModelScope.launch {
@@ -1432,14 +1439,18 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
                         val nextOffset = cursor.nextOffset + OmnisRepository.HISTORY_PAGE_SIZE
                         collectedCursors[account.id] = HistoryCursor(nextOffset, hasMore)
                         val existingCache = repository.getCachedHistory(account.id)
-                        repository.saveCachedHistory(
-                            account.id,
-                            HistoryCacheEntry(
-                                loans = existingCache.loans + loans,
-                                nextOffset = nextOffset,
-                                hasMore = hasMore
+                        // Cache kompletny w międzyczasie (pełne pobranie) — dopisanie strony
+                        // zapisałoby duplikaty.
+                        if (existingCache.hasMore && existingCache.fullFetchedAtMillis == null) {
+                            repository.saveCachedHistory(
+                                account.id,
+                                HistoryCacheEntry(
+                                    loans = existingCache.loans + loans,
+                                    nextOffset = nextOffset,
+                                    hasMore = hasMore
+                                )
                             )
-                        )
+                        }
                     }
                     .onFailure { failedAccountNames.add(account.displayName ?: account.username) }
             }

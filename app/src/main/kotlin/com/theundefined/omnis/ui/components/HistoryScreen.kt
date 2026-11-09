@@ -232,7 +232,10 @@ private fun HistoryFooter(state: HistoryUiState, onLoadMore: () -> Unit) {
             state.isLoading -> {}
             state.isLoadingMore -> CircularProgressIndicator()
             state.canLoadMore ->
-                TextButton(onClick = onLoadMore) { Text(stringResource(R.string.load_more)) }
+                // Podczas eksportu CSV (dociąga całą historię) doładowanie byłoby martwe/groźne.
+                TextButton(onClick = onLoadMore, enabled = !state.isExporting) {
+                    Text(stringResource(R.string.load_more))
+                }
             else ->
                 Text(
                     stringResource(R.string.history_end),

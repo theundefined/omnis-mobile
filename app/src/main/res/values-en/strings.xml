@@ -344,6 +344,7 @@
     <string name="guard_action_renew">Renew</string>
     <string name="guard_renew_pending">Renewing loans…</string>
     <string name="guard_renew_pending_text">The result will appear here once the library is reachable.</string>
+    <string name="guard_renew_nothing">Nothing to renew — due dates are already up to date</string>
     <string name="guard_line_renew_unknown">Could not confirm the renewal: %1$s</string>
 
     <!-- Calendar and export -->

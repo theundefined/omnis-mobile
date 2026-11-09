@@ -3,7 +3,7 @@ package com.theundefined.omnis.ui
 import com.theundefined.omnis.data.model.Loan
 import com.theundefined.omnis.data.model.parseFlexibleDate
 
-private const val BOM = "﻿"
+private const val BOM = "\uFEFF"
 
 /** Nagłówki kolumn CSV w kolejności z [historyToCsv] — lokalizowane, więc z zewnątrz. */
 data class HistoryCsvHeader(
@@ -52,10 +52,18 @@ fun historyToCsv(loans: List<Loan>, header: HistoryCsvHeader): String {
     return sb.toString()
 }
 
-internal fun csvField(value: String): String =
-    if (value.any { it == ',' || it == '"' || it == '\r' || it == '\n' })
-        "\"" + value.replace("\"", "\"\"") + "\""
-    else value
+/**
+ * Pole CSV. Komórka zaczynająca się od `=`, `+`, `-`, `@`, tabulatora lub CR bywa w arkuszu
+ * wykonana jak formuła (wstrzyknięcie przez tytuł/autora z katalogu) — dostaje przedrostek `'`.
+ */
+internal fun csvField(value: String): String {
+    val safe = if (value.firstOrNull() in FORMULA_PREFIXES) "'$value" else value
+    return if (safe.any { it == ',' || it == '"' || it == '\r' || it == '\n' })
+        "\"" + safe.replace("\"", "\"\"") + "\""
+    else safe
+}
+
+private val FORMULA_PREFIXES = setOf('=', '+', '-', '@', '\t', '\r')
 
 private fun isoDate(raw: String): String = parseFlexibleDate(raw)?.toString() ?: raw
 

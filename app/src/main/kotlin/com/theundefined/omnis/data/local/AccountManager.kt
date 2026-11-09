@@ -7,6 +7,7 @@ import com.theundefined.omnis.data.model.Account
 import com.theundefined.omnis.guard.GuardSettings
 import com.theundefined.omnis.guard.GuardState
 import com.theundefined.omnis.guard.WatchedTitle
+import com.theundefined.omnis.guard.validated
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -200,7 +201,7 @@ class AccountManager(context: Context) {
     fun getGuardSettings(): GuardSettings {
         val jsonStr = sharedPreferences.getString("guard_settings", null) ?: return GuardSettings()
         return try {
-            json.decodeFromString<GuardSettings>(jsonStr)
+            json.decodeFromString<GuardSettings>(jsonStr).validated()
         } catch (e: Exception) {
             GuardSettings()
         }

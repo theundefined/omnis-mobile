@@ -199,7 +199,11 @@ class DueDateWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         // kont — błąd tutaj nie może zmarnować wyniku logowań.
         var watchLibraries = 0
         var watchFailed = 0
-        if (settings.watchlistNotify) {
+        // Wszystkie konta padły na sieci i będzie powtórka — lista „Do przeczytania" poczeka na nią
+        // (bez kont, checked == 0, sprawdzamy ją zawsze).
+        val accountsFailed = checked > 0 && networkFailures == checked
+        val willRetry = accountsFailed && runAttemptCount < MAX_ATTEMPTS
+        if (settings.watchlistNotify && !willRetry) {
             try {
                 val (libraries, failed) = checkWatchlist(repository, notifier)
                 watchLibraries = libraries
@@ -217,7 +221,6 @@ class DueDateWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         // Sieć/serwer nie odpowiedziały — spróbuj później (backoff). Konta: jak dotąd, tylko gdy
         // żadne się nie zalogowało (powtórka nie zmarnuje logowań). Lista „Do przeczytania" sama
         // wyzwala powtórkę tylko wtedy, gdy nie było kont do sprawdzenia.
-        val accountsFailed = checked > 0 && networkFailures == checked
         val watchlistOnlyFailed =
             checked == 0 && watchLibraries > 0 && watchFailed == watchLibraries
         if ((accountsFailed || watchlistOnlyFailed) && runAttemptCount < MAX_ATTEMPTS) {
@@ -247,19 +250,18 @@ class DueDateWorker(context: Context, params: WorkerParameters) : CoroutineWorke
                 .map { it.tenant.searchKey() }
                 .distinct()
                 .associateWith { repository.getSearchBranchPrefs(it) }
-        var toNotify = emptyList<WatchedTitle>()
+        var lines = emptyList<Pair<WatchedTitle, List<String>>>()
         val now = System.currentTimeMillis()
         repository.updateWatchlist { current ->
             val outcome = applyChecks(current, fetch.deliveries, prefs, now, notify = true)
-            toNotify = outcome.toNotify
+            lines = outcome.toNotify.map { it to outcome.notifyBranches[it.id].orEmpty() }
             outcome.titles
         }
-        if (toNotify.isNotEmpty()) {
-            val lines = toNotify.map { it to countedBranchesIn(it, prefs) }
+        if (lines.isNotEmpty()) {
             // Flaga „czekamy na dostępność" gaśnie tylko po wysłanym powiadomieniu — bez zgody na
             // powiadomienia ponowimy przy następnym przebiegu.
             if (notifier.notifyWatchlist(lines)) {
-                val ids = toNotify.map { it.id }.toSet()
+                val ids = lines.map { it.first.id }.toSet()
                 repository.updateWatchlist { markNotified(it, ids) }
             }
         }

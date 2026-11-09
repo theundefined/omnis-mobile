@@ -35,7 +35,7 @@ class HistoryExportTest {
     @Test
     fun bomHeaderAndCrlf() {
         val csv = historyToCsv(emptyList(), header)
-        assertEquals("﻿T,A,LD,DD,RD,Lib,Br,P,BC\r\n", csv)
+        assertEquals("\uFEFFT,A,LD,DD,RD,Lib,Br,P,BC\r\n", csv)
     }
 
     @Test
@@ -53,6 +53,27 @@ class HistoryExportTest {
         val csv =
             historyToCsv(listOf(loan("Ala, \"kot\"\nI pies", null, returnDate = null)), header)
         assertTrue(csv.contains("\"Ala, \"\"kot\"\"\nI pies\",,2026-10-01,2026-11-01,,"))
+    }
+
+    @Test
+    fun formulaLikeCellsGetApostrophePrefix() {
+        val csv =
+            historyToCsv(
+                listOf(
+                    loan("=HYPERLINK(\"http://x\")", "+1", returnDate = null),
+                    loan("-2", "@SUM(A1)"),
+                    loan("\tTab", "\rCR"),
+                    loan("Zwykły", "Jan - Kowalski")
+                ),
+                header
+            )
+        assertTrue(csv.contains("\"'=HYPERLINK(\"\"http://x\"\")\",'+1,"))
+        assertTrue(csv.contains("'-2,'@SUM(A1),"))
+        assertTrue(csv.contains("'\tTab,\"'\rCR\","))
+        // Środek tekstu i zwykłe pola bez zmian.
+        assertTrue(csv.contains("Zwykły,Jan - Kowalski,"))
+        assertEquals("'=1", csvField("=1"))
+        assertEquals("abc", csvField("abc"))
     }
 
     @Test

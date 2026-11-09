@@ -132,7 +132,7 @@ fun newWatchedTitle(
         )
     // Dodany jako niedostępny -> powiadomimy o jego pojawieniu się; dodany jako dostępny -> dopiero
     // po tym, jak zniknie i wróci.
-    return title.copy(awaitingAvailability = countedBranches(title, prefs).isEmpty())
+    return title.copy(awaitingAvailability = countedBranches(title, prefs, known.toSet()).isEmpty())
 }
 
 enum class AddOutcome {
@@ -156,22 +156,38 @@ fun addWatched(
     }
 
 /**
- * Filie, które liczą się jako „dostępne": jeśli użytkownik wybrał w tej bibliotece filie
- * (`!showAllBranches` i niepusty wybór), tylko one. Inaczej niż w wynikach wyszukiwania nie
- * sprawdzamy, czy wybrana filia jest „potwierdzona": zbiór filii znany z kilku obserwowanych
- * tytułów to nie cała biblioteka, więc takie zabezpieczenie wyłączałoby filtr w zwykłym wypadku.
- * Koszt: nazwa filii, której żaden egzemplarz nie nosi, nigdy nie policzy się jako dostępna.
+ * Filie, które liczą się jako „dostępne". Tak jak w wynikach wyszukiwania: wybór użytkownika
+ * przecinamy ze znanymi filiami biblioteki ([libraryBranches] — nazwy faktycznie widziane w
+ * holdingach jej obserwowanych tytułów), a filtr działa tylko przy niepustym przecięciu
+ * (`!showAllBranches`). Wybór, którego żadna znana filia nie potwierdza (np. nazwa spoza
+ * obserwowanych tytułów), nie wycina więc wszystkiego — liczą się wtedy wszystkie filie.
  */
-fun countedBranches(title: WatchedTitle, prefs: SearchBranchPrefs): List<String> {
-    val selection = prefs.selectedBranches
-    val filter = !prefs.showAllBranches && selection.isNotEmpty()
-    return if (filter) title.availableBranches.filter { it in selection }
+fun countedBranches(
+    title: WatchedTitle,
+    prefs: SearchBranchPrefs,
+    libraryBranches: Set<String>
+): List<String> {
+    val effective = prefs.selectedBranches.intersect(libraryBranches)
+    val filter = !prefs.showAllBranches && effective.isNotEmpty()
+    return if (filter) title.availableBranches.filter { it in effective }
     else title.availableBranches
 }
 
-/** [countedBranches] z preferencjami wybranymi po bibliotece tytułu. */
-fun countedBranchesIn(title: WatchedTitle, prefs: Map<String, SearchBranchPrefs>): List<String> =
-    countedBranches(title, prefs[title.tenant.searchKey()] ?: SearchBranchPrefs())
+/** Filie znane z holdingów obserwowanych tytułów danej biblioteki (po `searchKey`). */
+fun libraryBranchesOf(titles: List<WatchedTitle>, tenantKey: String): Set<String> =
+    titles
+        .filter { it.tenant.searchKey() == tenantKey }
+        .flatMapTo(mutableSetOf()) { it.knownBranches }
+
+/** [countedBranches] z preferencjami i znanymi filiami biblioteki tytułu (z listy [all]). */
+fun countedBranchesIn(
+    title: WatchedTitle,
+    prefs: Map<String, SearchBranchPrefs>,
+    all: List<WatchedTitle>
+): List<String> {
+    val key = title.tenant.searchKey()
+    return countedBranches(title, prefs[key] ?: SearchBranchPrefs(), libraryBranchesOf(all, key))
+}
 
 enum class WatchStatus {
     NOT_CHECKED,
@@ -188,7 +204,7 @@ data class WatchRow(val title: WatchedTitle, val status: WatchStatus, val branch
 fun watchRows(titles: List<WatchedTitle>, prefs: Map<String, SearchBranchPrefs>): List<WatchRow> =
     titles
         .map { title ->
-            val branches = countedBranchesIn(title, prefs)
+            val branches = countedBranchesIn(title, prefs, titles)
             val status =
                 when {
                     title.lastCheckedAt == null -> WatchStatus.NOT_CHECKED
@@ -239,7 +255,9 @@ private fun snapshotOf(title: WatchedTitle, delivery: LibraryDelivery): Snapshot
 data class WatchCheckOutcome(
     val titles: List<WatchedTitle>,
     /** Tytuły, o których teraz trzeba powiadomić (ich flaga gaśnie dopiero w [markNotified]). */
-    val toNotify: List<WatchedTitle>
+    val toNotify: List<WatchedTitle>,
+    /** Filie liczone dla każdego z [toNotify] (po id) — do treści powiadomienia. */
+    val notifyBranches: Map<String, List<String>> = emptyMap()
 )
 
 /**
@@ -272,21 +290,23 @@ fun applyChecks(
             )
         }
     val toNotify = mutableListOf<WatchedTitle>()
+    val notifyBranches = mutableMapOf<String, List<String>>()
     val result =
         updated.map { title ->
             if (title.id !in observed) return@map title
-            val counted = countedBranchesIn(title, prefs)
+            val counted = countedBranchesIn(title, prefs, updated)
             when {
                 counted.isEmpty() -> title.copy(awaitingAvailability = true)
                 !title.awaitingAvailability -> title
                 notify -> {
                     toNotify += title
+                    notifyBranches[title.id] = counted
                     title
                 }
                 else -> title.copy(awaitingAvailability = false)
             }
         }
-    return WatchCheckOutcome(result, toNotify)
+    return WatchCheckOutcome(result, toNotify, notifyBranches)
 }
 
 /** Po faktycznie wysłanym powiadomieniu: wygasza flagę wskazanych tytułów (po id). */

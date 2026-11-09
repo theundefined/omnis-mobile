@@ -38,6 +38,7 @@ import com.theundefined.omnis.MainActivity
 import com.theundefined.omnis.R
 import com.theundefined.omnis.data.local.AccountManager
 import java.time.LocalDate
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -250,6 +251,8 @@ fun loadWidgetState(context: Context, today: LocalDate): WidgetState =
 suspend fun updateLoansWidgets(context: Context) {
     try {
         LoansWidget().updateAll(context.applicationContext)
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
         // Brak widżetów / błąd Glance nie może psuć zapisu cache'u ani pracy workera.
     }

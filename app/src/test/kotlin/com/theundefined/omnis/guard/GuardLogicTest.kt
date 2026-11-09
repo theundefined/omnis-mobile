@@ -321,4 +321,43 @@ class GuardLogicTest {
             outcome.renewed.isEmpty() && outcome.failed.isEmpty() && outcome.unknown.isEmpty()
         )
     }
+
+    @Test
+    fun nextRunMillisPicksTodayOrTomorrowInZone() {
+        val zone = java.time.ZoneId.of("Europe/Warsaw")
+        val before = java.time.ZonedDateTime.of(2026, 10, 11, 8, 0, 0, 0, zone)
+        val after = java.time.ZonedDateTime.of(2026, 10, 11, 10, 0, 0, 0, zone)
+        val nine = java.time.ZonedDateTime.of(2026, 10, 11, 9, 0, 0, 0, zone)
+        assertEquals(nine.toInstant().toEpochMilli(), nextRunMillis(before, 9))
+        assertEquals(nine.plusDays(1).toInstant().toEpochMilli(), nextRunMillis(after, 9))
+        // Dokładnie o pełnej godzinie — następny przebieg dopiero jutro.
+        assertEquals(nine.plusDays(1).toInstant().toEpochMilli(), nextRunMillis(nine, 9))
+        // Nowa godzina po zmianie (z 9 na 18) liczy od najbliższej 18:00.
+        assertEquals(nine.withHour(18).toInstant().toEpochMilli(), nextRunMillis(before, 18))
+    }
+
+    @Test
+    fun settingsOutsideChoicesFallBackToDefaults() {
+        val bad = GuardSettings(runHour = 3, autoRenewDays = 4).validated()
+        assertEquals(DEFAULT_RUN_HOUR, bad.runHour)
+        assertEquals(DEFAULT_AUTO_RENEW_DAYS, bad.autoRenewDays)
+        assertEquals(DEFAULT_RUN_HOUR, GuardSettings(runHour = 22).validated().runHour)
+        val ok = GuardSettings(runHour = 18, autoRenewDays = 5, thresholdDays = 7)
+        assertEquals(ok, ok.validated())
+    }
+
+    @Test
+    fun actionTargetsAlreadyAttemptedAreDropped() {
+        val a = RenewTarget("a", "1", "20261012")
+        val b = RenewTarget("a", "2", "20261012")
+        val attempted = setOf(GuardKeys.renew(a))
+        assertEquals(listOf(b), notYetAttempted(listOf(a, b), attempted))
+        // Klucz celu = klucz pozycji o tym samym koncie/id/terminie.
+        assertEquals(GuardKeys.renew(loan("1", "20261012")), GuardKeys.renew(a))
+        // Inny termin (przedłużone w międzyczasie) to nowa próba.
+        assertEquals(
+            listOf(RenewTarget("a", "1", "20261110")),
+            notYetAttempted(listOf(RenewTarget("a", "1", "20261110")), attempted)
+        )
+    }
 }

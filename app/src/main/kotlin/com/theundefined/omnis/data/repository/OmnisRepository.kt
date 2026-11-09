@@ -1320,8 +1320,8 @@ class OmnisRepository(private val accountManager: AccountManager) {
     /**
      * Dostępność wszystkich rekordów jednej biblioteki: JEDEN token gościa i `pub/delivery` z listą
      * id (po [DELIVERY_CHUNK] naraz, sekwencyjnie). Bez logowania, bez terminów zwrotu. Każdy błąd
-     * (token, HTTP, pusta odpowiedź) to porażka CAŁEJ biblioteki — wołający zostawia wtedy stan jej
-     * tytułów bez zmian, zamiast brać brak danych za „niedostępne".
+     * (token, HTTP) to porażka CAŁEJ biblioteki — wołający zostawia wtedy stan jej tytułów bez
+     * zmian, zamiast brać brak danych za „niedostępne".
      */
     suspend fun fetchLibraryDelivery(request: LibraryRequest): Result<LibraryDelivery> {
         return try {
@@ -1342,12 +1342,14 @@ class OmnisRepository(private val accountManager: AccountManager) {
             for (chunk in request.recordIds.chunked(DELIVERY_CHUNK)) {
                 val response = api.getDelivery(params, bearer, chunk)
                 val items = response.body()
-                if (!response.isSuccessful || items.isNullOrEmpty()) {
+                if (!response.isSuccessful) {
                     return Result.failure(
                         Exception("Błąd sprawdzania dostępności: ${response.code()}")
                     )
                 }
-                for (item in items) {
+                // Pusta odpowiedź na paczkę = brak danych dla tych id (zostają ze starym stanem),
+                // nie porażka całej biblioteki.
+                for (item in items.orEmpty()) {
                     val id = item.pnx.almaId() ?: continue
                     delivery[id] =
                         item.delivery?.holding.orEmpty().map {

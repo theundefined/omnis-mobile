@@ -27,7 +27,7 @@ internal constructor(
     private val byTitleAuthor: Map<String, ReadBeforeEntry>
 ) {
     val isEmpty: Boolean
-        get() = byMmsid.isEmpty()
+        get() = byMmsid.isEmpty() && byTitleAuthor.isEmpty()
 
     /**
      * Dopasowanie po `mmsid` któregokolwiek wydania wyniku; gdy brak — po znormalizowanym tytule i
@@ -100,11 +100,13 @@ internal fun titleAuthorKey(title: String?, author: String?): String? {
     return "$titleKey|${authorTokens.joinToString(" ")}"
 }
 
+private val NON_WORD = Regex("[^\\p{L}\\p{Nd}]+")
+
 /** Małe litery, bez diakrytyków (także ł/Ł), interpunkcja jako separator słów. */
 private fun normalizeWords(text: String): List<String> {
     val folded =
         Normalizer.normalize(text.lowercase().replace('ł', 'l'), Normalizer.Form.NFD).filter {
             Character.getType(it) != Character.NON_SPACING_MARK.toInt()
         }
-    return folded.split(Regex("[^\\p{L}\\p{Nd}]+")).filter { it.isNotEmpty() }
+    return folded.split(NON_WORD).filter { it.isNotEmpty() }
 }

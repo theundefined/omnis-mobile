@@ -185,34 +185,48 @@ class WatchlistLogicTest {
     @Test
     fun branchPrefsRestrictCountedBranches() {
         val title = watched(known = listOf("F1", "F2", "F3"), available = listOf("F2", "F3"))
-        assertEquals(listOf("F2", "F3"), countedBranches(title, SearchBranchPrefs()))
+        val known = setOf("F1", "F2", "F3")
+        assertEquals(listOf("F2", "F3"), countedBranches(title, SearchBranchPrefs(), known))
         val only1 = SearchBranchPrefs(setOf("F1"), showAllBranches = false)
-        assertEquals(emptyList<String>(), countedBranches(title, only1))
+        assertEquals(emptyList<String>(), countedBranches(title, only1, known))
         val only3 = SearchBranchPrefs(setOf("F3"), showAllBranches = false)
-        assertEquals(listOf("F3"), countedBranches(title, only3))
+        assertEquals(listOf("F3"), countedBranches(title, only3, known))
         // "Wszystkie filie" wygrywa z zapamiętanym wyborem.
         assertEquals(
             listOf("F2", "F3"),
-            countedBranches(title, SearchBranchPrefs(setOf("F1"), showAllBranches = true))
+            countedBranches(title, SearchBranchPrefs(setOf("F1"), showAllBranches = true), known)
         )
     }
 
     @Test
-    fun selectionOfBranchesTheTitleLacksMeansUnavailable() {
-        // Użytkownik wybrał tylko Filię 16, a tytuł jest w 2 i 56 — nie jest dostępny "dla niego",
-        // mimo że żadna wybrana filia nie występuje wśród egzemplarzy tego tytułu.
+    fun selectionKnownOnlyFromAnotherTitleOfTheLibraryMeansUnavailable() {
+        // Wybrano Filię 16, którą widać w holdingach innego obserwowanego tytułu tej biblioteki —
+        // ten tytuł jest w 2 i 56, więc nie jest dostępny "dla użytkownika".
+        val title = watched(known = listOf("Filia 2", "Filia 56"), available = listOf("Filia 2"))
+        val other = watched(id = "other", known = listOf("Filia 16"), available = emptyList())
+        val prefs = SearchBranchPrefs(setOf("Filia 16"), showAllBranches = false)
+        val all = listOf(title, other)
+        assertTrue(countedBranchesIn(title, mapOf(keyA to prefs), all).isEmpty())
+        val rows = watchRows(all, mapOf(keyA to prefs))
+        assertEquals(WatchStatus.UNAVAILABLE, rows.first { it.title.id == title.id }.status)
+    }
+
+    @Test
+    fun selectionNotConfirmedByAnyHoldingDoesNotFilter() {
+        // Jak w wyszukiwarce: przecięcie wyboru ze znanymi filiami jest puste -> liczą się
+        // wszystkie filie (zamiast wiecznego "niedostępne" przez nieistniejącą nazwę).
         val title = watched(known = listOf("Filia 2", "Filia 56"), available = listOf("Filia 2"))
         val prefs = SearchBranchPrefs(setOf("Filia 16"), showAllBranches = false)
-        assertTrue(countedBranches(title, prefs).isEmpty())
+        assertEquals(listOf("Filia 2"), countedBranches(title, prefs, setOf("Filia 2", "Filia 56")))
         val rows = watchRows(listOf(title), mapOf(keyA to prefs))
-        assertEquals(WatchStatus.UNAVAILABLE, rows.single().status)
+        assertEquals(WatchStatus.AVAILABLE, rows.single().status)
     }
 
     @Test
     fun emptySelectionDoesNotFilter() {
         val title = watched(known = listOf("F1"), available = listOf("F1"))
         val prefs = SearchBranchPrefs(emptySet(), showAllBranches = false)
-        assertEquals(listOf("F1"), countedBranches(title, prefs))
+        assertEquals(listOf("F1"), countedBranches(title, prefs, setOf("F1")))
     }
 
     // --- przejścia i powiadomienia ---

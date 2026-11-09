@@ -362,6 +362,7 @@
     <string name="guard_action_renew">Przedłuż</string>
     <string name="guard_renew_pending">Przedłużanie wypożyczeń…</string>
     <string name="guard_renew_pending_text">Wynik pojawi się tutaj, gdy będzie połączenie z biblioteką.</string>
+    <string name="guard_renew_nothing">Nic do przedłużenia — terminy są już aktualne</string>
     <string name="guard_line_renew_unknown">Nie udało się potwierdzić przedłużenia: %1$s</string>
 
     <!-- Kalendarz i eksport -->

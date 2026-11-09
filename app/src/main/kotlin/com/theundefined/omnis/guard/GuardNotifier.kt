@@ -189,8 +189,16 @@ class GuardNotifier(private val context: Context) {
             listOf(context.getString(R.string.guard_renew_pending_text)),
             MainActivity.ACTION_OPEN_LOANS
         ) {
-            it.setTimeoutAfter(PENDING_TIMEOUT_MILLIS).setOnlyAlertOnce(true)
+            it.setTimeoutAfter(PENDING_TIMEOUT_MILLIS).setOnlyAlertOnce(true).setSilent(true)
         }
+    }
+
+    /**
+     * Wynik akcji „Przedłuż", gdy nie było czego przedłużać — powiadomienie nie znika bez śladu.
+     */
+    fun notifyNothingToRenew() {
+        val text = context.getString(R.string.guard_renew_nothing)
+        post(ID_LOANS, CHANNEL_DUE, text, listOf(text), MainActivity.ACTION_OPEN_LOANS)
     }
 
     fun clearRenewPending() {
