@@ -3,7 +3,8 @@ package com.theundefined.omnis.ui
 import com.theundefined.omnis.data.model.Loan
 import com.theundefined.omnis.data.model.parseFlexibleDate
 
-private const val BOM = "\uFEFF"
+// BOM jest celowy (Excel rozpoznaje po nim UTF-8); lint bierze escape za BOM w środku pliku.
+@Suppress("ByteOrderMark") private const val BOM = "\uFEFF"
 
 /** Nagłówki kolumn CSV w kolejności z [historyToCsv] — lokalizowane, więc z zewnątrz. */
 data class HistoryCsvHeader(
