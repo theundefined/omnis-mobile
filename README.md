@@ -38,6 +38,7 @@ z serwerem wybranej biblioteki — autor nie prowadzi żadnego serwera pośredni
 - Filtr typu (książka, audiobook, film…), preferowane filie, sortowanie po trafności, tytule i serii.
 - Wyszukiwanie po autorze i serii (także prosto z listy wypożyczeń), historia wyszukiwań.
 - Mapa filii (OpenStreetMap) i skaner kodu ISBN z aparatu, również jako skrót aplikacji.
+- Znaczek „Wypożyczone teraz / Czytane: rok" przy wynikach wyszukiwania (z lokalnej historii, bez zapytań do serwera) oraz „Szukaj w Omnis" z menu Udostępnij i zaznaczonego tekstu w innych aplikacjach.
 
 **Rezerwacje i karta**
 - Rezerwacja z wyników wyszukiwania z wyborem filii i miejsca odbioru.

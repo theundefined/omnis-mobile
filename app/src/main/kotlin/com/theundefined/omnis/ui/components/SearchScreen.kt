@@ -32,6 +32,8 @@ import com.theundefined.omnis.data.model.Tenant
 import com.theundefined.omnis.data.model.searchKey
 import com.theundefined.omnis.data.model.seriesSearchTerm
 import com.theundefined.omnis.ui.OmnisViewModel
+import com.theundefined.omnis.ui.ReadBeforeEntry
+import com.theundefined.omnis.ui.ReadBeforeIndex
 import com.theundefined.omnis.ui.SearchLibrariesState
 import com.theundefined.omnis.ui.SearchSortMode
 import com.theundefined.omnis.ui.SearchTenantSection
@@ -71,6 +73,9 @@ fun SearchScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val noLibraries = libraries.selectedKeys.isEmpty()
+    val readBeforeIndex by viewModel.readBeforeIndex.collectAsStateWithLifecycle()
+    // Indeks z lokalnych cache'ów — przebudowa przy wejściu i gdy zmieni się cache wypożyczeń.
+    LaunchedEffect(uiState.accounts, uiState.loans) { viewModel.refreshReadBeforeIndex() }
 
     fun triggerSearch() {
         viewModel.runSearch(queryInput, searchField)
@@ -313,6 +318,9 @@ fun SearchScreen(
                                 SearchTenantSectionView(
                                     section = section,
                                     mediaTypes = mediaTypes,
+                                    readBeforeIndex = readBeforeIndex,
+                                    showReadBeforeOwner =
+                                        uiState.accounts.count { it.isEnabled } > 1,
                                     viewModel = viewModel,
                                     onAuthorClick = { searchFor(it, SearchField.AUTHOR) },
                                     onSeriesClick = { searchFor(it, SearchField.SERIES) }
@@ -514,6 +522,8 @@ private fun SearchHistoryList(
 private fun SearchTenantSectionView(
     section: SearchTenantSection,
     mediaTypes: Set<String>,
+    readBeforeIndex: ReadBeforeIndex,
+    showReadBeforeOwner: Boolean,
     viewModel: OmnisViewModel,
     onAuthorClick: (String) -> Unit,
     onSeriesClick: (String) -> Unit
@@ -589,6 +599,8 @@ private fun SearchTenantSectionView(
                         }
                     else null,
                 onShowMap = { viewModel.showBranchMap(result, section.tenantLabel) },
+                readBefore = readBeforeIndex.find(result),
+                showReadBeforeOwner = showReadBeforeOwner,
                 onAuthorClick = onAuthorClick,
                 onSeriesClick = onSeriesClick
             )
@@ -664,6 +676,8 @@ private fun SearchResultCard(
     // null = w tej bibliotece nie ma włączonego konta, więc nie ma czym zarezerwować.
     onPlaceHold: ((BookVersion) -> Unit)?,
     onShowMap: () -> Unit,
+    readBefore: ReadBeforeEntry?,
+    showReadBeforeOwner: Boolean,
     onAuthorClick: (String) -> Unit,
     onSeriesClick: (String) -> Unit
 ) {
@@ -672,6 +686,27 @@ private fun SearchResultCard(
     Card(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(result.title, style = MaterialTheme.typography.titleMedium)
+            readBefore?.let { entry ->
+                val owner = entry.ownerName?.takeIf { showReadBeforeOwner && it.isNotBlank() }
+                val label =
+                    when {
+                        entry.currentlyBorrowed && owner != null ->
+                            stringResource(R.string.read_before_current_owner, owner)
+                        entry.currentlyBorrowed -> stringResource(R.string.read_before_current)
+                        entry.year != null && owner != null ->
+                            stringResource(R.string.read_before_year_owner, entry.year, owner)
+                        entry.year != null ->
+                            stringResource(R.string.read_before_year, entry.year)
+                        owner != null -> stringResource(R.string.read_before_owner, owner)
+                        else -> stringResource(R.string.read_before)
+                    }
+                Text(
+                    "📖 $label",
+                    modifier = Modifier.padding(vertical = 2.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+            }
             result.author?.let { author ->
                 val authorClickLabel = stringResource(R.string.cd_search_by_author)
                 Text(

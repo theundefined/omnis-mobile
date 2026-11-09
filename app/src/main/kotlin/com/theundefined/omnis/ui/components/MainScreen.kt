@@ -29,9 +29,20 @@ import kotlinx.coroutines.flow.collectLatest
 /** Żądanie otwarcia ekranu z zewnątrz (powiadomienie); `seq` odróżnia kolejne kliknięcia. */
 data class NavRequest(val screen: String, val seq: Int)
 
+/**
+ * Żądanie wyszukania z innej aplikacji („Szukaj w Omnis"). `query` null = tylko otwórz
+ * wyszukiwarkę; `seq` odróżnia kolejne żądania o tym samym zapytaniu.
+ */
+data class SearchRequest(val query: String?, val seq: Int)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0, navRequest: NavRequest? = null) {
+fun MainScreen(
+    viewModel: OmnisViewModel,
+    scanRequests: Int = 0,
+    navRequest: NavRequest? = null,
+    searchRequest: SearchRequest? = null
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val holdsState by viewModel.holdsUiState.collectAsStateWithLifecycle()
     val dismissedReadyHolds by viewModel.dismissedReadyHolds.collectAsStateWithLifecycle()
@@ -77,6 +88,15 @@ fun MainScreen(viewModel: OmnisViewModel, scanRequests: Int = 0, navRequest: Nav
         currentScreen = request.screen
         // Powiadomienie mówi o świeżych danych z tła — lista w pamięci mogła być starsza.
         if (request.screen == "holds") viewModel.loadHolds(forceRefresh = true)
+    }
+
+    LaunchedEffect(searchRequest) {
+        val request = searchRequest ?: return@LaunchedEffect
+        currentScreen = "search"
+        // Bez wybranej biblioteki nie ma w czym szukać — ekran wyszukiwarki sam o tym poinformuje.
+        val query = request.query
+        if (query != null && viewModel.searchLibraries.value.selectedKeys.isNotEmpty())
+            viewModel.runSearch(query)
     }
 
     LaunchedEffect(scanRequests) {

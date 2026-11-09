@@ -322,4 +322,11 @@
     <string name="guard_title_login">Nie można zalogować się do konta</string>
     <string name="guard_line_login">%1$s (%2$s) — sprawdź hasło</string>
     <string name="guard_more_lines">i %1$d więcej</string>
+    <string name="share_search_label">Szukaj w Omnis</string>
+    <string name="read_before_current">Wypożyczone teraz</string>
+    <string name="read_before_current_owner">Wypożyczone teraz (%1$s)</string>
+    <string name="read_before_year">Czytane: %1$d</string>
+    <string name="read_before_year_owner">Czytane: %1$d (%2$s)</string>
+    <string name="read_before_owner">Czytane (%1$s)</string>
+    <string name="read_before">Czytane wcześniej</string>
 </resources>

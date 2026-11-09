@@ -18,8 +18,10 @@ import com.theundefined.omnis.data.local.AccountManager
 import com.theundefined.omnis.data.repository.OmnisRepository
 import com.theundefined.omnis.guard.GuardScheduler
 import com.theundefined.omnis.ui.OmnisViewModel
+import com.theundefined.omnis.ui.queryFromSharedText
 import com.theundefined.omnis.ui.components.MainScreen
 import com.theundefined.omnis.ui.components.NavRequest
+import com.theundefined.omnis.ui.components.SearchRequest
 import com.theundefined.omnis.ui.theme.OmnisTheme
 
 class MainActivity : ComponentActivity() {
@@ -38,6 +40,9 @@ class MainActivity : ComponentActivity() {
     private var navRequest by mutableStateOf<NavRequest?>(null)
     private var navSeq = 0
 
+    // Zapytanie przekazane z innej aplikacji przez ShareReceiverActivity.
+    private var searchRequest by mutableStateOf<SearchRequest?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -53,7 +58,12 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MainScreen(viewModel, scanRequests = scanRequests, navRequest = navRequest)
+                    MainScreen(
+                        viewModel,
+                        scanRequests = scanRequests,
+                        navRequest = navRequest,
+                        searchRequest = searchRequest
+                    )
                 }
             }
         }
@@ -76,6 +86,14 @@ class MainActivity : ComponentActivity() {
             ACTION_OPEN_LOANS -> navRequest = NavRequest("main", ++navSeq)
             ACTION_OPEN_HOLDS -> navRequest = NavRequest("holds", ++navSeq)
             ACTION_OPEN_SETTINGS -> navRequest = NavRequest("settings", ++navSeq)
+            // Zapytanie to wyłącznie tekst — ShareReceiverActivity już je oczyściła, ale ta akcja
+            // jest osiągalna dla każdej aplikacji, więc traktujemy je jak dane, nie polecenie.
+            ACTION_SEARCH_TEXT ->
+                searchRequest =
+                    SearchRequest(
+                        queryFromSharedText(intent?.getStringExtra(EXTRA_SEARCH_QUERY)),
+                        ++navSeq
+                    )
         }
     }
 
@@ -87,5 +105,9 @@ class MainActivity : ComponentActivity() {
         const val ACTION_OPEN_LOANS = "com.theundefined.omnis.action.OPEN_LOANS"
         const val ACTION_OPEN_HOLDS = "com.theundefined.omnis.action.OPEN_HOLDS"
         const val ACTION_OPEN_SETTINGS = "com.theundefined.omnis.action.OPEN_SETTINGS"
+
+        // „Szukaj w Omnis" z innych aplikacji (ShareReceiverActivity → MainActivity).
+        const val ACTION_SEARCH_TEXT = "com.theundefined.omnis.action.SEARCH_TEXT"
+        const val EXTRA_SEARCH_QUERY = "com.theundefined.omnis.extra.SEARCH_QUERY"
     }
 }

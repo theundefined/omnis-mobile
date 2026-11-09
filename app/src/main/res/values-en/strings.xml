@@ -308,4 +308,11 @@
     <string name="guard_title_login">Cannot log in to an account</string>
     <string name="guard_line_login">%1$s (%2$s) — check the password</string>
     <string name="guard_more_lines">and %1$d more</string>
+    <string name="share_search_label">Search in Omnis</string>
+    <string name="read_before_current">Borrowed now</string>
+    <string name="read_before_current_owner">Borrowed now (%1$s)</string>
+    <string name="read_before_year">Read: %1$d</string>
+    <string name="read_before_year_owner">Read: %1$d (%2$s)</string>
+    <string name="read_before_owner">Read (%1$s)</string>
+    <string name="read_before">Read before</string>
 </resources>

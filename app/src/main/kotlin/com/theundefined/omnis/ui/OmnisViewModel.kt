@@ -35,6 +35,7 @@ import com.theundefined.omnis.guard.GuardSettings
 import com.theundefined.omnis.guard.isPaused
 import java.text.Collator
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -429,6 +430,26 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
             SearchUiState(selectedMediaTypes = viewPrefs.getStringSet(PREF_SEARCH_MEDIA_TYPES))
         )
     val searchUiState: StateFlow<SearchUiState> = _searchUiState.asStateFlow()
+
+    // Indeks „już wypożyczone" (ReadBefore.kt) — z lokalnych cache'ów, bez sieci. Przebudowywany
+    // poza głównym wątkiem (odczyt szyfrowanych preferencji + JSON), nie przy rekompozycji.
+    private val _readBeforeIndex = MutableStateFlow(ReadBeforeIndex.EMPTY)
+    val readBeforeIndex: StateFlow<ReadBeforeIndex> = _readBeforeIndex.asStateFlow()
+    private var readBeforeJob: Job? = null
+
+    fun refreshReadBeforeIndex() {
+        val accounts = _uiState.value.accounts.filter { it.isEnabled }
+        // Tryb demo i zwykły się nie mieszają — jak w wyborze bibliotek wyszukiwarki.
+        val scoped =
+            if (isDemoModeActive(_uiState.value.accounts)) accounts else accounts.filter { !it.isDemo }
+        readBeforeJob?.cancel()
+        readBeforeJob =
+            viewModelScope.launch(Dispatchers.IO) {
+                val active = scoped.flatMap { repository.getCachedLoans(it.id) }
+                val history = scoped.flatMap { repository.getCachedHistory(it.id).loans }
+                _readBeforeIndex.value = buildReadBeforeIndex(active, history)
+            }
+    }
 
     // Biblioteki OSTATNIEGO wyszukania — loadMoreResults() doładowuje kolejne strony z tej samej
     // biblioteki, nawet jeśli w międzyczasie zmienił się wybór bibliotek.
