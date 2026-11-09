@@ -50,11 +50,8 @@ class ReadBeforeTest {
             branches = emptyList()
         )
 
-    private fun result(
-        title: String,
-        author: String?,
-        vararg versions: BookVersion
-    ) = SearchResult("g", title, author, versions.toList())
+    private fun result(title: String, author: String?, vararg versions: BookVersion) =
+        SearchResult("g", title, author, versions.toList())
 
     @Test
     fun `matches by mmsid of any edition`() {
@@ -67,8 +64,14 @@ class ReadBeforeTest {
 
     @Test
     fun `falls back to normalized title and author`() {
-        val index = buildReadBeforeIndex(emptyList(), listOf(loan(title = "Żółć: powieść", author = "Kowalski, Jan")))
-        assertNotNull(index.find(result("ŻÓŁĆ - POWIEŚĆ".replace('-', ':'), "Jan Kowalski", version("9"))))
+        val index =
+            buildReadBeforeIndex(
+                emptyList(),
+                listOf(loan(title = "Żółć: powieść", author = "Kowalski, Jan"))
+            )
+        assertNotNull(
+            index.find(result("ŻÓŁĆ - POWIEŚĆ".replace('-', ':'), "Jan Kowalski", version("9")))
+        )
     }
 
     @Test
@@ -86,7 +89,9 @@ class ReadBeforeTest {
         val index =
             buildReadBeforeIndex(
                 emptyList(),
-                listOf(loan(title = "Kamień", author = "J.K. R.", catalogAuthor = "Rowling, Joanne"))
+                listOf(
+                    loan(title = "Kamień", author = "J.K. R.", catalogAuthor = "Rowling, Joanne")
+                )
             )
         assertNotNull(index.find(result("Kamień", "Joanne Rowling", version("9"))))
     }
@@ -99,7 +104,11 @@ class ReadBeforeTest {
 
     @Test
     fun `different author with same title does not match`() {
-        val index = buildReadBeforeIndex(emptyList(), listOf(loan(title = "Dziady", author = "Mickiewicz, Adam")))
+        val index =
+            buildReadBeforeIndex(
+                emptyList(),
+                listOf(loan(title = "Dziady", author = "Mickiewicz, Adam"))
+            )
         assertNull(index.find(result("Dziady", "Inny, Autor", version("9"))))
     }
 
@@ -111,7 +120,11 @@ class ReadBeforeTest {
 
     @Test
     fun `statement of responsibility after slash is ignored`() {
-        val index = buildReadBeforeIndex(emptyList(), listOf(loan(title = "Dziady / Adam Mickiewicz", author = "Mickiewicz, Adam")))
+        val index =
+            buildReadBeforeIndex(
+                emptyList(),
+                listOf(loan(title = "Dziady / Adam Mickiewicz", author = "Mickiewicz, Adam"))
+            )
         assertNotNull(index.find(result("Dziady", "Mickiewicz, Adam", version("9"))))
     }
 

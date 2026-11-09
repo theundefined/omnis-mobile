@@ -17,7 +17,9 @@ private val URL = Regex("""(?i)\b(?:https?://|www\.)\S+""")
 fun queryFromSharedText(text: String?): String? {
     if (text.isNullOrBlank()) return null
     ISBN_CANDIDATE.findAll(text).forEach { match ->
-        normalizeIsbn(match.value)?.let { return it }
+        normalizeIsbn(match.value)?.let {
+            return it
+        }
     }
     val line =
         text
@@ -25,7 +27,6 @@ fun queryFromSharedText(text: String?): String? {
             .map { URL.replace(it, " ") }
             .map { line -> line.map { if (it.isISOControl()) ' ' else it }.joinToString("") }
             .map { it.replace(Regex("\\s+"), " ").trim() }
-            .firstOrNull { it.isNotEmpty() }
-            ?: return null
+            .firstOrNull { it.isNotEmpty() } ?: return null
     return line.take(MAX_QUERY_LENGTH).trim().ifEmpty { null }
 }

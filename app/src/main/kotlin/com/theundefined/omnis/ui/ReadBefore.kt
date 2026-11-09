@@ -7,9 +7,9 @@ import java.text.Normalizer
 import java.time.LocalDate
 
 /**
- * Znaczek „już wypożyczone" przy wynikach wyszukiwania. Wyłącznie dane lokalne (cache wypożyczeń
- * i historii) — zero ruchu do serwera. Decyzje są tu, w czystych funkcjach, żeby dało się je
- * pokryć testami.
+ * Znaczek „już wypożyczone" przy wynikach wyszukiwania. Wyłącznie dane lokalne (cache wypożyczeń i
+ * historii) — zero ruchu do serwera. Decyzje są tu, w czystych funkcjach, żeby dało się je pokryć
+ * testami.
  */
 data class ReadBeforeEntry(
     /** true = ta książka jest wypożyczona teraz (wygrywa z każdą historyczną). */
@@ -30,19 +30,17 @@ internal constructor(
         get() = byMmsid.isEmpty()
 
     /**
-     * Dopasowanie po `mmsid` któregokolwiek wydania wyniku; gdy brak — po znormalizowanym tytule
-     * i autorze. Lepiej nie pokazać znaczka niż pokazać błędnie, więc sam tytuł nie wystarcza
-     * (chyba że obie strony nie mają autora).
+     * Dopasowanie po `mmsid` któregokolwiek wydania wyniku; gdy brak — po znormalizowanym tytule i
+     * autorze. Lepiej nie pokazać znaczka niż pokazać błędnie, więc sam tytuł nie wystarcza (chyba
+     * że obie strony nie mają autora).
      */
     fun find(result: SearchResult): ReadBeforeEntry? {
-        val byId =
-            result.versions.mapNotNull { byMmsid[it.mmsid] }.reduceOrNull(::betterEntry)
+        val byId = result.versions.mapNotNull { byMmsid[it.mmsid] }.reduceOrNull(::betterEntry)
         if (byId != null) return byId
-        val candidates =
-            buildList {
-                titleAuthorKey(result.title, result.author)?.let { add(it) }
-                result.versions.forEach { v -> titleAuthorKey(v.title, v.author)?.let { add(it) } }
-            }
+        val candidates = buildList {
+            titleAuthorKey(result.title, result.author)?.let { add(it) }
+            result.versions.forEach { v -> titleAuthorKey(v.title, v.author)?.let { add(it) } }
+        }
         return candidates.mapNotNull { byTitleAuthor[it] }.reduceOrNull(::betterEntry)
     }
 
@@ -88,8 +86,8 @@ private fun betterEntry(a: ReadBeforeEntry, b: ReadBeforeEntry): ReadBeforeEntry
 
 /**
  * Klucz „tytuł|autor" po normalizacji albo null, gdy tytuł po normalizacji jest pusty. Autor to
- * pierwszy z listy (rozdzielanej średnikiem), bez cyfr (daty życia w rekordach katalogu), a
- * tokeny są posortowane, żeby „Kowalski, Jan" i „Jan Kowalski" dawały to samo.
+ * pierwszy z listy (rozdzielanej średnikiem), bez cyfr (daty życia w rekordach katalogu), a tokeny
+ * są posortowane, żeby „Kowalski, Jan" i „Jan Kowalski" dawały to samo.
  */
 internal fun titleAuthorKey(title: String?, author: String?): String? {
     // Część po " / " to w opisie bibliograficznym oznaczenie odpowiedzialności, nie tytuł.
@@ -105,7 +103,8 @@ internal fun titleAuthorKey(title: String?, author: String?): String? {
 /** Małe litery, bez diakrytyków (także ł/Ł), interpunkcja jako separator słów. */
 private fun normalizeWords(text: String): List<String> {
     val folded =
-        Normalizer.normalize(text.lowercase().replace('ł', 'l'), Normalizer.Form.NFD)
-            .filter { Character.getType(it) != Character.NON_SPACING_MARK.toInt() }
+        Normalizer.normalize(text.lowercase().replace('ł', 'l'), Normalizer.Form.NFD).filter {
+            Character.getType(it) != Character.NON_SPACING_MARK.toInt()
+        }
     return folded.split(Regex("[^\\p{L}\\p{Nd}]+")).filter { it.isNotEmpty() }
 }
