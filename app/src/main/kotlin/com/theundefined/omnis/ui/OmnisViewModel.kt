@@ -200,8 +200,29 @@ data class SearchUiState(
     val tenantSections: List<SearchTenantSection> = emptyList(),
     // Zaznaczone typy nośnika (BookVersion.mediaType), wspólne dla wszystkich bibliotek i
     // zapamiętywane między wyszukiwaniami. Puste = wszystkie typy.
-    val selectedMediaTypes: Set<String> = emptySet()
+    val selectedMediaTypes: Set<String> = emptySet(),
+    // Wyszukiwanie po autorze/serii: true = pokazuj też dzieła, które nie pasują do autora/serii
+    // (SearchResult.matchesQuery == false). Domyślnie ukryte; tylko na czas bieżącego wyszukiwania.
+    val showUnmatched: Boolean = false
 )
+
+/**
+ * Ukrywa dzieła niepasujące do szukanego autora/serii (matchesQuery == false) — tylko gdy
+ * [hide] i gdy cokolwiek pasuje. Gdy nic nie pasuje (np. fraza w innej odmianie niż w katalogu),
+ * niczego nie ukrywamy, żeby ekran nie był pusty przy domyślnie włączonym ukrywaniu.
+ */
+fun List<SearchResult>.withoutUnmatched(hide: Boolean): List<SearchResult> =
+    if (!hide || none { it.matchesQuery }) this else filter { it.matchesQuery }
+
+/** Ile dzieł w tej bibliotece ukryłoby ukrywanie niepasujących (0, gdy nic nie pasuje). */
+fun SearchTenantSection.unmatchedCount(): Int = results.size - results.withoutUnmatched(true).size
+
+/** Ile dzieł faktycznie jest teraz ukrytych jako niepasujące (0, gdy użytkownik je pokazał). */
+fun SearchUiState.hiddenUnmatchedCount(): Int =
+    if (showUnmatched) 0 else tenantSections.sumOf { it.unmatchedCount() }
+
+/** Ile dzieł w ogóle da się ukryć jako niepasujące — decyduje, czy pokazać chip. */
+fun SearchUiState.unmatchedCount(): Int = tenantSections.sumOf { it.unmatchedCount() }
 
 /** Typy nośnika obecne w wynikach — chipy filtra typów; kolejność pierwszego wystąpienia. */
 fun SearchUiState.availableMediaTypes(): List<String> =
@@ -323,14 +344,18 @@ private val polishCollator: Collator =
     Collator.getInstance(Locale("pl")).apply { strength = Collator.PRIMARY }
 
 /** `mediaTypes` — SearchUiState.effectiveMediaTypes(); puste = bez filtra typów. */
-fun SearchTenantSection.filteredResults(mediaTypes: Set<String> = emptySet()): List<SearchResult> {
+fun SearchTenantSection.filteredResults(
+    mediaTypes: Set<String> = emptySet(),
+    hideUnmatched: Boolean = false
+): List<SearchResult> {
+    val source = results.withoutUnmatched(hideUnmatched)
     val effectiveSelection = selectedBranches.intersect(confirmedBranches.toSet())
     val filterBranches = !showAllBranches && effectiveSelection.isNotEmpty()
     val filterTypes = mediaTypes.isNotEmpty()
     val base =
-        if (!filterBranches && !filterTypes) results
+        if (!filterBranches && !filterTypes) source
         else
-            results.mapNotNull { result ->
+            source.mapNotNull { result ->
                 val versions =
                     result.versions.mapNotNull { v ->
                         if (filterTypes && v.mediaType !in mediaTypes) return@mapNotNull null
@@ -1889,6 +1914,7 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
                 field = field,
                 hasSearched = true,
                 isLoading = true,
+                showUnmatched = false,
                 tenantSections = skeleton
             )
         }
@@ -2047,6 +2073,11 @@ class OmnisViewModel(application: Application, private val repository: OmnisRepo
     }
 
     fun clearMediaTypeSelection() = setSelectedMediaTypes(emptySet())
+
+    /** Wyłącznie klient-side — pokazuje/ukrywa dzieła niepasujące do autora/serii (bez API). */
+    fun setShowUnmatched(show: Boolean) {
+        _searchUiState.update { it.copy(showUnmatched = show) }
+    }
 
     private fun setSelectedMediaTypes(types: Set<String>) {
         _searchUiState.update { it.copy(selectedMediaTypes = types) }

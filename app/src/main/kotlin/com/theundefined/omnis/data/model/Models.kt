@@ -269,6 +269,60 @@ fun seriesVolume(series: String): Int? =
  */
 fun authorSearchTerm(author: String): String = author.substringBefore(" (").trim().trimEnd(',')
 
+/** Słowa tekstu po kolei, bez wielkości liter i znaków diakrytycznych (`contains` w Primo ich nie rozróżnia). */
+private fun foldedTokens(text: String): List<String> =
+    java.text.Normalizer.normalize(text.lowercase(), java.text.Normalizer.Form.NFD)
+        .replace(Regex("""\p{Mn}+"""), "")
+        // litery bez rozkładu w NFD — celowo łagodniej niż Primo, żeby filtr nie gubił trafień
+        .replace('ł', 'l').replace('ø', 'o').replace('đ', 'd')
+        .split(Regex("""[^\p{L}\p{N}]+"""))
+        .filter { it.isNotEmpty() }
+
+private fun foldedWords(text: String): Set<String> = foldedTokens(text).toSet()
+
+/** Czy wszystkie [wanted] stoją obok siebie w [text], w dowolnej kolejności („Lee Child” dla „Child, Lee”). */
+private fun wordsAdjacent(wanted: Set<String>, text: String): Boolean {
+    val tokens = foldedTokens(text)
+    val k = wanted.size
+    return k > 0 && tokens.windowed(k).any { it.toSet() == wanted }
+}
+
+/**
+ * Czy rekord faktycznie ma [query] w danym polu wyszukiwania. Primo łączy w jedną grupę FRBR różne
+ * książki o tym samym tytule (np. wszystkie tomy Disneya „Nowa kolekcja bajek”) i po rozwinięciu
+ * grupy (`qInclude=facet_frbrgroupid`) zwraca WSZYSTKIE jej wydania, ignorując pierwotne `q` — przy
+ * wyszukiwaniu po serii/autorze pojawiały się więc wydania innych serii/autorów. Dlatego wydania
+ * sprawdza się po stronie klienta: wszystkie słowa [query] muszą wystąpić w jednej wartości pola
+ * rekordu. Dla [SearchField.ANY] zawsze true.
+ */
+fun Pnx.matchesField(field: SearchField, query: String): Boolean {
+    val values =
+        when (field) {
+            // `addata.seriestitle` to tylko pierwsza seria; `display.series` ma wszystkie
+            // ("Nazwa$$QNazwa"), np. "Pierwsza Znajdywanka" + "Tomek i Przyjaciele".
+            SearchField.SERIES ->
+                addata["seriestitle"].orEmpty() +
+                    display["series"].orEmpty().map { it.substringBefore("\$\$Q") }
+            // Indeks `creator` w Primo obejmuje też współtwórców (redaktorzy antologii, ekranizacje).
+            SearchField.AUTHOR ->
+                (display["creator"].orEmpty() + display["contributor"].orEmpty()).map {
+                    it.substringBefore("\$\$Q")
+                } + addata["au"].orEmpty() + addata["addau"].orEmpty()
+            SearchField.ANY -> return true
+        }
+    val wanted = foldedWords(query)
+    if (values.any { foldedWords(it).containsAll(wanted) }) return true
+    if (field == SearchField.AUTHOR) {
+        // Błąd katalogu (np. „Poszukiwany” przypisany Lauren Child) nadal podaje prawdziwego autora w
+        // opisie odpowiedzialności tytułu („… / Lee Child ; …”). Wymagamy tam słów obok siebie, żeby
+        // szum typu „Child, Noah” + „Lee, David” nie wrócił.
+        return display["title"].orEmpty().any { title ->
+            title.contains(" / ") && wordsAdjacent(wanted, title.substringAfter(" / "))
+        }
+    }
+    return false
+}
+
 /**
  * Tytuł wypożyczenia bez oznaczenia odpowiedzialności: API podaje pełny opis z katalogu ("Lalka /
  * Bolesław Prus ; posłowie …"), a autor i tak jest w osobnej linii. Ukośnik tylko otoczony
@@ -364,7 +418,14 @@ data class SearchResult(
     val frbrgroupid: String?,
     val title: String,
     val author: String?,
-    val versions: List<BookVersion>
+    val versions: List<BookVersion>,
+    /**
+     * Przy wyszukiwaniu po autorze/serii: czy którekolwiek wydanie dzieła naprawdę ma szukanego
+     * autora/serię (Pnx.matchesField). `false` = dzieło trafione przez Primo luźniej niż całymi
+     * słowami (np. „Child, Noah” + „Lee, David” dla „Child, Lee”) albo przez błąd w katalogu —
+     * UI domyślnie je ukrywa, ale pokazuje licznik i pozwala je zobaczyć. Zawsze `true` dla ANY.
+     */
+    val matchesQuery: Boolean = true
 )
 
 data class SearchPage(

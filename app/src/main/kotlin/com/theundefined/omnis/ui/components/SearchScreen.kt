@@ -44,6 +44,8 @@ import com.theundefined.omnis.ui.branchChipLabel
 import com.theundefined.omnis.ui.checkboxBranches
 import com.theundefined.omnis.ui.effectiveMediaTypes
 import com.theundefined.omnis.ui.filteredResults
+import com.theundefined.omnis.ui.hiddenUnmatchedCount
+import com.theundefined.omnis.ui.unmatchedCount
 import com.theundefined.omnis.ui.hasMappableBranches
 import com.theundefined.omnis.ui.holdAccounts
 import com.theundefined.omnis.ui.searchLibraryPickerOrder
@@ -229,6 +231,24 @@ fun SearchScreen(
                         trailingIcon = { Text("✕") }
                     )
                 }
+                // Ukrywanie dzieł niepasujących do autora/serii — tylko gdy jest co ukryć. Licznik
+                // na chipie, żeby ukryta pozycja (np. błąd w katalogu) nie znikała po cichu.
+                val unmatchedTotal = state.unmatchedCount()
+                if (state.hasSearched && state.field != SearchField.ANY && unmatchedTotal > 0) {
+                    FilterChip(
+                        selected = !state.showUnmatched,
+                        onClick = { viewModel.setShowUnmatched(!state.showUnmatched) },
+                        label = {
+                            Text(
+                                stringResource(
+                                    if (state.showUnmatched) R.string.search_unmatched_hide
+                                    else R.string.search_unmatched_hidden,
+                                    unmatchedTotal
+                                )
+                            )
+                        }
+                    )
+                }
             }
 
             val mediaTypes = state.effectiveMediaTypes()
@@ -248,7 +268,7 @@ fun SearchScreen(
             val allFilteredEmpty =
                 state.tenantSections.isNotEmpty() &&
                     state.tenantSections.all {
-                        it.filteredResults(mediaTypes).isEmpty() && !it.isLoading
+                        it.filteredResults(mediaTypes, !state.showUnmatched).isEmpty() && !it.isLoading
                     }
 
             when {
@@ -316,6 +336,11 @@ fun SearchScreen(
                                         Text(stringResource(R.string.search_all_media))
                                     }
                                 }
+                                if (state.hiddenUnmatchedCount() > 0) {
+                                    TextButton(onClick = { viewModel.setShowUnmatched(true) }) {
+                                        Text(stringResource(R.string.search_unmatched_show))
+                                    }
+                                }
                                 TextButton(
                                     onClick = {
                                         state.tenantSections.forEach {
@@ -346,6 +371,7 @@ fun SearchScreen(
                                     readBeforeIndex = readBeforeIndex,
                                     showReadBeforeOwner =
                                         uiState.accounts.count { it.isEnabled } > 1,
+                                    hideUnmatched = !state.showUnmatched,
                                     viewModel = viewModel,
                                     onAuthorClick = { searchFor(it, SearchField.AUTHOR) },
                                     onSeriesClick = { searchFor(it, SearchField.SERIES) }
@@ -549,6 +575,7 @@ private fun SearchTenantSectionView(
     mediaTypes: Set<String>,
     readBeforeIndex: ReadBeforeIndex,
     showReadBeforeOwner: Boolean,
+    hideUnmatched: Boolean,
     viewModel: OmnisViewModel,
     onAuthorClick: (String) -> Unit,
     onSeriesClick: (String) -> Unit
@@ -615,7 +642,7 @@ private fun SearchTenantSectionView(
                 holdAccounts(uiState.accounts, section.tenantKey).isNotEmpty()
             }
         val watchlist by viewModel.watchlistUiState.collectAsStateWithLifecycle()
-        section.filteredResults(mediaTypes).forEach { result ->
+        section.filteredResults(mediaTypes, hideUnmatched).forEach { result ->
             SearchResultCard(
                 result,
                 onPlaceHold =
@@ -632,6 +659,24 @@ private fun SearchTenantSectionView(
                 onAuthorClick = onAuthorClick,
                 onSeriesClick = onSeriesClick
             )
+        }
+
+        val hiddenUnmatched = if (hideUnmatched) section.unmatchedCount() else 0
+        if (hiddenUnmatched > 0) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    stringResource(R.string.search_unmatched_footer, hiddenUnmatched),
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TextButton(onClick = { viewModel.setShowUnmatched(true) }) {
+                    Text(stringResource(R.string.search_unmatched_show))
+                }
+            }
         }
 
         // Paginacja per biblioteka — ten sam wzorzec co HistoryScreen.HistoryFooter, bez

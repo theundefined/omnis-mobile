@@ -1106,14 +1106,17 @@ class OmnisRepository(private val accountManager: AccountManager) {
             // Krok 2: dociągnij WSZYSTKIE wydania per frbrgroupid, równolegle.
             data class Resolved(
                 val versions: List<PnxDoc>,
-                val deliveryById: Map<String, DeliveryItem>
+                val deliveryById: Map<String, DeliveryItem>,
+                val matchesQuery: Boolean
             )
             val resolved = coroutineScope {
                 topDocs
                     .map { doc ->
                         async {
                             val frbrgroupid = doc.pnx.frbrgroupid()
-                            val (versionDocs, deliveryParams) =
+                            // Wydania do pokazania, parametry zapytania o dostępność i czy dzieło
+                            // faktycznie ma szukanego autora/serię (tylko dla pól innych niż ANY).
+                            val (versionDocs, deliveryParams, matchesQuery) =
                                 if (frbrgroupid != null) {
                                     val groupParams =
                                         buildParams(
@@ -1127,8 +1130,27 @@ class OmnisRepository(private val accountManager: AccountManager) {
                                         api.searchPnxs(groupParams, bearer).body()?.docs?.takeIf {
                                             it.isNotEmpty()
                                         } ?: listOf(doc)
-                                    docs to groupParams
-                                } else listOf(doc) to topParams
+                                    // Primo ignoruje `q` po rozwinięciu grupy FRBR — dla serii/autora
+                                    // odrzuć wydania innych serii/autorów (patrz Pnx.matchesField).
+                                    if (field == SearchField.ANY) Triple(docs, groupParams, true)
+                                    else {
+                                        val matching =
+                                            docs.filter { it.pnx.matchesField(field, query) }
+                                        // Żadne wydanie nie pasuje: zostaje trafione wydanie, ale
+                                        // dzieło dostaje matchesQuery=false (UI może je ukryć).
+                                        Triple(
+                                            matching.ifEmpty { listOf(doc) },
+                                            groupParams,
+                                            matching.isNotEmpty()
+                                        )
+                                    }
+                                } else
+                                    Triple(
+                                        listOf(doc),
+                                        topParams,
+                                        field == SearchField.ANY ||
+                                            doc.pnx.matchesField(field, query)
+                                    )
 
                             val almaIds = versionDocs.mapNotNull { it.pnx.almaId() }.distinct()
                             val deliveryById =
@@ -1141,7 +1163,7 @@ class OmnisRepository(private val accountManager: AccountManager) {
                                         ?.toMap() ?: emptyMap()
                                 } else emptyMap()
 
-                            Resolved(versionDocs, deliveryById)
+                            Resolved(versionDocs, deliveryById, matchesQuery)
                         }
                     }
                     .awaitAll()
@@ -1201,7 +1223,7 @@ class OmnisRepository(private val accountManager: AccountManager) {
                                 almaId = v.pnx.almaId()
                             )
                         }
-                    SearchResult(frbrgroupid, title, author, versions)
+                    SearchResult(frbrgroupid, title, author, versions, r.matchesQuery)
                 }
 
             Result.success(SearchPage(results, hasMore, dueDateLookups, token))
