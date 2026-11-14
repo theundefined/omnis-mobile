@@ -44,11 +44,11 @@ import com.theundefined.omnis.ui.branchChipLabel
 import com.theundefined.omnis.ui.checkboxBranches
 import com.theundefined.omnis.ui.effectiveMediaTypes
 import com.theundefined.omnis.ui.filteredResults
-import com.theundefined.omnis.ui.hiddenUnmatchedCount
-import com.theundefined.omnis.ui.unmatchedCount
 import com.theundefined.omnis.ui.hasMappableBranches
+import com.theundefined.omnis.ui.hiddenUnmatchedCount
 import com.theundefined.omnis.ui.holdAccounts
 import com.theundefined.omnis.ui.searchLibraryPickerOrder
+import com.theundefined.omnis.ui.unmatchedCount
 import java.text.Collator
 import java.util.Locale
 import kotlinx.coroutines.launch
@@ -268,7 +268,8 @@ fun SearchScreen(
             val allFilteredEmpty =
                 state.tenantSections.isNotEmpty() &&
                     state.tenantSections.all {
-                        it.filteredResults(mediaTypes, !state.showUnmatched).isEmpty() && !it.isLoading
+                        it.filteredResults(mediaTypes, !state.showUnmatched).isEmpty() &&
+                            !it.isLoading
                     }
 
             when {

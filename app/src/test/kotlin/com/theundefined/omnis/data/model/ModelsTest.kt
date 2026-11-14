@@ -283,11 +283,7 @@ class RenewStatusMessagesTest {
 // (np. "Nowa kolekcja bajek" z serią "Elena z Avaloru" ma w grupie też Tomka, Smerfy, Binga).
 class PnxMatchesFieldTest {
 
-    private fun pnx(
-        series: String? = null,
-        creator: String? = null,
-        au: String? = null
-    ) =
+    private fun pnx(series: String? = null, creator: String? = null, au: String? = null) =
         Pnx(
             display = if (creator != null) mapOf("creator" to listOf(creator)) else emptyMap(),
             addata =
@@ -299,7 +295,10 @@ class PnxMatchesFieldTest {
 
     @Test
     fun `series matches own series and rejects other series in the same group`() {
-        assertEquals(true, pnx(series = "Elena z Avaloru").matchesField(SearchField.SERIES, "Elena"))
+        assertEquals(
+            true,
+            pnx(series = "Elena z Avaloru").matchesField(SearchField.SERIES, "Elena")
+        )
         assertEquals(
             false,
             pnx(series = "Tomek i Przyjaciele").matchesField(SearchField.SERIES, "Elena")
@@ -310,7 +309,10 @@ class PnxMatchesFieldTest {
     @Test
     fun `series requires all words but ignores case, diacritics and volume or author tail`() {
         val p = pnx(series = "Garstka z Ustki / Aneta Jadowska ; [t. 1]")
-        assertEquals(true, p.matchesField(SearchField.SERIES, seriesSearchTerm(p.addata["seriestitle"]!![0])))
+        assertEquals(
+            true,
+            p.matchesField(SearchField.SERIES, seriesSearchTerm(p.addata["seriestitle"]!![0]))
+        )
         assertEquals(true, p.matchesField(SearchField.SERIES, "garstka USTKI"))
         assertEquals(true, pnx(series = "Żółć").matchesField(SearchField.SERIES, "zolc"))
         assertEquals(false, p.matchesField(SearchField.SERIES, "Garstka Gdyni"))
@@ -319,9 +321,15 @@ class PnxMatchesFieldTest {
     @Test
     fun `author matches creator with dates and role as well as addata au`() {
         val p = pnx(creator = "Jadowska, Aneta (1981- ) Autor\$\$QJadowska, Aneta (1981- )")
-        assertEquals(true, p.matchesField(SearchField.AUTHOR, authorSearchTerm("Jadowska, Aneta (1981- ). Autor")))
+        assertEquals(
+            true,
+            p.matchesField(SearchField.AUTHOR, authorSearchTerm("Jadowska, Aneta (1981- ). Autor"))
+        )
         assertEquals(false, p.matchesField(SearchField.AUTHOR, "Ferrante, Elena"))
-        assertEquals(true, pnx(au = "Ferrante, Elena").matchesField(SearchField.AUTHOR, "Elena Ferrante"))
+        assertEquals(
+            true,
+            pnx(au = "Ferrante, Elena").matchesField(SearchField.AUTHOR, "Elena Ferrante")
+        )
     }
 
     @Test
@@ -348,7 +356,10 @@ class PnxMatchesFieldTest {
         val p =
             Pnx(
                 display =
-                    mapOf("contributor" to listOf("Child, Lee (1954- ) Redakcja\$\$QChild, Lee (1954- )")),
+                    mapOf(
+                        "contributor" to
+                            listOf("Child, Lee (1954- ) Redakcja\$\$QChild, Lee (1954- )")
+                    ),
                 addata = mapOf("au" to listOf("Penzler, Otto"), "addau" to listOf("Child, Lee"))
             )
         assertEquals(true, p.matchesField(SearchField.AUTHOR, "Child, Lee"))
@@ -361,15 +372,25 @@ class PnxMatchesFieldTest {
             Pnx(
                 display =
                     mapOf(
-                        "title" to listOf("Poszukiwany / Lee Child ; z angielskiego przełożył Łukasz Praski."),
-                        "creator" to listOf("Child, Lauren (1965- ) Autor\$\$QChild, Lauren (1965- )")
+                        "title" to
+                            listOf(
+                                "Poszukiwany / Lee Child ; z angielskiego przełożył Łukasz Praski."
+                            ),
+                        "creator" to
+                            listOf("Child, Lauren (1965- ) Autor\$\$QChild, Lauren (1965- )")
                     ),
                 addata = mapOf("au" to listOf("Child, Lauren"))
             )
         assertEquals(true, wrong.matchesField(SearchField.AUTHOR, "Child, Lee"))
         val noise =
             Pnx(
-                display = mapOf("title" to listOf("Atak piratów / Marcus Emerson ; ilustracje David Lee ; Noah Child.")),
+                display =
+                    mapOf(
+                        "title" to
+                            listOf(
+                                "Atak piratów / Marcus Emerson ; ilustracje David Lee ; Noah Child."
+                            )
+                    ),
                 addata = mapOf("au" to listOf("Emerson, Marcus"))
             )
         assertEquals(false, noise.matchesField(SearchField.AUTHOR, "Child, Lee"))

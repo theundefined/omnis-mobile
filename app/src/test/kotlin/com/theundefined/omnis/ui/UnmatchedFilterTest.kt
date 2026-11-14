@@ -37,11 +37,18 @@ class UnmatchedFilterTest {
         SearchTenantSection(tenantKey = "t", tenantLabel = "T", results = results.toList())
 
     private val mixed =
-        listOf(result("Poziom śmierci", true), result("Horrid Henry", false), result("Podejrzany", true))
+        listOf(
+            result("Poziom śmierci", true),
+            result("Horrid Henry", false),
+            result("Podejrzany", true)
+        )
 
     @Test
     fun `hides unmatched works only when asked and something matches`() {
-        assertEquals(listOf("Poziom śmierci", "Podejrzany"), mixed.withoutUnmatched(true).map { it.title })
+        assertEquals(
+            listOf("Poziom śmierci", "Podejrzany"),
+            mixed.withoutUnmatched(true).map { it.title }
+        )
         assertEquals(mixed, mixed.withoutUnmatched(false))
     }
 
@@ -66,7 +73,10 @@ class UnmatchedFilterTest {
                 result("Film", true, type = "dvd"),
                 result("Szum", false, type = null)
             )
-        assertEquals(listOf("Książka", "Film"), s.filteredResults(hideUnmatched = true).map { it.title })
+        assertEquals(
+            listOf("Książka", "Film"),
+            s.filteredResults(hideUnmatched = true).map { it.title }
+        )
         assertEquals(
             listOf("Film"),
             s.filteredResults(setOf("dvd"), hideUnmatched = true).map { it.title }

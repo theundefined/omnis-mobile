@@ -1130,7 +1130,8 @@ class OmnisRepository(private val accountManager: AccountManager) {
                                         api.searchPnxs(groupParams, bearer).body()?.docs?.takeIf {
                                             it.isNotEmpty()
                                         } ?: listOf(doc)
-                                    // Primo ignoruje `q` po rozwinięciu grupy FRBR — dla serii/autora
+                                    // Primo ignoruje `q` po rozwinięciu grupy FRBR — dla
+                                    // serii/autora
                                     // odrzuć wydania innych serii/autorów (patrz Pnx.matchesField).
                                     if (field == SearchField.ANY) Triple(docs, groupParams, true)
                                     else {

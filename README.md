@@ -38,6 +38,7 @@ z serwerem wybranej biblioteki — autor nie prowadzi żadnego serwera pośredni
 - Wszystkie wydania tytułu, dostępność w każdej filii i termin zwrotu wypożyczonych egzemplarzy.
 - Filtr typu (książka, audiobook, film…), preferowane filie, sortowanie po trafności, tytule i serii.
 - Wyszukiwanie po autorze i serii (także prosto z listy wypożyczeń), historia wyszukiwań.
+- Wyszukiwanie po serii/autorze pokazuje tylko wydania naprawdę z tej serii/od tego autora (Primo łączy różne książki o tym samym tytule w jedno dzieło), a dzieła trafione tylko luźno (np. inna osoba o podobnym nazwisku) ukrywa chip „Ukryj niepasujące (N)” z licznikiem i przyciskiem „Pokaż”.
 - Mapa filii (OpenStreetMap) i skaner kodu ISBN z aparatu, również jako skrót aplikacji.
 - Znaczek „Wypożyczone teraz / Czytane: rok" przy wynikach wyszukiwania (z lokalnej historii, bez zapytań do serwera) oraz „Szukaj w Omnis" z menu Udostępnij i zaznaczonego tekstu w innych aplikacjach.
 - „Dodaj do kalendarza": wydarzenie całodniowe w dniu zwrotu dla jednej książki, grupy lub zaznaczenia (bez uprawnień, zapis robi aplikacja kalendarza). Eksport historii do CSV (cała historia, z uwzględnieniem filtra) oraz udostępnianie podsumowania roku ze statystyk jako tekst lub obraz.

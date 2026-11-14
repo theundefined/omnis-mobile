@@ -207,9 +207,9 @@ data class SearchUiState(
 )
 
 /**
- * Ukrywa dzieła niepasujące do szukanego autora/serii (matchesQuery == false) — tylko gdy
- * [hide] i gdy cokolwiek pasuje. Gdy nic nie pasuje (np. fraza w innej odmianie niż w katalogu),
- * niczego nie ukrywamy, żeby ekran nie był pusty przy domyślnie włączonym ukrywaniu.
+ * Ukrywa dzieła niepasujące do szukanego autora/serii (matchesQuery == false) — tylko gdy [hide] i
+ * gdy cokolwiek pasuje. Gdy nic nie pasuje (np. fraza w innej odmianie niż w katalogu), niczego nie
+ * ukrywamy, żeby ekran nie był pusty przy domyślnie włączonym ukrywaniu.
  */
 fun List<SearchResult>.withoutUnmatched(hide: Boolean): List<SearchResult> =
     if (!hide || none { it.matchesQuery }) this else filter { it.matchesQuery }
